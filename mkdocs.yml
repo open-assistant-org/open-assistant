@@ -1,0 +1,101 @@
+site_name: Open Assistant
+site_url: https://docs.open-assistant.org
+site_description: >-
+  Open Assistant — a multi-agent personal assistant system that integrates with your
+  emails, files, calendars, tasks, and notes through natural conversations.
+
+repo_url: https://github.com/open-assistant-org/open-assistant
+repo_name: open-assistant-org/open-assistant
+edit_uri: edit/main/docs/
+
+docs_dir: docs
+
+theme:
+  name: material
+  # Single dark scheme — the app UI has no light mode, so the docs stay on-brand.
+  palette:
+    - scheme: slate
+      primary: custom
+      accent: custom
+  logo: assets/open-assistant.svg
+  favicon: assets/open-assistant.svg
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - navigation.indexes
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - content.action.edit
+  # Mermaid 2.x diagram support (architecture docs use ```mermaid blocks)
+  icon:
+    repo: fontawesome/brands/github
+
+extra_css:
+  - stylesheets/extra.css
+
+plugins:
+  - search:
+      lang: en
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+
+nav:
+  - Home: index.md
+  - Setup:
+      - Configuration: setup/configuration.md
+      - Development: setup/development.md
+  - Development Checklist: development-checklist.md
+  - Architecture:
+      - System Architecture: architecture/system-architecture.md
+      - Solution Architecture: architecture/solution-architecture.md
+      - Software Architecture: architecture/software-architecture.md
+      - Agents: architecture/agents.md
+      - Database Schema: architecture/database-schema.md
+      - Capabilities: architecture/capabilities.md
+  - Integrations:
+      - integrations/index.md
+      - Google: integrations/google.md
+      - Google Ads: integrations/google_ads.md
+      - Google News: integrations/google_news.md
+      - Google Navigator: integrations/google_navigator.md
+      - Microsoft: integrations/microsoft.md
+      - Notion: integrations/notion.md
+      - Nextcloud: integrations/nextcloud.md
+      - Browser Automation: integrations/browser.md
+      - WhatsApp: integrations/whatsapp.md
+      - Whisper: integrations/whisper.md
+      - Mistral OCR: integrations/mistral_ocr.md
+      - Brave Search: integrations/brave.md
+      - Slack: integrations/slack.md
+      - Toggl: integrations/toggl.md
+      - LLM Providers: integrations/llm-providers.md
+  - Plugin Schema: plugin-schema.md

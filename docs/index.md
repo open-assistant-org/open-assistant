@@ -89,7 +89,7 @@ docs/
    - Keep implementation in sync
 
 3. **Development Guidelines**:
-   - Read [`CONTRIBUTING.md`](../CONTRIBUTING.md) - Contribution guidelines
+   - Read [`CONTRIBUTING.md`](https://github.com/open-assistant-org/open-assistant/blob/main/CONTRIBUTING.md) - Contribution guidelines
    - Read [Development Setup](setup/development.md) - Environment setup and workflow
 
 ## Need Help?

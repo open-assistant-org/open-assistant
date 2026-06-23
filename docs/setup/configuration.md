@@ -568,4 +568,4 @@ grep "settings" logs/assistant.log
 
 ## Next Steps
 
-See [Integration Guides](../integrations/) for detailed setup instructions for each service.
+See the [Integration Guides](../integrations/index.md) for detailed setup instructions for each service.
