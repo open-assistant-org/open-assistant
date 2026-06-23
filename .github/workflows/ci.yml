@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Run black formatter check
+        run: uv run black --check .
+
+      - name: Run pytest
+        run: uv run pytest --cov=src --cov-report=xml
+
+      - name: Coverage Summary
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const xml = fs.readFileSync('coverage.xml', 'utf8');
+            const covered = xml.match(/lines-covered="(\d+)"/);
+            const total = xml.match(/lines-valid="(\d+)"/);
+            if (covered && total) {
+              const pct = Math.round((parseInt(covered[1]) / parseInt(total[1])) * 100);
+              console.log(`Coverage: ${pct}% (${covered[1]}/${total[1]} lines)`);
+            }
+
+      - name: Upload coverage to GitHub
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.xml
+
+      - name: Add coverage comment to PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const xml = fs.readFileSync('coverage.xml', 'utf8');
+            const covered = xml.match(/lines-covered="(\d+)"/);
+            const total = xml.match(/lines-valid="(\d+)"/);
+            const pct = covered && total
+              ? Math.round((parseInt(covered[1]) / parseInt(total[1])) * 100)
+              : '?';
+
+            const body = `## Coverage\n\n**${pct}%** (${covered?.[1] || '?'}/${total?.[1] || '?'} lines)`;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });

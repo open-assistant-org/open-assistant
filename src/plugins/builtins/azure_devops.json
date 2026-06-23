@@ -1,0 +1,384 @@
+{
+  "id": "azure_devops",
+  "display_name": "Azure DevOps",
+  "description": "Work items, repositories, and pipelines via the Azure DevOps REST API. Authenticate with a Personal Access Token (PAT).",
+  "icon": "🔷",
+  "base_url": "https://dev.azure.com",
+  "auth": {
+    "type": "bearer"
+  },
+  "config_fields": [
+    {
+      "key": "organization",
+      "display_name": "Organization",
+      "description": "Your Azure DevOps organization name (from the URL: dev.azure.com/{organization}).",
+      "required": true,
+      "sensitive": false,
+      "placeholder": "my-org"
+    }
+  ],
+  "endpoints": [
+    {
+      "name": "query_work_items",
+      "display_name": "Query Work Items",
+      "description": "Run a WIQL query to find work items in a project. Returns matching work item IDs and URLs.",
+      "method": "POST",
+      "path": "/{organization}/{project}/_apis/wit/wiql?api-version=7.1",
+      "parameters": [
+        {
+          "name": "project",
+          "in": "path",
+          "type": "string",
+          "description": "The Azure DevOps project name.",
+          "required": true
+        },
+        {
+          "name": "query",
+          "in": "body",
+          "type": "string",
+          "description": "WIQL query string, e.g. \"SELECT [System.Id],[System.Title] FROM WorkItems WHERE [System.State] = 'Active'\".",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "get_work_item",
+      "display_name": "Get Work Item",
+      "description": "Retrieve the details of a specific work item by its numeric ID.",
+      "method": "GET",
+      "path": "/{organization}/{project}/_apis/wit/workitems/{id}?api-version=7.1",
+      "parameters": [
+        {
+          "name": "project",
+          "in": "path",
+          "type": "string",
+          "description": "The Azure DevOps project name.",
+          "required": true
+        },
+        {
+          "name": "id",
+          "in": "path",
+          "type": "integer",
+          "description": "The numeric work item ID.",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "create_work_item",
+      "display_name": "Create Work Item",
+      "description": "Create a new work item (e.g. Task, Bug, User Story) in a project.",
+      "method": "POST",
+      "path": "/{organization}/{project}/_apis/wit/workitems/${type}?api-version=7.1",
+      "parameters": [
+        {
+          "name": "project",
+          "in": "path",
+          "type": "string",
+          "description": "The Azure DevOps project name.",
+          "required": true
+        },
+        {
+          "name": "type",
+          "in": "path",
+          "type": "string",
+          "description": "Work item type, e.g. Task, Bug, User Story, Epic.",
+          "required": true
+        },
+        {
+          "name": "title",
+          "in": "body",
+          "type": "string",
+          "description": "Title of the new work item.",
+          "required": true
+        },
+        {
+          "name": "description",
+          "in": "body",
+          "type": "string",
+          "description": "Description / acceptance criteria for the work item.",
+          "required": false
+        }
+      ]
+    },
+    {
+      "name": "list_repositories",
+      "display_name": "List Repositories",
+      "description": "List all Git repositories in an Azure DevOps project.",
+      "method": "GET",
+      "path": "/{organization}/{project}/_apis/git/repositories?api-version=7.1",
+      "parameters": [
+        {
+          "name": "project",
+          "in": "path",
+          "type": "string",
+          "description": "The Azure DevOps project name.",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "list_pipelines",
+      "display_name": "List Pipelines",
+      "description": "List all build/release pipelines in an Azure DevOps project.",
+      "method": "GET",
+      "path": "/{organization}/{project}/_apis/pipelines?api-version=7.1",
+      "parameters": [
+        {
+          "name": "project",
+          "in": "path",
+          "type": "string",
+          "description": "The Azure DevOps project name.",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "get_work_item_with_relations",
+      "display_name": "Get Work Item With Relations",
+      "description": "Retrieve a work item by ID including all parent/child relations. Call this before move_work_item to find the current parent relation index in the returned 'relations' array.",
+      "method": "GET",
+      "path": "/{organization}/{project}/_apis/wit/workitems/{id}?$expand=relations&api-version=7.1",
+      "parameters": [
+        {
+          "name": "project",
+          "in": "path",
+          "type": "string",
+          "description": "The Azure DevOps project name.",
+          "required": true
+        },
+        {
+          "name": "id",
+          "in": "path",
+          "type": "integer",
+          "description": "The numeric work item ID.",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "list_iterations",
+      "display_name": "List Iterations",
+      "description": "List all iteration paths (sprints) in a project as a tree. Use to discover valid System.IterationPath values before calling update_work_item.",
+      "method": "GET",
+      "path": "/{organization}/{project}/_apis/wit/classificationnodes/iterations?$depth=10&api-version=7.1",
+      "parameters": [
+        {
+          "name": "project",
+          "in": "path",
+          "type": "string",
+          "description": "The Azure DevOps project name.",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "list_areas",
+      "display_name": "List Area Paths",
+      "description": "List all area paths in a project as a tree. Use to discover valid System.AreaPath values before calling update_work_item.",
+      "method": "GET",
+      "path": "/{organization}/{project}/_apis/wit/classificationnodes/areas?$depth=5&api-version=7.1",
+      "parameters": [
+        {
+          "name": "project",
+          "in": "path",
+          "type": "string",
+          "description": "The Azure DevOps project name.",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "list_work_item_types",
+      "display_name": "List Work Item Types",
+      "description": "List all work item types available in a project (e.g. Task, Bug, User Story, Epic, Feature).",
+      "method": "GET",
+      "path": "/{organization}/{project}/_apis/wit/workitemtypes?api-version=7.1",
+      "parameters": [
+        {
+          "name": "project",
+          "in": "path",
+          "type": "string",
+          "description": "The Azure DevOps project name.",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "list_states",
+      "display_name": "List Work Item States",
+      "description": "List valid states for a given work item type (e.g. Active, Closed, Resolved for a Bug). Use before update_work_item to ensure the state name is valid for that type.",
+      "method": "GET",
+      "path": "/{organization}/{project}/_apis/wit/workitemtypes/{type}/states?api-version=7.1",
+      "parameters": [
+        {
+          "name": "project",
+          "in": "path",
+          "type": "string",
+          "description": "The Azure DevOps project name.",
+          "required": true
+        },
+        {
+          "name": "type",
+          "in": "path",
+          "type": "string",
+          "description": "Work item type name, e.g. 'Bug', 'Task', 'User Story'. Use list_work_item_types to find valid names.",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "update_work_item",
+      "display_name": "Update Work Item",
+      "description": "Update fields on an existing work item. Only provided fields are changed. Supported: title, description, acceptance_criteria, state, iteration_path, area_path, priority (1-4), assigned_to (email), tags (semicolon-separated).",
+      "method": "PATCH",
+      "path": "/{organization}/{project}/_apis/wit/workitems/{id}?api-version=7.1",
+      "parameters": [
+        {
+          "name": "project",
+          "in": "path",
+          "type": "string",
+          "description": "The Azure DevOps project name.",
+          "required": true
+        },
+        {
+          "name": "id",
+          "in": "path",
+          "type": "integer",
+          "description": "The numeric work item ID to update.",
+          "required": true
+        },
+        {
+          "name": "title",
+          "in": "body",
+          "type": "string",
+          "description": "New title.",
+          "required": false
+        },
+        {
+          "name": "description",
+          "in": "body",
+          "type": "string",
+          "description": "New description (HTML supported).",
+          "required": false
+        },
+        {
+          "name": "acceptance_criteria",
+          "in": "body",
+          "type": "string",
+          "description": "Acceptance criteria (HTML supported). Maps to Microsoft.VSTS.Common.AcceptanceCriteria.",
+          "required": false
+        },
+        {
+          "name": "state",
+          "in": "body",
+          "type": "string",
+          "description": "New state, e.g. 'Active'. Use list_states to find valid values for the work item type.",
+          "required": false
+        },
+        {
+          "name": "iteration_path",
+          "in": "body",
+          "type": "string",
+          "description": "Iteration path, e.g. 'MyProject\\Sprint 3'. Use list_iterations to find valid paths.",
+          "required": false
+        },
+        {
+          "name": "area_path",
+          "in": "body",
+          "type": "string",
+          "description": "Area path, e.g. 'MyProject\\Backend'. Use list_areas to find valid paths.",
+          "required": false
+        },
+        {
+          "name": "priority",
+          "in": "body",
+          "type": "integer",
+          "description": "Priority 1 (highest) to 4 (lowest). Maps to Microsoft.VSTS.Common.Priority.",
+          "required": false
+        },
+        {
+          "name": "assigned_to",
+          "in": "body",
+          "type": "string",
+          "description": "Email address of the user to assign the work item to.",
+          "required": false
+        },
+        {
+          "name": "tags",
+          "in": "body",
+          "type": "string",
+          "description": "Semicolon-separated tags, e.g. 'backend; performance'.",
+          "required": false
+        }
+      ]
+    },
+    {
+      "name": "move_work_item",
+      "display_name": "Move Work Item (Change Parent)",
+      "description": "Re-parent a work item under a different epic, feature, or story. Call get_work_item_with_relations first to find the current parent relation index. If the item has no current parent, omit current_parent_relation_index.",
+      "method": "PATCH",
+      "path": "/{organization}/{project}/_apis/wit/workitems/{id}?api-version=7.1",
+      "parameters": [
+        {
+          "name": "project",
+          "in": "path",
+          "type": "string",
+          "description": "The Azure DevOps project name.",
+          "required": true
+        },
+        {
+          "name": "id",
+          "in": "path",
+          "type": "integer",
+          "description": "The numeric ID of the work item to move.",
+          "required": true
+        },
+        {
+          "name": "new_parent_id",
+          "in": "body",
+          "type": "integer",
+          "description": "Numeric ID of the new parent work item.",
+          "required": true
+        },
+        {
+          "name": "current_parent_relation_index",
+          "in": "body",
+          "type": "integer",
+          "description": "Zero-based index of the existing parent relation in the 'relations' array from get_work_item_with_relations. Omit if the item currently has no parent.",
+          "required": false
+        }
+      ]
+    },
+    {
+      "name": "add_work_item_comment",
+      "display_name": "Add Work Item Comment",
+      "description": "Add a comment to a work item's discussion thread. Text may be plain text or HTML.",
+      "method": "POST",
+      "path": "/{organization}/{project}/_apis/wit/workitems/{id}/comments?api-version=7.1-preview.3",
+      "parameters": [
+        {
+          "name": "project",
+          "in": "path",
+          "type": "string",
+          "description": "The Azure DevOps project name.",
+          "required": true
+        },
+        {
+          "name": "id",
+          "in": "path",
+          "type": "integer",
+          "description": "The numeric work item ID.",
+          "required": true
+        },
+        {
+          "name": "text",
+          "in": "body",
+          "type": "string",
+          "description": "The comment text (plain text or HTML).",
+          "required": true
+        }
+      ]
+    }
+  ]
+}

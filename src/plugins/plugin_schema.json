@@ -1,0 +1,179 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/open-assistant-org/open-assistant/plugin-schema",
+  "title": "Open Assistant Plugin Definition",
+  "description": "Schema for defining a REST API plugin that is exposed as LLM tools.",
+  "type": "object",
+  "required": ["id", "display_name", "description", "base_url", "auth", "endpoints"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "description": "Unique plugin identifier using lowercase letters, digits, and underscores. Used as a prefix for tool names."
+    },
+    "display_name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable name shown in the UI."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Short description of what this plugin integrates with."
+    },
+    "icon": {
+      "type": "string",
+      "description": "Emoji or short text icon displayed next to the plugin name.",
+      "default": "🔌"
+    },
+    "base_url": {
+      "type": "string",
+      "format": "uri",
+      "description": "Base URL for all API calls. Config field values can be substituted using {field_key} placeholders."
+    },
+    "auth": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["bearer", "header", "basic", "api_key_with_jwt"],
+          "description": "Authentication mechanism. 'bearer' → Authorization: Bearer {token}. 'header' → {header_name}: {token}. 'basic' → Authorization: Basic base64(username:password). 'api_key_with_jwt' → static {api_key_header} + JWT obtained via POST {token_endpoint}."
+        },
+        "header_name": {
+          "type": "string",
+          "description": "Required when type is 'header'. The HTTP header name to use."
+        },
+        "fixed_password": {
+          "type": "string",
+          "description": "Optional, for type 'basic'. When set, the password is hardcoded to this value and the user only provides a token/username. Example: Toggl uses 'api_token' as the fixed password."
+        },
+        "api_key_header": {
+          "type": "string",
+          "description": "For type 'api_key_with_jwt'. The HTTP header name for the static API key (e.g. 'X-apikey'). Defaults to 'X-API-Key'."
+        },
+        "token_endpoint": {
+          "type": "string",
+          "description": "For type 'api_key_with_jwt'. Path to POST username+password to in order to obtain a JWT (e.g. '/token'). Defaults to '/token'."
+        },
+        "token_field": {
+          "type": "string",
+          "description": "For type 'api_key_with_jwt'. JSON field name in the login response that contains the JWT (e.g. 'access_token'). Defaults to 'access_token'."
+        },
+        "token_prefix": {
+          "type": "string",
+          "description": "For type 'api_key_with_jwt'. Prefix for the Authorization header value (e.g. 'Access_Token' → 'Authorization: Access_Token <jwt>'). Defaults to 'Bearer'."
+        }
+      }
+    },
+    "config_fields": {
+      "type": "array",
+      "description": "Non-credential configuration fields (e.g. organization name, site URL). Stored in settings and substituted into URLs.",
+      "items": {
+        "type": "object",
+        "required": ["key", "display_name"],
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "description": "Field key used as a URL placeholder and settings key."
+          },
+          "display_name": {
+            "type": "string",
+            "description": "Human-readable label."
+          },
+          "description": {
+            "type": "string",
+            "description": "Help text shown below the input."
+          },
+          "required": {
+            "type": "boolean",
+            "default": true
+          },
+          "sensitive": {
+            "type": "boolean",
+            "default": false,
+            "description": "If true, stored encrypted in service_credentials instead of settings."
+          },
+          "placeholder": {
+            "type": "string",
+            "description": "Placeholder text shown in the input field."
+          }
+        }
+      }
+    },
+    "endpoints": {
+      "type": "array",
+      "minItems": 1,
+      "description": "List of API endpoints exposed as LLM tools. Each becomes a tool named plugin_{id}_{endpoint.name}.",
+      "items": {
+        "type": "object",
+        "required": ["name", "display_name", "description", "method", "path"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "description": "Endpoint identifier (lowercase + underscores). Becomes the tool name suffix."
+          },
+          "display_name": {
+            "type": "string",
+            "description": "Human-readable name for the Tools assignment screen."
+          },
+          "description": {
+            "type": "string",
+            "description": "Description shown to the LLM. Be specific about when to use this endpoint."
+          },
+          "method": {
+            "type": "string",
+            "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"],
+            "description": "HTTP method."
+          },
+          "path": {
+            "type": "string",
+            "description": "URL path appended to base_url. Supports {variable} placeholders for path parameters and config fields."
+          },
+          "parameters": {
+            "type": "array",
+            "description": "Parameters the LLM can pass when calling this tool.",
+            "items": {
+              "type": "object",
+              "required": ["name", "in", "type", "description"],
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Parameter name."
+                },
+                "in": {
+                  "type": "string",
+                  "enum": ["path", "query", "body", "header"],
+                  "description": "Where to place the parameter: 'path' → substituted into URL, 'query' → appended as ?key=value, 'body' → JSON request body, 'header' → HTTP request header."
+                },
+                "type": {
+                  "type": "string",
+                  "enum": ["string", "integer", "number", "boolean"],
+                  "description": "JSON Schema type for the parameter."
+                },
+                "description": {
+                  "type": "string",
+                  "description": "Description shown to the LLM."
+                },
+                "required": {
+                  "type": "boolean",
+                  "default": true
+                },
+                "default": {
+                  "description": "Default value when the parameter is not provided."
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

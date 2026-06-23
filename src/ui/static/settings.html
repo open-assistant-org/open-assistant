@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Settings - Open Assistant</title>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/api/pwa/manifest.json">
+
+    <!-- Theme Colors -->
+    <meta name="theme-color" content="#00ff00">
+    <meta name="msapplication-TileColor" content="#0a0a0a">
+    <meta name="msapplication-navbutton-color" content="#00ff00">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <!-- PWA Meta Tags -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Assistant">
+    <meta name="application-name" content="Open Assistant">
+
+    <!-- Apple Touch Icons -->
+    <link rel="apple-touch-icon" href="/static/icons/icon-152x152.png">
+    <link rel="apple-touch-icon" sizes="72x72" href="/static/icons/icon-72x72.png">
+    <link rel="apple-touch-icon" sizes="96x96" href="/static/icons/icon-96x96.png">
+    <link rel="apple-touch-icon" sizes="128x128" href="/static/icons/icon-128x128.png">
+    <link rel="apple-touch-icon" sizes="144x144" href="/static/icons/icon-144x144.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="/static/icons/icon-152x152.png">
+    <link rel="apple-touch-icon" sizes="192x192" href="/static/icons/icon-192x192.png">
+    <link rel="apple-touch-icon" sizes="384x384" href="/static/icons/icon-384x384.png">
+    <link rel="apple-touch-icon" sizes="512x512" href="/static/icons/icon-512x512.png">
+
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="/static/css/common.css">
+    <link rel="stylesheet" href="/static/css/mobile.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-content">
+            <div class="navbar-brand">
+                <img src="/static/robot-logo.svg" alt="Logo" class="navbar-logo">
+                <span>Open Assistant</span>
+            </div>
+            <div class="navbar-links">
+                <a href="/" class="nav-link">Chat</a>
+                <a href="/settings" class="nav-link active">Settings</a>
+                <a href="/monitoring" class="nav-link">Monitoring</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="main-container">
+        <div class="settings-container">
+            <div class="settings-header">
+                <h1>Settings</h1>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab active" data-tab="agents">Agents</button>
+                <button class="tab" data-tab="tools">Tools</button>
+                <button class="tab" data-tab="integrations">Integrations</button>
+                <button class="tab" data-tab="prompts">System Prompts</button>
+                <button class="tab" data-tab="llm">LLM</button>
+                <button class="tab" data-tab="plugins">Plugins</button>
+                <button class="tab" data-tab="application">Application</button>
+                <button class="tab" data-tab="advanced">Advanced</button>
+            </div>
+
+            <!-- Application Tab -->
+            <div id="application-tab" class="tab-content">
+                <div class="settings-section">
+                    <h3 class="section-title">General</h3>
+                    <div id="application-general-settings"></div>
+                </div>
+
+                <div class="settings-section">
+                    <h3 class="section-title">Logging</h3>
+                    <div id="logging-settings"></div>
+                </div>
+
+                <div class="settings-section">
+                    <h3 class="section-title">Memory Management</h3>
+                    <div id="memory-settings"></div>
+                </div>
+
+                <div class="settings-section">
+                    <h3 class="section-title">Web UI</h3>
+                    <div id="web-ui-settings"></div>
+                </div>
+
+                <button onclick="saveApplicationSettings()" class="btn btn-primary">Save Application Settings</button>
+            </div>
+
+            <!-- LLM Tab -->
+            <div id="llm-tab" class="tab-content">
+                <div class="settings-section">
+                    <h3 class="section-title">LLM Configuration</h3>
+                    <p class="text-muted">
+                        Configure your LLM provider for AI-powered conversations.
+                        <a href="https://github.com/open-assistant-org/open-assistant/blob/main/docs/integrations/llm-providers.md" target="_blank" class="help-link">
+                            📚 How to get API credentials?
+                        </a>
+                    </p>
+                    <div id="llm-settings"></div>
+                </div>
+
+                <div class="settings-section">
+                    <button onclick="testLLMConnection()" class="btn btn-secondary">
+                        Test Connection
+                    </button>
+                    <div id="llm-test-result" class="test-result" style="display: none;"></div>
+                </div>
+
+                <button onclick="saveCategory('llm')" class="btn btn-primary">Save LLM Settings</button>
+            </div>
+
+            <!-- Prompts Tab -->
+            <div id="prompts-tab" class="tab-content">
+                <div class="settings-section">
+                    <h3 class="section-title">System Prompt</h3>
+                    <p class="text-muted">The system prompt defines the base behavior of the assistant. The default prompt is always included, and you can add custom instructions on top.</p>
+
+                    <div class="form-group">
+                        <div class="setting-header">
+                            <label class="form-label" for="prompt-system_prompt_default">Default Prompt</label>
+                        </div>
+                        <textarea
+                            id="prompt-system_prompt_default"
+                            class="form-textarea"
+                            placeholder="Default system prompt..."
+                            rows="4"
+                        ></textarea>
+                        <small class="form-hint">The base system prompt that defines the core behavior of the assistant.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="setting-header">
+                            <label class="form-label" for="prompt-system_prompt_custom">Custom Instructions</label>
+                        </div>
+                        <textarea
+                            id="prompt-system_prompt_custom"
+                            class="form-textarea"
+                            placeholder="Add your custom instructions here..."
+                            rows="4"
+                        ></textarea>
+                        <small class="form-hint">Custom additions to the system prompt. Use this to tailor the assistant behavior to your specific needs.</small>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3 class="section-title">Memory</h3>
+                    <p class="text-muted">The memory stores information the system learns about you over time: your name, preferences, people, places, and other context.</p>
+
+                    <div class="form-group">
+                        <div class="setting-header">
+                            <label class="form-label" for="prompt-memory">Memory</label>
+                        </div>
+                        <textarea
+                            id="prompt-memory"
+                            class="form-textarea"
+                            placeholder="User preferences, context, and learned information will appear here..."
+                            rows="8"
+                        ></textarea>
+                        <small class="form-hint">Text-based store for requests, characteristics, people, places, relations, and other information about you.</small>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3 class="section-title">Soul</h3>
+                    <p class="text-muted">The soul shapes the personality and tone of the assistant. It can be refined based on your feedback to better match how you want the assistant to communicate.</p>
+
+                    <div class="form-group">
+                        <div class="setting-header">
+                            <label class="form-label" for="prompt-soul">Soul</label>
+                        </div>
+                        <textarea
+                            id="prompt-soul"
+                            class="form-textarea"
+                            placeholder="Describe the personality, tone, and communication style of your assistant..."
+                            rows="6"
+                        ></textarea>
+                        <small class="form-hint">Text-based description of the assistant's personality, derived from your feedback to adapt its responses.</small>
+                    </div>
+                </div>
+
+                <button onclick="savePrompts()" class="btn btn-primary">Save Prompts</button>
+            </div>
+
+            <!-- Agent Prompts Tab -->
+            <div id="agents-tab" class="tab-content active">
+                <div class="settings-section">
+                    <div class="section-title-row">
+                        <div>
+                            <h3 class="section-title">Agent Prompts & Priority</h3>
+                            <p class="text-muted">
+                                Configure agent roles, prompts, and priority order. Agents higher in the list have higher priority.
+                                Use the arrows to reorder, or add/remove agents as needed.
+                            </p>
+                        </div>
+                        <button onclick="openAddAgentModal()" class="btn btn-primary btn-sm">+ Add Agent</button>
+                    </div>
+                    <div id="agents-list"></div>
+                </div>
+            </div>
+
+            <!-- Tools Tab -->
+            <div id="tools-tab" class="tab-content">
+                <div class="settings-section">
+                    <h3 class="section-title">Tool Assignments</h3>
+                    <p class="text-muted">
+                        Drag and drop tools between agents to reassign them. Changes are saved automatically.
+                    </p>
+                    <div id="tools-dnd-container"></div>
+                </div>
+            </div>
+
+            <!-- Integrations Tab -->
+            <div id="integrations-tab" class="tab-content">
+                <div class="settings-section">
+                    <h3 class="section-title">Service Integrations</h3>
+                    <p class="text-muted">Configure connections to external services</p>
+                    <div id="integrations-list"></div>
+                </div>
+            </div>
+
+            <!-- Plugins Tab -->
+            <div id="plugins-tab" class="tab-content">
+                <div class="settings-section">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <h3 class="section-title" style="margin-bottom:0;">Plugin Integrations</h3>
+                        <button onclick="showAddPluginModal()" class="btn btn-secondary">+ Add Custom Plugin</button>
+                    </div>
+                    <p class="text-muted">
+                        Enable lightweight REST API integrations. Each plugin's endpoints are injected as LLM tools at runtime.
+                        <a href="https://github.com/open-assistant-org/open-assistant/blob/main/docs/plugin-schema.md" target="_blank" class="help-link">📚 How to write a plugin?</a>
+                    </p>
+                    <div id="plugins-list"></div>
+                </div>
+            </div>
+
+            <!-- Advanced Tab -->
+            <div id="advanced-tab" class="tab-content">
+                <div class="settings-section">
+                    <h3 class="section-title">User Preferences</h3>
+                    <p class="text-muted">Timezone and locale preferences used by the assistant and cron scheduler</p>
+                    <div id="user-preferences-settings"></div>
+                    <button onclick="saveCategory('user')" class="btn btn-primary">Save Preferences</button>
+                </div>
+
+                <div class="settings-section">
+                    <h3 class="section-title">Audit Log</h3>
+                    <p class="text-muted">View configuration change history</p>
+
+                    <div class="audit-filters">
+                        <select id="audit-event-type" class="form-select">
+                            <option value="">All Events</option>
+                            <option value="setting_change">Setting Changes</option>
+                        </select>
+                        <button onclick="loadAuditLog()" class="btn btn-secondary">Refresh</button>
+                    </div>
+
+                    <div id="audit-log" class="audit-log"></div>
+                </div>
+
+                <div class="settings-section danger-zone">
+                    <h3 class="section-title">Danger Zone</h3>
+                    <p class="text-muted">These actions cannot be undone</p>
+
+                    <button onclick="resetAllSettings()" class="btn btn-danger">
+                        Reset All Settings to Defaults
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add / Edit Plugin Modal -->
+    <div id="addPluginModal" class="modal" style="display:none;">
+        <div class="modal-content" style="max-width:680px;">
+            <div class="modal-header">
+                <h2 id="plugin-modal-title">Install Custom Plugin</h2>
+                <button class="modal-close" onclick="closeAddPluginModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted" style="margin-bottom:12px;">
+                    Paste a plugin definition JSON below.
+                    <a href="https://github.com/open-assistant-org/open-assistant/blob/main/docs/plugin-schema.md" target="_blank" class="help-link">View schema docs →</a>
+                </p>
+                <textarea id="plugin-json-input" class="form-input" rows="18"
+                    style="font-family:monospace; font-size:0.82rem; width:100%; box-sizing:border-box;"
+                    placeholder='{"id": "my_service", "display_name": "My Service", ...}'></textarea>
+                <div id="plugin-json-error" style="display:none; margin-top:8px; padding:8px 12px; background:#330000; color:#ff6666; border-radius:4px; font-size:0.85rem;"></div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="closeAddPluginModal()" class="btn btn-secondary">Cancel</button>
+                <button id="plugin-modal-save-btn" onclick="savePluginJson()" class="btn btn-primary">Validate & Install</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Integration Card Modal -->
+    <div id="integrationModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="integration-modal-title">Integration Settings</h2>
+                <button class="modal-close" onclick="closeIntegrationModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="integration-modal-content"></div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="closeIntegrationModal()" class="btn btn-secondary">Cancel</button>
+                <button onclick="saveIntegrationSettings()" class="btn btn-primary">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Device Code Modal -->
+    <div id="deviceCodeModal" class="device-code-modal">
+        <div class="device-code-content">
+            <h2>Microsoft Authentication</h2>
+            <p>Please visit the URL below and enter this code:</p>
+            <div class="device-code" id="deviceCode" onclick="copyDeviceCode()" title="Click to copy"></div>
+            <p class="verification-url" id="verificationUrl"></p>
+            <button class="open-url-btn" id="openUrlBtn">Open in New Tab</button>
+            <p style="margin-top: 1.5rem; color: var(--text-muted); font-size: 0.9rem;">
+                Waiting for authentication... This window will close automatically when complete.
+            </p>
+            <button onclick="closeDeviceCodeModal()" class="btn btn-secondary">
+                Cancel
+            </button>
+        </div>
+    </div>
+
+    <!-- WhatsApp QR Code Modal -->
+    <div id="whatsappQrModal" class="device-code-modal">
+        <div class="device-code-content">
+            <h2>Link WhatsApp</h2>
+            <p>Scan this QR code with your phone:</p>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem;">
+                WhatsApp &gt; Settings &gt; Linked Devices &gt; Link a Device
+            </p>
+            <div id="whatsappQrCode" class="whatsapp-qr-container">
+                <p style="color: var(--text-muted);">Waiting for QR code...</p>
+            </div>
+            <p id="whatsappQrStatus" style="margin-top: 1rem; color: var(--text-muted); font-size: 0.9rem;">
+                Waiting for authentication...
+            </p>
+            <div style="margin-top: 1rem; padding: 10px; background: #f5f5f5; border-radius: 5px; font-size: 0.85rem; color: #666;">
+                <strong>💡 Tip:</strong> If the QR code doesn't appear here, check your container logs:<br>
+                <code style="background: #e0e0e0; padding: 2px 6px; border-radius: 3px; font-family: monospace;">docker logs -f &lt;container_name&gt;</code>
+            </div>
+            <button onclick="closeWhatsAppQrModal()" class="btn btn-secondary" style="margin-top: 1rem;">
+                Cancel
+            </button>
+        </div>
+    </div>
+
+    <!-- Agent Edit Modal -->
+    <div id="agentModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="agent-modal-title">Edit Agent</h2>
+                <button class="modal-close" onclick="closeAgentModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="agent-name">
+
+                <div class="form-group">
+                    <label for="agent-display-name">Display Name</label>
+                    <input type="text" id="agent-display-name" class="form-input" placeholder="Agent display name">
+                </div>
+
+                <div class="form-group">
+                    <label for="agent-role">Role</label>
+                    <input type="text" id="agent-role" class="form-input" placeholder="Agent role">
+                </div>
+
+                <div class="form-group">
+                    <label for="agent-goal">Goal</label>
+                    <textarea id="agent-goal" class="form-textarea" rows="2" placeholder="What this agent aims to achieve"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="agent-backstory">Backstory / System Prompt</label>
+                    <textarea id="agent-backstory" class="form-textarea" rows="10" placeholder="Agent backstory and instructions"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="agent-priority">Priority (higher = selected first)</label>
+                    <input type="number" id="agent-priority" class="form-input" min="1" value="5">
+                </div>
+
+                <div class="form-group">
+                    <label for="agent-intent-keywords">Intent Keywords (comma-separated)</label>
+                    <textarea id="agent-intent-keywords" class="form-textarea" rows="2" placeholder="e.g. email, send, message, draft, reply"></textarea>
+                    <small class="form-hint">Keywords used to automatically select this skill when a user's message matches. Leave empty to rely on priority-based selection.</small>
+                </div>
+
+            </div>
+            <div class="modal-footer">
+                <button onclick="resetAgentToDefault()" id="agent-reset-btn" class="btn btn-secondary">Reset to Default</button>
+                <button onclick="closeAgentModal()" class="btn btn-secondary">Cancel</button>
+                <button onclick="saveAgentSettings()" class="btn btn-primary">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Agent Modal -->
+    <div id="addAgentModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add New Agent</h2>
+                <button class="modal-close" onclick="closeAddAgentModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="new-agent-name">Agent ID (lowercase, underscores only)</label>
+                    <input type="text" id="new-agent-name" class="form-input" placeholder="e.g., my_custom_agent" pattern="[a-z_]+">
+                </div>
+
+                <div class="form-group">
+                    <label for="new-agent-display-name">Display Name</label>
+                    <input type="text" id="new-agent-display-name" class="form-input" placeholder="My Custom Agent">
+                </div>
+
+                <div class="form-group">
+                    <label for="new-agent-role">Role</label>
+                    <input type="text" id="new-agent-role" class="form-input" placeholder="Specialist role description">
+                </div>
+
+                <div class="form-group">
+                    <label for="new-agent-goal">Goal</label>
+                    <textarea id="new-agent-goal" class="form-textarea" rows="2" placeholder="What this agent aims to achieve"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="new-agent-backstory">Backstory / System Prompt</label>
+                    <textarea id="new-agent-backstory" class="form-textarea" rows="6" placeholder="Agent backstory and instructions"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="closeAddAgentModal()" class="btn btn-secondary">Cancel</button>
+                <button onclick="createNewAgent()" class="btn btn-primary">Create Agent</button>
+            </div>
+        </div>
+    </div>
+
+    <script defer src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+    <script src="/static/js/common.js"></script>
+    <script src="/static/js/settings.js"></script>
+    <script src="/static/js/pwa.js"></script>
+    <script>
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeSettings();
+        });
+    </script>
+</body>
+</html>

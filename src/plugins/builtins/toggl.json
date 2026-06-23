@@ -1,0 +1,108 @@
+{
+  "id": "toggl",
+  "display_name": "Toggl Track",
+  "description": "Time tracking — read your time entries, projects, workspaces, and goals from Toggl Track.",
+  "icon": "⏱️",
+  "base_url": "https://api.track.toggl.com/api/v9",
+  "auth": {
+    "type": "basic",
+    "fixed_password": "api_token"
+  },
+  "config_fields": [],
+  "endpoints": [
+    {
+      "name": "get_me",
+      "display_name": "Get My Profile",
+      "description": "Get the current Toggl user's profile including their name, email, timezone, and default workspace ID. Use this to look up the default workspace before querying projects or time entries.",
+      "method": "GET",
+      "path": "/me",
+      "parameters": []
+    },
+    {
+      "name": "list_workspaces",
+      "display_name": "List Workspaces",
+      "description": "List all Toggl workspaces the current user has access to. Returns workspace IDs and names needed for project and time entry queries.",
+      "method": "GET",
+      "path": "/workspaces",
+      "parameters": []
+    },
+    {
+      "name": "list_projects",
+      "display_name": "List Projects",
+      "description": "List projects in a Toggl workspace. Use this to find project IDs when the user asks about tracked time per project, or to show what projects exist in their workspace.",
+      "method": "GET",
+      "path": "/workspaces/{workspace_id}/projects",
+      "parameters": [
+        {
+          "name": "workspace_id",
+          "in": "path",
+          "type": "integer",
+          "description": "The numeric workspace ID. Use toggl_list_workspaces to find it.",
+          "required": true
+        },
+        {
+          "name": "active",
+          "in": "query",
+          "type": "boolean",
+          "description": "Filter by active status. true = active projects only, false = archived only. Omit for all projects.",
+          "required": false
+        }
+      ]
+    },
+    {
+      "name": "list_time_entries",
+      "display_name": "List Time Entries",
+      "description": "List Toggl time entries for the current user, optionally filtered by date range. Each entry includes project_name, client_name, and task_name by default (no separate project lookup needed). Use this when the user asks how much time they tracked, what they worked on, or wants a summary of logged hours per project or period. Returns up to 1000 entries; narrow the range for large datasets.",
+      "method": "GET",
+      "path": "/me/time_entries",
+      "parameters": [
+        {
+          "name": "start_date",
+          "in": "query",
+          "type": "string",
+          "description": "Start of the date range in ISO 8601 format (YYYY-MM-DD or full datetime). Defaults to 9 days ago when omitted.",
+          "required": false
+        },
+        {
+          "name": "end_date",
+          "in": "query",
+          "type": "string",
+          "description": "End of the date range in ISO 8601 format (YYYY-MM-DD or full datetime). Defaults to today when omitted.",
+          "required": false
+        },
+        {
+          "name": "meta",
+          "in": "query",
+          "type": "boolean",
+          "description": "When true (default), each entry includes resolved names: project_name, client_name, and task_name. Set to false to get only raw IDs.",
+          "required": false,
+          "default": true
+        }
+      ]
+    },
+    {
+      "name": "get_current_timer",
+      "display_name": "Get Current Timer",
+      "description": "Get the Toggl timer that is currently running, if any. Use this when the user asks 'what am I tracking right now?' or 'is my Toggl timer running?'.",
+      "method": "GET",
+      "path": "/me/time_entries/current",
+      "parameters": []
+    },
+    {
+      "name": "list_goals",
+      "display_name": "List Goals",
+      "description": "List time-tracking goals for a Toggl workspace. Goals have a target duration, a recurrence period (daily/weekly/monthly), and can be scoped to specific projects, clients, tags, or the whole workspace. Use this when the user asks about their Toggl targets, goals, or time budgets at a workspace level.",
+      "method": "GET",
+      "path": "/workspaces/{workspace_id}/goals",
+      "parameters": [
+        {
+          "name": "workspace_id",
+          "in": "path",
+          "type": "integer",
+          "description": "The numeric workspace ID. Use toggl_list_workspaces to find it.",
+          "required": true
+        }
+      ]
+    }
+  ]
+}

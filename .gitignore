@@ -1,0 +1,83 @@
+.idea/
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+
+# uv
+.uv/
+uv.lock
+
+# Configuration and Secrets
+.env
+config/config.yaml
+config/credentials/
+
+# OAuth tokens and credentials (anywhere in repo)
+*token*.json
+*credentials*.json
+*_token_cache.json
+
+# Logs
+logs/
+*.log
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+
+# Docker
+.dockerignore
+
+# IDEs
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.tox/
+
+# Build artifacts
+*.whl
+*.tar.gz
+/src/integrations/whatsapp/bridge/node_modules/
+/src/integrations/whatsapp/bridge/whatsapp_session/
+/src/integrations/whatsapp/bridge/.wwebjs_cache/
+/src/integrations/whatsapp/bridge/package-lock.json
+/tmp/
+/.claude/

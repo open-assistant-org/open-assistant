@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  assistant:
+    container_name: personal-assistant
+    image: ghcr.io/open-assistant-org/open-assistant:latest
+    ports:
+      - "8080:8080"
+    volumes:
+      # Persist data and logs using named volumes
+      - assistant-data:/app/data
+      - assistant-logs:/app/logs
+      - assistant-tmp:/app/tmp
+    environment:
+      # Override with .env file or specify here
+      - LOG_LEVEL=INFO
+      - ENVIRONMENT=production
+      - DATABASE_URL=sqlite:///data/assistant.db
+      - ENCRYPTION_KEY=
+      # Domain configuration for production deployments
+      - APP_URL=
+      - CORS_ORIGINS=
+      # WhatsApp bridge configuration
+      - WHATSAPP_BRIDGE_PORT=3001
+      - WHATSAPP_SESSION_DIR=/app/data/whatsapp_session
+      # Temporary files directory
+      - TMP_DIR=/app/tmp
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  assistant-data:
+    driver: local
+  assistant-logs:
+    driver: local
+  assistant-tmp:
+    driver: local

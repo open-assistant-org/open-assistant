@@ -1,0 +1,144 @@
+{
+  "id": "wordpress",
+  "display_name": "WordPress",
+  "description": "Manage posts and pages on a WordPress site via the WordPress REST API. Authenticate with your username and an Application Password.",
+  "icon": "📝",
+  "base_url": "https://example.com",
+  "auth": {
+    "type": "basic"
+  },
+  "config_fields": [
+    {
+      "key": "site_url",
+      "display_name": "Site URL",
+      "description": "Full URL of your WordPress site, e.g. https://myblog.com",
+      "required": true,
+      "sensitive": false,
+      "placeholder": "https://myblog.com"
+    }
+  ],
+  "endpoints": [
+    {
+      "name": "list_posts",
+      "display_name": "List Posts",
+      "description": "Retrieve a list of published posts from the WordPress site.",
+      "method": "GET",
+      "path": "/wp-json/wp/v2/posts",
+      "parameters": [
+        {
+          "name": "per_page",
+          "in": "query",
+          "type": "integer",
+          "description": "Number of posts to return (max 100).",
+          "required": false,
+          "default": 10
+        },
+        {
+          "name": "search",
+          "in": "query",
+          "type": "string",
+          "description": "Limit results to posts matching this search term.",
+          "required": false
+        },
+        {
+          "name": "status",
+          "in": "query",
+          "type": "string",
+          "description": "Filter by post status: publish, draft, pending, private. Defaults to publish.",
+          "required": false
+        }
+      ]
+    },
+    {
+      "name": "create_post",
+      "display_name": "Create Post",
+      "description": "Create a new post on the WordPress site.",
+      "method": "POST",
+      "path": "/wp-json/wp/v2/posts",
+      "parameters": [
+        {
+          "name": "title",
+          "in": "body",
+          "type": "string",
+          "description": "The post title.",
+          "required": true
+        },
+        {
+          "name": "content",
+          "in": "body",
+          "type": "string",
+          "description": "The post body content (HTML or plain text).",
+          "required": true
+        },
+        {
+          "name": "status",
+          "in": "body",
+          "type": "string",
+          "description": "Post status: draft or publish. Defaults to draft.",
+          "required": false
+        }
+      ]
+    },
+    {
+      "name": "update_post",
+      "display_name": "Update Post",
+      "description": "Update an existing post by its ID.",
+      "method": "POST",
+      "path": "/wp-json/wp/v2/posts/{id}",
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "integer",
+          "description": "The numeric post ID.",
+          "required": true
+        },
+        {
+          "name": "title",
+          "in": "body",
+          "type": "string",
+          "description": "New post title.",
+          "required": false
+        },
+        {
+          "name": "content",
+          "in": "body",
+          "type": "string",
+          "description": "New post body content.",
+          "required": false
+        },
+        {
+          "name": "status",
+          "in": "body",
+          "type": "string",
+          "description": "New post status: draft, publish, private.",
+          "required": false
+        }
+      ]
+    },
+    {
+      "name": "list_pages",
+      "display_name": "List Pages",
+      "description": "Retrieve a list of pages from the WordPress site.",
+      "method": "GET",
+      "path": "/wp-json/wp/v2/pages",
+      "parameters": [
+        {
+          "name": "per_page",
+          "in": "query",
+          "type": "integer",
+          "description": "Number of pages to return (max 100).",
+          "required": false,
+          "default": 10
+        },
+        {
+          "name": "search",
+          "in": "query",
+          "type": "string",
+          "description": "Limit results to pages matching this search term.",
+          "required": false
+        }
+      ]
+    }
+  ]
+}

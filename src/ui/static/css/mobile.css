@@ -1,0 +1,469 @@
+/**
+ * Mobile-specific enhancements for PWA
+ * Better touch targets, improved spacing, mobile gestures
+ */
+
+/* ============================================================================
+   MOBILE TOUCH TARGETS
+   ============================================================================ */
+
+/* Ensure all interactive elements meet minimum touch target size (44x44px) */
+@media (max-width: 768px) {
+    /* Buttons */
+    .btn,
+    .nav-link,
+    .tab,
+    button {
+        min-height: 44px;
+        min-width: 44px;
+        padding: 12px 16px;
+    }
+
+    /* Input fields */
+    .form-input,
+    .form-textarea,
+    .form-select,
+    #messageInput {
+        min-height: 44px;
+        font-size: 16px; /* Prevents zoom on iOS */
+    }
+
+    /* Increase tap target for small icons */
+    .sidebar-toggle-btn,
+    .sidebar-close-btn,
+    #newConversationBtn {
+        min-width: 44px;
+        min-height: 44px;
+    }
+
+    /* Make conversation cards easier to tap */
+    .conversation-card {
+        padding: 16px;
+        margin-bottom: 12px;
+    }
+
+    /* Larger pin buttons */
+    .pin-button {
+        width: 32px;
+        height: 32px;
+        font-size: 1.3rem;
+    }
+
+    /* Send button larger on mobile */
+    #sendButton {
+        min-width: 80px;
+        padding: 12px 20px;
+    }
+}
+
+/* ============================================================================
+   SAFE AREA INSETS (for notched devices)
+   ============================================================================ */
+
+@supports (padding: max(0px)) {
+    /* Navbar safe area */
+    .navbar {
+        padding-left: max(0px, env(safe-area-inset-left));
+        padding-right: max(0px, env(safe-area-inset-right));
+    }
+
+    .navbar-content {
+        padding-left: max(20px, env(safe-area-inset-left));
+        padding-right: max(20px, env(safe-area-inset-right));
+    }
+
+    /* Chat input safe area */
+    .chat-input-container {
+        padding-left: max(20px, env(safe-area-inset-left));
+        padding-right: max(20px, env(safe-area-inset-right));
+        padding-bottom: max(20px, env(safe-area-inset-bottom));
+    }
+
+    /* Main container safe area */
+    .main-container {
+        padding-left: max(12px, env(safe-area-inset-left));
+        padding-right: max(12px, env(safe-area-inset-right));
+    }
+}
+
+/* ============================================================================
+   MOBILE SCROLLING IMPROVEMENTS
+   ============================================================================ */
+
+/* Smooth momentum scrolling on iOS */
+.chat-messages,
+.sidebar-content,
+.settings-container,
+.monitoring-container {
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Prevent overscroll bounce on fixed elements */
+body.is-pwa {
+    overscroll-behavior-y: contain;
+}
+
+.chat-messages {
+    overscroll-behavior-y: contain;
+}
+
+/* ============================================================================
+   MOBILE KEYBOARD HANDLING
+   ============================================================================ */
+
+@media (max-width: 768px) {
+    /* Adjust layout when keyboard is visible */
+    .chat-container {
+        height: 100vh;
+        max-height: -webkit-fill-available;
+    }
+
+    /* Ensure input stays visible when keyboard opens */
+    .chat-input-container {
+        position: sticky;
+        bottom: 0;
+        background: var(--card-background);
+        z-index: 100;
+    }
+
+    /* Reduce message input max height on mobile */
+    #messageInput {
+        max-height: 100px;
+    }
+}
+
+/* ============================================================================
+   MOBILE NAVIGATION IMPROVEMENTS
+   ============================================================================ */
+
+@media (max-width: 768px) {
+    /* Make navigation links more touch-friendly */
+    .navbar-links {
+        gap: 2px;
+    }
+
+    .nav-link {
+        padding: 10px 12px;
+        font-size: 0.9rem;
+        border-radius: 6px;
+    }
+
+    /* Brand logo slightly smaller on mobile */
+    .navbar-logo {
+        width: 28px;
+        height: 28px;
+    }
+
+    .navbar-brand {
+        font-size: 1.1rem;
+    }
+
+    .navbar-brand span {
+        display: none;
+    }
+}
+
+/* ============================================================================
+   MOBILE MODAL IMPROVEMENTS
+   ============================================================================ */
+
+@media (max-width: 768px) {
+    /* Full screen modals on mobile */
+    .modal-content {
+        width: 100%;
+        max-width: 100%;
+        max-height: 100vh;
+        border-radius: 0;
+        margin: 0;
+    }
+
+    /* Sticky modal header */
+    .modal-header {
+        position: sticky;
+        top: 0;
+        background: var(--card-background);
+        z-index: 10;
+    }
+
+    /* Sticky modal footer */
+    .modal-footer {
+        position: sticky;
+        bottom: 0;
+        background: var(--card-background);
+        z-index: 10;
+        padding-bottom: max(24px, env(safe-area-inset-bottom));
+    }
+
+    .modal-body {
+        padding: 16px;
+        padding-bottom: max(16px, env(safe-area-inset-bottom));
+    }
+}
+
+/* ============================================================================
+   MOBILE CHAT IMPROVEMENTS
+   ============================================================================ */
+
+@media (max-width: 768px) {
+    /* Better message layout on mobile */
+    .message-content {
+        max-width: 85%;
+        font-size: 0.95rem;
+    }
+
+    .chat-messages {
+        padding: 16px 12px;
+    }
+
+    /* Header adjustments */
+    .chat-header-title {
+        font-size: 1.1rem;
+    }
+
+    .conversation-id {
+        display: none; /* Hide on very small screens */
+    }
+
+    @media (min-width: 480px) {
+        .conversation-id {
+            display: inline;
+        }
+    }
+}
+
+/* ============================================================================
+   MOBILE SETTINGS IMPROVEMENTS
+   ============================================================================ */
+
+@media (max-width: 768px) {
+    .settings-container {
+        padding: 16px;
+        border-radius: 0;
+        min-height: 100vh;
+    }
+
+    .settings-header h1 {
+        font-size: 1.5rem;
+    }
+
+    /* Scrollable tabs on mobile */
+    .tabs {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none; /* Firefox */
+        -ms-overflow-style: none; /* IE/Edge */
+    }
+
+    .tabs::-webkit-scrollbar {
+        display: none; /* Chrome/Safari */
+    }
+
+    .tab {
+        flex-shrink: 0;
+        padding: 10px 16px;
+        font-size: 0.9rem;
+    }
+
+    /* Integration cards stack better on mobile */
+    .integration-actions {
+        flex-direction: column;
+    }
+
+    .integration-actions .btn {
+        width: 100%;
+    }
+
+    /* Form improvements */
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-label {
+        font-size: 0.95rem;
+    }
+}
+
+/* ============================================================================
+   PULL-TO-REFRESH STYLING
+   ============================================================================ */
+
+@media (max-width: 768px) {
+    /* Prevent pull-to-refresh from interfering with scrolling */
+    body.is-pwa {
+        overscroll-behavior-y: contain;
+    }
+
+    /* Style for pull-to-refresh indicator */
+    .ptr-element {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        color: var(--primary-color);
+        text-align: center;
+        padding: 10px;
+        opacity: 0;
+        transition: opacity 0.3s;
+    }
+
+    .ptr-element.ptr-refresh {
+        opacity: 1;
+    }
+}
+
+/* ============================================================================
+   MOBILE TOAST NOTIFICATIONS
+   ============================================================================ */
+
+@media (max-width: 768px) {
+    .toast-container {
+        top: max(70px, env(safe-area-inset-top));
+        right: 12px;
+        left: 12px;
+    }
+
+    .toast {
+        min-width: auto;
+        width: 100%;
+        font-size: 0.9rem;
+    }
+}
+
+/* ============================================================================
+   MOBILE LOADING STATES
+   ============================================================================ */
+
+@media (max-width: 768px) {
+    .spinner {
+        width: 32px;
+        height: 32px;
+        border-width: 2px;
+    }
+
+    .typing-indicator {
+        padding: 10px 14px;
+    }
+
+    .typing-dot {
+        width: 6px;
+        height: 6px;
+    }
+}
+
+/* ============================================================================
+   LANDSCAPE MODE ADJUSTMENTS
+   ============================================================================ */
+
+@media (max-width: 768px) and (orientation: landscape) {
+    /* Reduce navbar height in landscape */
+    .navbar {
+        height: 48px;
+    }
+
+    .navbar-brand {
+        font-size: 1rem;
+    }
+
+    .nav-link {
+        padding: 6px 10px;
+        font-size: 0.85rem;
+    }
+
+    /* Reduce chat header height */
+    .chat-header {
+        padding: 12px 16px;
+    }
+
+    .chat-header-title {
+        font-size: 1rem;
+    }
+
+    /* Optimize vertical space */
+    .chat-messages {
+        padding: 12px;
+    }
+
+    .chat-input-container {
+        padding: 12px 16px;
+    }
+
+    .message-content {
+        padding: 10px 14px;
+        font-size: 0.9rem;
+    }
+}
+
+/* ============================================================================
+   INSTALL BUTTON STYLING
+   ============================================================================ */
+
+#installAppBtn {
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(0, 255, 0, 0.4);
+    }
+    50% {
+        box-shadow: 0 0 0 4px rgba(0, 255, 0, 0);
+    }
+}
+
+/* Hide install button when already installed */
+body.is-pwa #installAppBtn {
+    display: none !important;
+}
+
+/* ============================================================================
+   HAPTIC FEEDBACK HELPER
+   ============================================================================ */
+
+/* Add visual feedback for touch interactions */
+@media (hover: none) and (pointer: coarse) {
+    button:active,
+    .btn:active,
+    .nav-link:active,
+    .tab:active,
+    .conversation-card:active {
+        transform: scale(0.98);
+        transition: transform 0.1s;
+    }
+}
+
+/* ============================================================================
+   MOBILE-SPECIFIC UTILITIES
+   ============================================================================ */
+
+@media (max-width: 768px) {
+    /* Hide on mobile */
+    .hide-mobile {
+        display: none !important;
+    }
+
+    /* Show only on mobile */
+    .show-mobile {
+        display: block !important;
+    }
+
+    /* Full width on mobile */
+    .mobile-full-width {
+        width: 100% !important;
+    }
+
+    /* Text size adjustments */
+    .mobile-text-sm {
+        font-size: 0.85rem !important;
+    }
+
+    .mobile-text-base {
+        font-size: 0.95rem !important;
+    }
+}
+
+/* Show only on desktop */
+@media (min-width: 769px) {
+    .show-mobile {
+        display: none !important;
+    }
+}

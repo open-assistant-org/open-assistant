@@ -1,0 +1,59 @@
+Business Source License 1.1 (BSL 1.1)
+
+Copyright (c) 2026 Open Assistant Contributors
+
+The terms "Licensor" and "the Licensor" refer to the copyright owners above.
+
+1. License Grant; Restrictions.
+(a) Subject to the terms and conditions of this License, Licensor hereby grants You a non-exclusive, worldwide,
+royalty-free, perpetual (subject to the provisions of Section 5) license to use, copy, modify, prepare derivative
+works of, publicly display, publicly perform, and distribute the Licensed Program, in source or object form,
+solely for:
+(i) Your personal, non-commercial purposes; or
+(ii) academic research, educational, or scholarly purposes; provided that any such use is free of charge and does not
+involve the creation of a commercial product or service offered to third parties.
+(b) You may NOT use, copy, modify, merge, publish, distribute, sublicense, or make available the Licensed Program,
+in any form, for any commercial purpose. Commercial purposes include, without limitation:
+(i) using the Licensed Program or any derivative work thereof in, or to build, a commercial product or service offered
+to or accessible by third parties (whether free or paid);
+(ii) running the Licensed Program or any derivative work thereof to provide a commercial service to third parties;
+(iii) distributing, transferring, or relicensing the Licensed Program as or within a commercial offering; and
+(iv) any other use of the Licensed Program for, or in connection with, direct or indirect commercial advantage or
+monetary compensation.
+(c) Derivative works (modifications, enhancements, extensions) created by You are subject to the same restrictions
+in this Section 1 and must prominently state "Modified by [Your Name]" and include this license in full.
+
+2. Attribution. You must reproduce the above copyright notice and this entire License grant on every copy of the
+Licensed Program, in whole or in part, that You use, distribute, or make available.
+
+3. Change Date. The "Change Date" is the later of:
+(a) four (4) years from the date the Licensed Program was first published under this license by the Licensor; or
+(b) four (4) years from the date of the most recent substantial change to the Licensed Program, provided that such
+change is clearly described in a file named CHANGELOG or similar in the distribution.
+
+4. Change License. On the Change Date, this license automatically converts to the "Released License" — which is the
+terms of the GNU General Public License version 3 (GPL-3.0), or (at Licensor's option) any later version of the GPL
+published by the Free Software Foundation. Upon such conversion, You are relicensed under the Released License for
+all further use of the Licensed Program.
+
+5. Termination. If You violate any term or condition of this License, Your rights under this License terminate
+immediately and automatically. Upon termination, You must cease all use of the Licensed Program and destroy all copies
+in Your possession.
+
+6. Patent License. Licensor hereby grants You a limited, non-exclusive, royalty-free license to any patent claims
+licensable by the copyright owners that are necessarily infringed by the Licensed Program as provided.
+
+7. Disclaimer of Warranty. THE LICENSED PROGRAM IS PROVIDED "AS IS" AND "AS AVAILABLE," WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE,
+AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGE, OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE
+LICENSED PROGRAM OR THE USE OR OTHER DEALINGS IN THE LICENSED PROGRAM.
+
+8. Limitation of Liability. IN NO EVENT SHALL THE LICENSOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
+OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THE LICENSED
+ PROGRAM, EVEN IF THE LICENSOR HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+9. This License does not grant permission to use the trade names, trademarks, service marks, or product names of the
+Licensor, except as required for reasonable and customary use in describing the origin of the Licensed Program.

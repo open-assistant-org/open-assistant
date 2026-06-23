@@ -1,0 +1,8 @@
+# Default
+* @open-assistant-org/open-assistant-core
+
+# CI/CD and releases
+/.github/workflows/ @open-assistant-org/open-assistant-core
+
+# Code ownership rules themselves
+/.github/CODEOWNERS @open-assistant-org/open-assistant-core

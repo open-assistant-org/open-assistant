@@ -1,0 +1,1457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Monitoring - Open Assistant</title>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/api/pwa/manifest.json">
+
+    <!-- Theme Colors -->
+    <meta name="theme-color" content="#00ff00">
+    <meta name="msapplication-TileColor" content="#0a0a0a">
+    <meta name="msapplication-navbutton-color" content="#00ff00">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <!-- PWA Meta Tags -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Assistant">
+    <meta name="application-name" content="Open Assistant">
+
+    <!-- Apple Touch Icons -->
+    <link rel="apple-touch-icon" href="/static/icons/icon-152x152.png">
+    <link rel="apple-touch-icon" sizes="72x72" href="/static/icons/icon-72x72.png">
+    <link rel="apple-touch-icon" sizes="96x96" href="/static/icons/icon-96x96.png">
+    <link rel="apple-touch-icon" sizes="128x128" href="/static/icons/icon-128x128.png">
+    <link rel="apple-touch-icon" sizes="144x144" href="/static/icons/icon-144x144.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="/static/icons/icon-152x152.png">
+    <link rel="apple-touch-icon" sizes="192x192" href="/static/icons/icon-192x192.png">
+    <link rel="apple-touch-icon" sizes="384x384" href="/static/icons/icon-384x384.png">
+    <link rel="apple-touch-icon" sizes="512x512" href="/static/icons/icon-512x512.png">
+
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="/static/css/common.css">
+    <link rel="stylesheet" href="/static/css/mobile.css">
+    <style>
+        .monitoring-container {
+            background: var(--card-background);
+            border-radius: 16px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-color);
+            width: 100%;
+            max-width: 1200px;
+            padding: 30px;
+        }
+
+        .monitoring-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .monitoring-header h1 {
+            font-size: 1.75rem;
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 24px;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-healthy { background: var(--success-color); }
+        .status-degraded { background: var(--warning-color); }
+        .status-unhealthy { background: var(--error-color); }
+
+        .log-entry {
+            padding: 12px;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+
+        .log-timestamp {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+
+        /* Job Tables */
+        .jobs-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+
+        .jobs-table th {
+            text-align: left;
+            padding: 12px;
+            background: var(--background-secondary);
+            color: var(--text-secondary);
+            font-weight: 600;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .jobs-table td {
+            padding: 12px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .jobs-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .jobs-table tr:hover {
+            background: var(--background-secondary);
+        }
+
+        /* Status Badges */
+        .status-badge-inline {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .status-badge-enabled {
+            background: rgba(34, 197, 94, 0.1);
+            color: var(--success-color);
+        }
+
+        .status-badge-disabled {
+            background: rgba(107, 114, 128, 0.1);
+            color: var(--text-muted);
+        }
+
+        .status-badge-pending {
+            background: rgba(59, 130, 246, 0.1);
+            color: #3b82f6;
+        }
+
+        .status-badge-completed {
+            background: rgba(34, 197, 94, 0.1);
+            color: var(--success-color);
+        }
+
+        .status-badge-failed {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--error-color);
+        }
+
+        .status-badge-cancelled {
+            background: rgba(107, 114, 128, 0.1);
+            color: var(--text-muted);
+        }
+
+        .status-badge-running {
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--warning-color);
+        }
+
+        .status-badge-success {
+            background: rgba(34, 197, 94, 0.1);
+            color: var(--success-color);
+        }
+
+        /* Job Actions */
+        .job-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .job-action-btn {
+            padding: 4px 8px;
+            border: none;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            background: var(--primary-color);
+            color: white;
+            transition: opacity 0.2s;
+        }
+
+        .job-action-btn:hover {
+            opacity: 0.8;
+        }
+
+        .job-action-btn.btn-danger {
+            background: var(--error-color);
+        }
+
+        .job-action-btn.btn-warning {
+            background: var(--warning-color);
+        }
+
+        .job-action-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Execution Details */
+        .execution-details {
+            padding: 12px;
+            background: var(--background-secondary);
+            border-radius: 4px;
+            margin-top: 8px;
+            font-size: 0.85rem;
+        }
+
+        .execution-details pre {
+            margin: 8px 0;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-muted);
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background-color: var(--card-background);
+            border-radius: 12px;
+            padding: 24px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal-header {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--primary-color);
+        }
+
+        .modal-body {
+            margin-bottom: 20px;
+        }
+
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .form-textarea {
+            width: 100%;
+            min-height: 150px;
+            padding: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--background-secondary);
+            color: var(--text-primary);
+            font-family: monospace;
+            font-size: 0.9rem;
+            resize: vertical;
+        }
+
+        .form-textarea:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+
+        /* Logs Terminal */
+        .logs-terminal {
+            height: 580px;
+            overflow-y: auto;
+            background: #0d0d0d;
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.82rem;
+            line-height: 1.5;
+            border: 1px solid var(--border-color);
+        }
+
+        .log-stream-entry {
+            display: flex;
+            gap: 8px;
+            padding: 2px 0;
+            word-break: break-all;
+        }
+
+        .log-stream-entry:hover {
+            background: rgba(255,255,255,0.04);
+        }
+
+        .log-stream-time {
+            color: #555;
+            flex-shrink: 0;
+            user-select: none;
+        }
+
+        .log-stream-level {
+            flex-shrink: 0;
+            font-weight: 700;
+            min-width: 72px;
+        }
+
+        .log-stream-module {
+            color: #888;
+            flex-shrink: 0;
+            max-width: 180px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .log-stream-msg {
+            color: #ccc;
+            flex: 1;
+        }
+
+        .log-stream-raw {
+            color: #888;
+            flex: 1;
+        }
+
+        .logs-status {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .logs-status-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--success-color);
+            animation: pulse 2s infinite;
+        }
+
+        .logs-status-dot.disconnected {
+            background: var(--error-color);
+            animation: none;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-content">
+            <div class="navbar-brand">
+                <img src="/static/robot-logo.svg" alt="Logo" class="navbar-logo">
+                <span>Open Assistant</span>
+            </div>
+            <div class="navbar-links">
+                <a href="/" class="nav-link">Chat</a>
+                <a href="/settings" class="nav-link">Settings</a>
+                <a href="/monitoring" class="nav-link">Monitoring</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="main-container">
+        <div class="monitoring-container">
+            <div class="monitoring-header">
+                <h1>System Monitoring</h1>
+                <button onclick="refreshAll()" class="btn btn-secondary">Refresh</button>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab active" data-tab="jobs">Jobs</button>
+                <button class="tab" data-tab="system">System</button>
+                <button class="tab" data-tab="logs">Logs</button>
+            </div>
+
+            <!-- System Tab -->
+            <div id="system-tab" class="tab-content">
+            <div class="grid">
+                <div class="card">
+                    <div class="card-header">System Health</div>
+                    <div id="healthStatus">Loading...</div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">API Metrics</div>
+                    <div id="apiMetrics">Loading...</div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">Conversations</div>
+                    <div id="conversationStats">Loading...</div>
+                </div>
+            </div>
+
+            <div class="card" style="margin-bottom: 24px;">
+                <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>Agent Actions</span>
+                    <div style="display: flex; gap: 8px;">
+                        <select id="filterService" class="form-control" style="width: auto; padding: 6px 12px; font-size: 0.9rem;">
+                            <option value="">All Services</option>
+                            <option value="google">Google</option>
+                            <option value="outlook">Outlook</option>
+                            <option value="notion">Notion</option>
+                            <option value="nextcloud">Nextcloud</option>
+                            <option value="whatsapp">WhatsApp</option>
+                            <option value="system">System</option>
+                        </select>
+                        <select id="filterSuccess" class="form-control" style="width: auto; padding: 6px 12px; font-size: 0.9rem;">
+                            <option value="">All</option>
+                            <option value="true">Success</option>
+                            <option value="false">Failed</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="agentActions">Loading...</div>
+            </div>
+
+            </div>
+            <!-- End System Tab -->
+
+            <!-- Jobs Tab -->
+            <div id="jobs-tab" class="tab-content active">
+                <div class="card" style="margin-bottom: 24px;">
+                    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>Cron Jobs</span>
+                        <span id="tzLabel" style="font-size: 0.8rem; color: var(--text-muted);"></span>
+                    </div>
+                    <div id="cronJobs">Loading...</div>
+                </div>
+
+                <div class="card" style="margin-bottom: 24px;">
+                    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>Future Tasks</span>
+                        <select id="futureTaskStatusFilter" class="form-control" style="width: auto; padding: 6px 12px; font-size: 0.9rem;">
+                            <option value="">All Status</option>
+                            <option value="pending">Pending</option>
+                            <option value="completed">Completed</option>
+                            <option value="failed">Failed</option>
+                            <option value="cancelled">Cancelled</option>
+                        </select>
+                    </div>
+                    <div id="futureTasks">Loading...</div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>Execution History</span>
+                        <div style="display: flex; gap: 8px;">
+                            <select id="historyTypeFilter" class="form-control" style="width: auto; padding: 6px 12px; font-size: 0.9rem;">
+                                <option value="">All Types</option>
+                                <option value="cron">Cron Jobs</option>
+                                <option value="future_task">Future Tasks</option>
+                            </select>
+                            <select id="historyStatusFilter" class="form-control" style="width: auto; padding: 6px 12px; font-size: 0.9rem;">
+                                <option value="">All Status</option>
+                                <option value="success">Success</option>
+                                <option value="failed">Failed</option>
+                                <option value="cancelled">Cancelled</option>
+                                <option value="running">Running</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="executionHistory">Loading...</div>
+                </div>
+            </div>
+            <!-- End Jobs Tab -->
+
+            <!-- Logs Tab -->
+            <div id="logs-tab" class="tab-content">
+                <div class="card">
+                    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <span>Application Logs</span>
+                            <div class="logs-status" id="logsStatusIndicator">
+                                <span class="logs-status-dot disconnected" id="logsStatusDot"></span>
+                                <span id="logsStatusText">Not connected</span>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                            <select id="logsLevelFilter" class="form-control" style="width: auto; padding: 6px 12px; font-size: 0.9rem;" onchange="applyLogsFilter()">
+                                <option value="">All Levels</option>
+                                <option value="DEBUG">DEBUG</option>
+                                <option value="INFO">INFO</option>
+                                <option value="WARNING">WARNING</option>
+                                <option value="ERROR">ERROR</option>
+                                <option value="CRITICAL">CRITICAL</option>
+                            </select>
+                            <button id="logsAutoScrollBtn" class="btn btn-secondary" onclick="toggleLogsAutoScroll()" style="font-size: 0.85rem; padding: 6px 12px;">Auto-scroll: ON</button>
+                            <button id="logsPauseBtn" class="btn btn-secondary" onclick="toggleLogsPause()" style="font-size: 0.85rem; padding: 6px 12px;">Pause</button>
+                            <button class="btn btn-secondary" onclick="clearLogs()" style="font-size: 0.85rem; padding: 6px 12px;">Clear</button>
+                        </div>
+                    </div>
+                    <div class="logs-terminal" id="logsContainer">
+                        <div id="logsContent">
+                            <span style="color: #555;">Open this tab to start streaming logs...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- End Logs Tab -->
+
+        </div>
+    </div>
+
+    <!-- Edit Recipe Modal -->
+    <div id="editPromptModal" class="modal">
+        <div class="modal-content" style="max-width:640px">
+            <div class="modal-header">Edit Recipe</div>
+            <div class="modal-body">
+                <div id="modalJobName" style="color:var(--text-secondary);margin-bottom:16px;font-weight:500;"></div>
+
+                <!-- Steps list -->
+                <div id="recipeStepsList" style="display:flex;flex-direction:column;gap:12px;margin-bottom:16px;"></div>
+
+                <button class="btn btn-secondary" onclick="addRecipeStep()" style="width:100%;margin-bottom:8px;">+ Add Step</button>
+
+                <!-- Legacy prompt fallback (hidden when steps present) -->
+                <div id="legacyPromptGroup" class="form-group" style="display:none">
+                    <label class="form-label" for="promptTextarea">Prompt</label>
+                    <textarea id="promptTextarea" class="form-textarea" placeholder="Enter the prompt for this job..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeEditPromptModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="savePrompt()">Save Recipe</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/common.js"></script>
+    <script>
+        // State management
+        const jobsState = {
+            cronJobs: [],
+            futureTasks: [],
+            executionHistory: [],
+            jobsLoaded: false,
+            systemLoaded: false
+        };
+
+        let currentTab = 'jobs';
+        let isManaged = false;
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        // ============================================================================
+        // TAB MANAGEMENT
+        // ============================================================================
+
+        function setupTabSwitching() {
+            const tabs = document.querySelectorAll('.tab');
+            tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    switchMonitoringTab(tab.dataset.tab);
+                });
+            });
+        }
+
+        function switchMonitoringTab(tabName) {
+            // Stop log streaming if leaving the logs tab
+            if (currentTab === 'logs') {
+                stopLogsStream();
+            }
+
+            // Update tab buttons
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelector(`.tab[data-tab="${tabName}"]`).classList.add('active');
+
+            // Update tab content
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.getElementById(`${tabName}-tab`).classList.add('active');
+
+            currentTab = tabName;
+
+            // Lazy load tabs on first open
+            if (tabName === 'jobs' && !jobsState.jobsLoaded) {
+                loadJobsTab();
+                jobsState.jobsLoaded = true;
+            } else if (tabName === 'system' && !jobsState.systemLoaded) {
+                loadHealth();
+                loadMetrics();
+                loadStats();
+                loadAgentActions();
+                jobsState.systemLoaded = true;
+            } else if (tabName === 'logs') {
+                initLogsTab();
+            }
+        }
+
+        // ============================================================================
+        // SYSTEM TAB FUNCTIONS
+        // ============================================================================
+
+        async function loadHealth() {
+            try {
+                const health = await api.get('/api/monitoring/health');
+                const statusHtml = Object.entries(health.checks).filter(([name]) => {
+                    return !(isManaged && name === 'disk_space');
+                }).map(([name, check]) => {
+                    const statusClass = `status-${check.status}`;
+                    return `<div><span class="status-indicator ${statusClass}"></span>${name}: ${check.message}</div>`;
+                }).join('');
+                document.getElementById('healthStatus').innerHTML = statusHtml;
+            } catch (error) {
+                document.getElementById('healthStatus').innerHTML = '<span class="text-muted">Failed to load</span>';
+            }
+        }
+
+        async function loadMetrics() {
+            try {
+                const metrics = await api.get('/api/monitoring/metrics');
+                document.getElementById('apiMetrics').innerHTML = `
+                    <div>Total Calls: ${metrics.api_calls.total}</div>
+                    <div>Success Rate: ${(metrics.api_calls.success_rate * 100).toFixed(1)}%</div>
+                `;
+            } catch (error) {
+                document.getElementById('apiMetrics').innerHTML = '<span class="text-muted">Failed to load</span>';
+            }
+        }
+
+        async function loadStats() {
+            try {
+                const stats = await api.get('/api/monitoring/stats');
+                document.getElementById('conversationStats').innerHTML = `
+                    <div>Total: ${stats.total_conversations}</div>
+                    <div>Active (24h): ${stats.active_last_24h}</div>
+                `;
+            } catch (error) {
+                document.getElementById('conversationStats').innerHTML = '<span class="text-muted">Failed to load</span>';
+            }
+        }
+
+        async function loadAgentActions() {
+            try {
+                const service = document.getElementById('filterService')?.value || '';
+                const success = document.getElementById('filterSuccess')?.value || '';
+
+                let url = '/api/monitoring/audit-logs?event_type=tool_execution&limit=20';
+                if (service) url += `&service_name=${service}`;
+                if (success) url += `&success=${success}`;
+
+                const data = await api.get(url);
+
+                if (!data.logs || data.logs.length === 0) {
+                    document.getElementById('agentActions').innerHTML =
+                        '<span class="text-muted">No agent actions yet</span>';
+                    return;
+                }
+
+                const actionsHtml = data.logs.map(log => {
+                    const details = log.details || {};
+                    const statusIcon = log.success ? '✓' : '✗';
+                    const statusColor = log.success ? 'var(--success-color)' : 'var(--error-color)';
+                    const execTime = details.execution_time_ms || 0;
+
+                    return `
+                        <div class="log-entry" style="cursor: pointer;" onclick="toggleDetails('action-${log.id}')">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <span style="color: ${statusColor}; margin-right: 8px; font-weight: bold;">${statusIcon}</span>
+                                    <span style="font-weight: 500;">${log.service_name || 'unknown'}</span>
+                                    <span style="margin: 0 8px; color: var(--text-muted);">•</span>
+                                    <span>${log.action}</span>
+                                </div>
+                                <div>
+                                    <span class="log-timestamp">${formatDateTime(log.timestamp)}</span>
+                                    <span style="color: var(--text-muted); margin-left: 8px;">${execTime}ms</span>
+                                </div>
+                            </div>
+                            <div id="action-${log.id}" style="display: none; margin-top: 8px; padding: 8px; background: var(--background-secondary); border-radius: 4px; font-size: 0.85rem;">
+                                ${details.arguments ? `<div><strong>Arguments:</strong><pre style="margin: 4px 0; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;">${JSON.stringify(details.arguments, null, 2)}</pre></div>` : ''}
+                                ${details.result_summary ? `<div style="margin-top: 8px;"><strong>Result:</strong><pre style="margin: 4px 0; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;">${JSON.stringify(details.result_summary, null, 2)}</pre></div>` : ''}
+                                ${log.error_message ? `<div style="color: var(--error-color); margin-top: 8px;"><strong>Error:</strong> ${log.error_message}</div>` : ''}
+                                ${details.tool_call_id ? `<div style="margin-top: 8px; color: var(--text-muted);"><strong>Tool Call ID:</strong> ${details.tool_call_id}</div>` : ''}
+                                ${details.iteration ? `<div style="color: var(--text-muted);"><strong>Iteration:</strong> ${details.iteration}</div>` : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                document.getElementById('agentActions').innerHTML = actionsHtml;
+            } catch (error) {
+                console.error('Failed to load agent actions:', error);
+                document.getElementById('agentActions').innerHTML =
+                    '<span class="text-muted">Failed to load</span>';
+            }
+        }
+
+        function toggleDetails(id) {
+            const elem = document.getElementById(id);
+            if (elem) {
+                elem.style.display = elem.style.display === 'none' ? 'block' : 'none';
+            }
+        }
+
+        function refreshAll() {
+            if (currentTab === 'system') {
+                loadHealth();
+                loadMetrics();
+                loadStats();
+                loadAgentActions();
+                jobsState.systemLoaded = true;
+            } else if (currentTab === 'jobs') {
+                loadJobsTab();
+                jobsState.jobsLoaded = true;
+            } else if (currentTab === 'logs') {
+                stopLogsStream();
+                clearLogs();
+                initLogsTab();
+            }
+            toast.success('Refreshed');
+        }
+
+        // ============================================================================
+        // LOGS TAB FUNCTIONS
+        // ============================================================================
+
+        const logsState = {
+            eventSource: null,
+            autoScroll: true,
+            paused: false,
+            pauseBuffer: [],
+            maxLines: 1000,
+            placeholderCleared: false,
+        };
+
+        const LOG_LEVEL_COLORS = {
+            DEBUG:    '#666',
+            INFO:     '#8eb4e3',
+            WARNING:  '#f5a623',
+            ERROR:    '#e05252',
+            CRITICAL: '#ff2020',
+        };
+
+        function initLogsTab() {
+            if (logsState.eventSource) return;
+
+            const content = document.getElementById('logsContent');
+            content.innerHTML = '<span style="color: #555;">Connecting to log stream...</span>';
+            setLogsStatus(false);
+
+            const es = new EventSource((window.INSTANCE_BASE_PATH || '') + '/api/monitoring/logs/stream');
+            logsState.eventSource = es;
+
+            es.onopen = () => setLogsStatus(true);
+
+            es.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.error) {
+                        appendLogsMessage(`[error] ${data.error}`, '#e05252');
+                        return;
+                    }
+                    if (logsState.paused) {
+                        logsState.pauseBuffer.push(data);
+                    } else {
+                        appendLogLine(data);
+                    }
+                } catch (_) { /* ignore parse errors */ }
+            };
+
+            es.onerror = () => {
+                setLogsStatus(false);
+                // EventSource reconnects automatically; update indicator
+            };
+        }
+
+        function stopLogsStream() {
+            if (logsState.eventSource) {
+                logsState.eventSource.close();
+                logsState.eventSource = null;
+            }
+            setLogsStatus(false);
+        }
+
+        function setLogsStatus(connected) {
+            const dot = document.getElementById('logsStatusDot');
+            const text = document.getElementById('logsStatusText');
+            if (!dot || !text) return;
+            if (connected) {
+                dot.classList.remove('disconnected');
+                text.textContent = 'Live';
+            } else {
+                dot.classList.add('disconnected');
+                text.textContent = logsState.eventSource ? 'Reconnecting...' : 'Not connected';
+            }
+        }
+
+        function parseLogLine(line) {
+            // Format: "2024-01-01 12:00:00,123 - LEVEL - module - message"
+            const parts = line.split(' - ');
+            if (parts.length >= 4) {
+                return {
+                    timestamp: parts[0].trim(),
+                    level: parts[1].trim(),
+                    module: parts[2].trim(),
+                    message: parts.slice(3).join(' - ').trim(),
+                };
+            }
+            return null;
+        }
+
+        function appendLogLine(data) {
+            const container = document.getElementById('logsContent');
+            if (!container) return;
+
+            // Clear placeholder text on first real entry
+            if (!logsState.placeholderCleared) {
+                container.innerHTML = '';
+                logsState.placeholderCleared = true;
+            }
+
+            const parsed = parseLogLine(data.line);
+            const levelFilter = document.getElementById('logsLevelFilter')?.value || '';
+
+            // Enforce max line count
+            while (container.children.length >= logsState.maxLines) {
+                container.removeChild(container.firstChild);
+            }
+
+            const entry = document.createElement('div');
+            entry.className = 'log-stream-entry';
+            if (data.historical) entry.dataset.historical = '1';
+
+            if (parsed) {
+                entry.dataset.level = parsed.level;
+                const color = LOG_LEVEL_COLORS[parsed.level] || '#ccc';
+                entry.innerHTML =
+                    `<span class="log-stream-time">${escapeHtml(parsed.timestamp)}</span>` +
+                    `<span class="log-stream-level" style="color:${color};">[${escapeHtml(parsed.level)}]</span>` +
+                    `<span class="log-stream-module">${escapeHtml(parsed.module)}</span>` +
+                    `<span class="log-stream-msg">${escapeHtml(parsed.message)}</span>`;
+            } else {
+                entry.dataset.level = 'RAW';
+                entry.innerHTML = `<span class="log-stream-raw">${escapeHtml(data.line)}</span>`;
+            }
+
+            // Apply current filter visibility
+            if (levelFilter && entry.dataset.level !== levelFilter) {
+                entry.style.display = 'none';
+            }
+
+            container.appendChild(entry);
+
+            if (logsState.autoScroll) {
+                const terminal = document.getElementById('logsContainer');
+                terminal.scrollTop = terminal.scrollHeight;
+            }
+        }
+
+        function appendLogsMessage(text, color) {
+            const container = document.getElementById('logsContent');
+            if (!container) return;
+            const entry = document.createElement('div');
+            entry.style.color = color || '#888';
+            entry.style.padding = '4px 0';
+            entry.textContent = text;
+            container.appendChild(entry);
+        }
+
+        function applyLogsFilter() {
+            const filter = document.getElementById('logsLevelFilter')?.value || '';
+            document.querySelectorAll('#logsContent .log-stream-entry').forEach(entry => {
+                const level = entry.dataset.level || '';
+                entry.style.display = (!filter || level === filter) ? '' : 'none';
+            });
+            if (logsState.autoScroll) {
+                const terminal = document.getElementById('logsContainer');
+                terminal.scrollTop = terminal.scrollHeight;
+            }
+        }
+
+        function clearLogs() {
+            const container = document.getElementById('logsContent');
+            if (container) container.innerHTML = '';
+            logsState.pauseBuffer = [];
+            logsState.placeholderCleared = false;
+        }
+
+        function toggleLogsAutoScroll() {
+            logsState.autoScroll = !logsState.autoScroll;
+            const btn = document.getElementById('logsAutoScrollBtn');
+            if (btn) btn.textContent = `Auto-scroll: ${logsState.autoScroll ? 'ON' : 'OFF'}`;
+            if (logsState.autoScroll) {
+                const terminal = document.getElementById('logsContainer');
+                if (terminal) terminal.scrollTop = terminal.scrollHeight;
+            }
+        }
+
+        function toggleLogsPause() {
+            logsState.paused = !logsState.paused;
+            const btn = document.getElementById('logsPauseBtn');
+            if (logsState.paused) {
+                if (btn) btn.textContent = 'Resume';
+            } else {
+                // Flush buffered lines
+                logsState.pauseBuffer.forEach(data => appendLogLine(data));
+                logsState.pauseBuffer = [];
+                if (btn) btn.textContent = 'Pause';
+            }
+        }
+
+        // Stop streaming when navigating away
+        window.addEventListener('beforeunload', () => stopLogsStream());
+
+        // ============================================================================
+        // JOBS TAB FUNCTIONS
+        // ============================================================================
+
+        async function loadJobsTab() {
+            await Promise.all([
+                loadCronJobs(),
+                loadFutureTasks(),
+                loadExecutionHistory()
+            ]);
+        }
+
+        // Cron Jobs
+        async function loadCronJobs() {
+            try {
+                const data = await api.get('/api/cron-jobs');
+                jobsState.cronJobs = data.jobs || [];
+                renderCronJobs();
+            } catch (error) {
+                console.error('Failed to load cron jobs:', error);
+                document.getElementById('cronJobs').innerHTML = '<div class="empty-state">Failed to load cron jobs</div>';
+            }
+        }
+
+        function renderCronJobs() {
+            const container = document.getElementById('cronJobs');
+
+            if (jobsState.cronJobs.length === 0) {
+                container.innerHTML = '<div class="empty-state">No cron jobs configured</div>';
+                return;
+            }
+
+            const html = `
+                <table class="jobs-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Schedule</th>
+                            <th>Steps</th>
+                            <th>Status</th>
+                            <th>Last Run</th>
+                            <th>Next Run</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${jobsState.cronJobs.map(job => {
+                            const stepCount = job.steps ? job.steps.length : 1;
+                            const stepLabel = stepCount === 1 ? '1 step' : `${stepCount} steps`;
+                            const pinnedCount = job.steps ? job.steps.filter(s => s.tool_name).length : 0;
+                            const stepDetail = pinnedCount > 0 ? ` (${pinnedCount} pinned)` : '';
+                            return `
+                            <tr>
+                                <td><strong>${escapeHtml(job.name)}</strong></td>
+                                <td><code style="font-size: 0.85rem;">${escapeHtml(job.cron_expression)}</code></td>
+                                <td style="white-space:nowrap">${stepLabel}<span style="color:var(--text-secondary);font-size:0.8rem">${stepDetail}</span></td>
+                                <td>
+                                    <span class="status-badge-inline status-badge-${job.enabled ? 'enabled' : 'disabled'}">
+                                        ${job.enabled ? 'Enabled' : 'Disabled'}
+                                    </span>
+                                </td>
+                                <td>${job.last_run_at ? formatDateTime(job.last_run_at) : 'Never'}</td>
+                                <td>${job.next_run_at ? formatDateTime(job.next_run_at) : 'N/A'}</td>
+                                <td>
+                                    <div class="job-actions">
+                                        <button class="job-action-btn" onclick="openEditPromptModal('${job.job_id}')">
+                                            Edit Recipe
+                                        </button>
+                                        <button class="job-action-btn" onclick="toggleCronJob('${job.job_id}', ${!job.enabled})">
+                                            ${job.enabled ? 'Disable' : 'Enable'}
+                                        </button>
+                                        <button class="job-action-btn" onclick="runCronJobNow('${job.job_id}')">
+                                            Run Now
+                                        </button>
+                                        <button class="job-action-btn btn-danger" onclick="deleteCronJob('${job.job_id}')">
+                                            Delete
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+
+            container.innerHTML = html;
+        }
+
+        async function toggleCronJob(jobId, enabled) {
+            try {
+                await api.post(`/api/cron-jobs/${jobId}/toggle?enabled=${enabled}`);
+                toast.success(`Cron job ${enabled ? 'enabled' : 'disabled'}`);
+                await loadCronJobs();
+            } catch (error) {
+                console.error('Failed to toggle cron job:', error);
+                toast.error('Failed to toggle cron job');
+            }
+        }
+
+        async function runCronJobNow(jobId) {
+            try {
+                await api.post(`/api/cron-jobs/${jobId}/run-now`);
+                toast.success('Cron job execution started');
+                await loadCronJobs();
+            } catch (error) {
+                console.error('Failed to run cron job:', error);
+                toast.error('Failed to run cron job');
+            }
+        }
+
+        async function deleteCronJob(jobId) {
+            if (!confirm('Are you sure you want to delete this cron job?')) {
+                return;
+            }
+
+            try {
+                await api.delete(`/api/cron-jobs/${jobId}`);
+                toast.success('Cron job deleted');
+                await loadCronJobs();
+            } catch (error) {
+                console.error('Failed to delete cron job:', error);
+                toast.error('Failed to delete cron job');
+            }
+        }
+
+        // Future Tasks
+        async function loadFutureTasks() {
+            try {
+                const statusFilter = document.getElementById('futureTaskStatusFilter')?.value || '';
+                let url = '/api/future-tasks';
+                if (statusFilter) {
+                    url += `?status=${statusFilter}`;
+                }
+
+                const data = await api.get(url);
+                jobsState.futureTasks = data.tasks || [];
+                renderFutureTasks();
+            } catch (error) {
+                console.error('Failed to load future tasks:', error);
+                document.getElementById('futureTasks').innerHTML = '<div class="empty-state">Failed to load future tasks</div>';
+            }
+        }
+
+        function renderFutureTasks() {
+            const container = document.getElementById('futureTasks');
+
+            if (jobsState.futureTasks.length === 0) {
+                container.innerHTML = '<div class="empty-state">No future tasks scheduled</div>';
+                return;
+            }
+
+            const html = `
+                <table class="jobs-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Scheduled Time</th>
+                            <th>Type</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${jobsState.futureTasks.map(task => `
+                            <tr>
+                                <td><strong>${task.name}</strong></td>
+                                <td>${formatDateTime(task.scheduled_time)}</td>
+                                <td>${task.job_type || 'unknown'}</td>
+                                <td>
+                                    <span class="status-badge-inline status-badge-${task.status}">
+                                        ${task.status.charAt(0).toUpperCase() + task.status.slice(1)}
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="job-actions">
+                                        ${task.status === 'pending' ? `
+                                            <button class="job-action-btn btn-danger" onclick="cancelFutureTask('${task.task_id}')">
+                                                Cancel
+                                            </button>
+                                        ` : ''}
+                                    </div>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+
+            container.innerHTML = html;
+        }
+
+        async function cancelFutureTask(taskId) {
+            if (!confirm('Are you sure you want to cancel this future task?')) {
+                return;
+            }
+
+            try {
+                await api.delete(`/api/future-tasks/${taskId}`);
+                toast.success('Future task cancelled');
+                await loadFutureTasks();
+            } catch (error) {
+                console.error('Failed to cancel future task:', error);
+                toast.error('Failed to cancel future task');
+            }
+        }
+
+        // Execution History
+        async function loadExecutionHistory() {
+            try {
+                const data = await api.get('/api/cron-jobs/executions/recent?limit=20');
+                jobsState.executionHistory = data.executions || [];
+                renderExecutionHistory();
+            } catch (error) {
+                console.error('Failed to load execution history:', error);
+                document.getElementById('executionHistory').innerHTML = '<div class="empty-state">Failed to load execution history</div>';
+            }
+        }
+
+        function renderExecutionHistory() {
+            const container = document.getElementById('executionHistory');
+
+            // Apply filters
+            const typeFilter = document.getElementById('historyTypeFilter')?.value || '';
+            const statusFilter = document.getElementById('historyStatusFilter')?.value || '';
+
+            let filtered = jobsState.executionHistory;
+
+            if (typeFilter) {
+                filtered = filtered.filter(exec => exec.job_type === typeFilter);
+            }
+
+            if (statusFilter) {
+                filtered = filtered.filter(exec => exec.status === statusFilter);
+            }
+
+            if (filtered.length === 0) {
+                container.innerHTML = '<div class="empty-state">No execution history</div>';
+                return;
+            }
+
+            const html = `
+                <table class="jobs-table">
+                    <thead>
+                        <tr>
+                            <th>Job Name</th>
+                            <th>Type</th>
+                            <th>Started</th>
+                            <th>Duration</th>
+                            <th>Status</th>
+                            <th>Details</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${filtered.map((exec, idx) => {
+                            const duration = exec.completed_at
+                                ? Math.round((new Date(exec.completed_at) - new Date(exec.started_at)) / 1000)
+                                : 'N/A';
+
+                            const statusBadge = exec.status === 'success' ? 'success'
+                                : exec.status === 'failed' ? 'failed'
+                                : exec.status === 'cancelled' ? 'cancelled'
+                                : 'running';
+                            const statusText = exec.status.charAt(0).toUpperCase() + exec.status.slice(1);
+
+                            return `
+                                <tr>
+                                    <td><strong>${escapeHtml(exec.job_name || 'Unknown')}</strong></td>
+                                    <td>${exec.job_type === 'cron' ? 'Cron Job' : 'Future Task'}</td>
+                                    <td>${formatDateTime(exec.started_at)}</td>
+                                    <td>${duration !== 'N/A' ? duration + 's' : duration}</td>
+                                    <td>
+                                        <span class="status-badge-inline status-badge-${statusBadge}">
+                                            ${statusText}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        ${exec.error_message || exec.result ? `
+                                            <button class="job-action-btn" onclick="toggleExecutionDetails('exec-${idx}')">
+                                                Show Details
+                                            </button>
+                                        ` : '-'}
+                                    </td>
+                                </tr>
+                                ${exec.error_message || exec.result ? `
+                                    <tr id="exec-${idx}" style="display: none;">
+                                        <td colspan="6">
+                                            <div class="execution-details">
+                                                ${exec.error_message ? `
+                                                    <div style="color: var(--error-color);">
+                                                        <strong>Error:</strong>
+                                                        <pre>${exec.error_message}</pre>
+                                                    </div>
+                                                ` : ''}
+                                                ${exec.result ? `
+                                                    <div>
+                                                        <strong>Result:</strong>
+                                                        <pre>${JSON.stringify(exec.result, null, 2)}</pre>
+                                                    </div>
+                                                ` : ''}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ` : ''}
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+
+            container.innerHTML = html;
+        }
+
+        function toggleExecutionDetails(id) {
+            const elem = document.getElementById(id);
+            if (elem) {
+                elem.style.display = elem.style.display === 'none' ? '' : 'none';
+            }
+        }
+
+        // ============================================================================
+        // EDIT RECIPE MODAL FUNCTIONS
+        // ============================================================================
+
+        let currentEditJobId = null;
+        let recipeSteps = [];  // working copy of steps being edited
+
+        function openEditPromptModal(jobId) {
+            const job = jobsState.cronJobs.find(j => j.job_id === jobId);
+            if (!job) { toast.error('Job not found'); return; }
+            currentEditJobId = jobId;
+            document.getElementById('modalJobName').textContent = job.name;
+
+            if (job.steps && job.steps.length > 0) {
+                recipeSteps = job.steps.map(s => Object.assign({}, s));
+                document.getElementById('legacyPromptGroup').style.display = 'none';
+            } else {
+                // Legacy prompt job — wrap in a single step for editing
+                recipeSteps = [{ order: 1, description: job.name, prompt_template: job.prompt || '' }];
+                document.getElementById('legacyPromptGroup').style.display = 'none';
+            }
+            renderStepsList();
+            document.getElementById('editPromptModal').classList.add('active');
+        }
+
+        function renderStepsList() {
+            const container = document.getElementById('recipeStepsList');
+            container.innerHTML = recipeSteps.map((step, idx) => `
+                <div style="border:1px solid var(--border-color);border-radius:8px;padding:12px;background:var(--bg-secondary)">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                        <strong style="font-size:0.85rem">Step ${step.order}</strong>
+                        <button class="btn btn-secondary" style="padding:2px 8px;font-size:0.75rem" onclick="removeRecipeStep(${idx})">Remove</button>
+                    </div>
+                    <div class="form-group" style="margin-bottom:8px">
+                        <label class="form-label" style="font-size:0.8rem">Description</label>
+                        <input class="form-input" value="${escapeHtml(step.description||'')}" oninput="updateStep(${idx},'description',this.value)" style="font-size:0.85rem">
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+                        <div class="form-group" style="margin:0">
+                            <label class="form-label" style="font-size:0.8rem">Pinned tool <span style="color:var(--text-secondary)">(optional)</span></label>
+                            <input class="form-input" value="${escapeHtml(step.tool_name||'')}" placeholder="e.g. google_calendar_list_events" oninput="updateStep(${idx},'tool_name',this.value||null)" style="font-size:0.85rem">
+                        </div>
+                        <div class="form-group" style="margin:0">
+                            <label class="form-label" style="font-size:0.8rem">Stores result as</label>
+                            <input class="form-input" value="${escapeHtml(step.stores_as||'')}" placeholder="variable_name" oninput="updateStep(${idx},'stores_as',this.value||null)" style="font-size:0.85rem">
+                        </div>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+                        <div class="form-group" style="margin:0">
+                            <label class="form-label" style="font-size:0.8rem">Uses variable</label>
+                            <input class="form-input" value="${escapeHtml(step.uses_variable||'')}" placeholder="from prior step" oninput="updateStep(${idx},'uses_variable',this.value||null)" style="font-size:0.85rem">
+                        </div>
+                    </div>
+                    ${!step.tool_name ? `
+                    <div class="form-group" style="margin:0">
+                        <label class="form-label" style="font-size:0.8rem">Prompt template <span style="color:var(--text-secondary)">(used when no tool is pinned)</span></label>
+                        <textarea class="form-textarea" style="font-size:0.85rem;min-height:80px" oninput="updateStep(${idx},'prompt_template',this.value)">${escapeHtml(step.prompt_template||'')}</textarea>
+                    </div>` : ''}
+                </div>
+            `).join('');
+        }
+
+        function updateStep(idx, field, value) {
+            recipeSteps[idx][field] = value;
+        }
+
+        function addRecipeStep() {
+            const nextOrder = recipeSteps.length > 0 ? Math.max(...recipeSteps.map(s => s.order)) + 1 : 1;
+            recipeSteps.push({ order: nextOrder, description: '', tool_name: null, prompt_template: '', stores_as: null, uses_variable: null });
+            renderStepsList();
+        }
+
+        function removeRecipeStep(idx) {
+            recipeSteps.splice(idx, 1);
+            recipeSteps.forEach((s, i) => s.order = i + 1);
+            renderStepsList();
+        }
+
+        function closeEditPromptModal() {
+            currentEditJobId = null;
+            recipeSteps = [];
+            document.getElementById('modalJobName').textContent = '';
+            document.getElementById('recipeStepsList').innerHTML = '';
+            document.getElementById('editPromptModal').classList.remove('active');
+        }
+
+        async function savePrompt() {
+            if (!currentEditJobId) { toast.error('No job selected'); return; }
+            if (recipeSteps.length === 0) { toast.error('Add at least one step'); return; }
+
+            const cleanedSteps = recipeSteps.map(s => {
+                const step = { order: s.order, description: s.description || '' };
+                if (s.tool_name) step.tool_name = s.tool_name;
+                if (s.tool_parameters) step.tool_parameters = s.tool_parameters;
+                if (s.prompt_template) step.prompt_template = s.prompt_template;
+                if (s.stores_as) step.stores_as = s.stores_as;
+                if (s.uses_variable) step.uses_variable = s.uses_variable;
+                return step;
+            });
+
+            try {
+                await api.put(`/api/cron-jobs/${currentEditJobId}`, { steps: cleanedSteps });
+                toast.success('Recipe saved');
+                closeEditPromptModal();
+                await loadCronJobs();
+            } catch (error) {
+                console.error('Failed to save recipe:', error);
+                toast.error('Failed to save recipe');
+            }
+        }
+
+        // Close modal when clicking outside
+        document.addEventListener('click', (e) => {
+            const modal = document.getElementById('editPromptModal');
+            if (e.target === modal) {
+                closeEditPromptModal();
+            }
+        });
+
+        // Close modal on Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && document.getElementById('editPromptModal').classList.contains('active')) {
+                closeEditPromptModal();
+            }
+        });
+
+        async function loadManagedStatus() {
+            try {
+                const response = await api.get('/api/settings/managed-status');
+                return response;
+            } catch (error) {
+                return { is_managed: false };
+            }
+        }
+
+        async function loadUserTimezone() {
+            try {
+                const data = await api.get('/api/settings/category/user');
+                const tzSetting = (data.settings || []).find(s => s.key === 'user.timezone');
+                if (tzSetting && tzSetting.value) {
+                    window.userTimezone = tzSetting.value;
+                    const label = document.getElementById('tzLabel');
+                    if (label) label.textContent = `Times in ${tzSetting.value}`;
+                }
+            } catch (_) { /* ignore; browser local time is fine */ }
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            const [managedStatus] = await Promise.all([
+                loadManagedStatus(),
+                loadUserTimezone(),
+            ]);
+            isManaged = !!(managedStatus && managedStatus.is_managed);
+
+            // Setup tab switching
+            setupTabSwitching();
+
+            // Load initial data (Jobs tab)
+            refreshAll();
+
+            // Initialize filter dropdowns for System tab
+            document.getElementById('filterService')?.addEventListener('change', loadAgentActions);
+            document.getElementById('filterSuccess')?.addEventListener('change', loadAgentActions);
+
+            // Initialize filter dropdowns for Jobs tab
+            document.getElementById('futureTaskStatusFilter')?.addEventListener('change', loadFutureTasks);
+            document.getElementById('historyTypeFilter')?.addEventListener('change', renderExecutionHistory);
+            document.getElementById('historyStatusFilter')?.addEventListener('change', renderExecutionHistory);
+        });
+
+        // Auto-refresh every 30 seconds (only active tab; logs tab streams in real-time)
+        setInterval(() => {
+            if (currentTab === 'system') {
+                loadHealth();
+                loadMetrics();
+                loadStats();
+                loadAgentActions();
+            } else if (currentTab === 'jobs' && jobsState.jobsLoaded) {
+                loadJobsTab();
+            }
+        }, 30000);
+    </script>
+    <script src="/static/js/pwa.js"></script>
+</body>
+</html>

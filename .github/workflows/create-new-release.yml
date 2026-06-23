@@ -1,0 +1,123 @@
+name: Create New Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'pyproject.toml'
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+
+jobs:
+  create_release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Get current version
+        id: current_version
+        run: |
+          CURRENT_VERSION=$(grep -m1 '^version' pyproject.toml | sed 's/.*"\(.*\)".*/\1/')
+          echo "Current version: $CURRENT_VERSION"
+          echo "current=${CURRENT_VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Get latest tag version
+        id: latest_tag
+        run: |
+          # Get the latest tag name
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          echo "Latest tag: $LATEST_TAG"
+
+          if [ -z "$LATEST_TAG" ]; then
+            PREVIOUS_VERSION="0.0.0"
+          else
+            # Remove leading 'v' to get the version number
+            PREVIOUS_VERSION=${LATEST_TAG#v}
+          fi
+          echo "Previous version: $PREVIOUS_VERSION"
+          echo "previous=${PREVIOUS_VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Check if version has changed or manual trigger
+        if: ${{ steps.current_version.outputs.current != steps.latest_tag.outputs.previous || github.event_name == 'workflow_dispatch' }}
+        run: |
+          echo "Version changed from ${{ steps.latest_tag.outputs.previous }} to ${{ steps.current_version.outputs.current }}."
+          echo "Proceeding to create tag and release."
+
+      - name: Create new tag
+        if: ${{ steps.current_version.outputs.current != steps.latest_tag.outputs.previous || github.event_name == 'workflow_dispatch' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          NEW_TAG="v${{ steps.current_version.outputs.current }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # Set up authentication
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git
+          git tag $NEW_TAG
+          git push origin $NEW_TAG
+
+      - name: Generate release notes with LLM
+        if: ${{ steps.current_version.outputs.current != steps.latest_tag.outputs.previous || github.event_name == 'workflow_dispatch' }}
+        id: generate_notes
+        env:
+          GH_ACTIONS_OPENAI_API_KEY: ${{ secrets.GH_ACTIONS_OPENAI_API_KEY }}
+        run: |
+          PREVIOUS_TAG="${{ steps.latest_tag.outputs.previous }}"
+          CURRENT_TAG="v${{ steps.current_version.outputs.current }}"
+
+          # Run the release notes generator script
+          if [ "$PREVIOUS_TAG" = "0.0.0" ]; then
+            RELEASE_NOTES=$(node .github/scripts/generate-release-notes.mjs "" "$CURRENT_TAG")
+          else
+            RELEASE_NOTES=$(node .github/scripts/generate-release-notes.mjs "v${PREVIOUS_TAG}" "$CURRENT_TAG")
+          fi
+
+          # Save to file and output (handle multiline)
+          echo "$RELEASE_NOTES" > release_notes.md
+          echo "notes<<EOF" >> $GITHUB_OUTPUT
+          echo "$RELEASE_NOTES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        if: ${{ steps.current_version.outputs.current != steps.latest_tag.outputs.previous || github.event_name == 'workflow_dispatch' }}
+        id: create_release
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const releaseNotes = fs.readFileSync('release_notes.md', 'utf8');
+
+            const release = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: "v${{ steps.current_version.outputs.current }}",
+              name: "v${{ steps.current_version.outputs.current }}",
+              body: releaseNotes,
+              draft: false,
+              prerelease: false
+            });
+
+            console.log(`Release created: ${release.data.html_url}`);
+            return release.data.html_url;
+
+      - name: Trigger Docker build workflow
+        if: ${{ steps.current_version.outputs.current != steps.latest_tag.outputs.previous || github.event_name == 'workflow_dispatch' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Triggering Docker build workflow for tag v${{ steps.current_version.outputs.current }}"
+          gh workflow run docker-build-push.yml --ref "v${{ steps.current_version.outputs.current }}"
