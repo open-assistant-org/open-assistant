@@ -1,0 +1,111 @@
+/*
+ * Open Assistant docs theme.
+ *
+ * Mirrors the app UI palette from src/ui/static/css/common.css:
+ *   --color-primary: #00ff00; --color-primary-dark: #00aa00;
+ *   --color-bg: #0f0f0f; --color-bg-darker: #050505; --color-surface: #1a1a1a;
+ *   --color-text: #ffffff; --color-text-muted: #cccccc;
+ *   --color-border: #2e2e2e; --color-primary-glow: rgba(0, 255, 0, 0.3);
+ *
+ * Toned down from the pure #00ff00 of the app UI: neon green is kept as a sparing
+ * accent (active nav, logo, glow, highlights), while links, code and headings use
+ * softer emerald/mint greens that stay on-brand but read well on the dark background.
+ */
+
+:root,
+[data-md-color-scheme="slate"] {
+  /* Primary — emerald (softer than pure neon green) */
+  --md-primary-fg-color: #2bd66f;
+  --md-primary-fg-color--light: #34d399;
+  --md-primary-fg-color--dark: #00aa00;
+  --md-primary-bg-color: #0a0a0a;
+  --md-primary-bg-color--light: #0f0f0f;
+
+  /* Accent — brighter, used only on hover/focus/active edges */
+  --md-accent-fg-color: #34d399;
+  --md-accent-fg-color--transparent: rgba(52, 211, 153, 0.25);
+
+  /* Backgrounds */
+  --md-default-bg-color: #0f0f0f;
+  --md-default-fg-color: #ffffff;
+  --md-default-fg-color--light: #cccccc;
+  --md-default-fg-color--lighter: #aaaaaa;
+  --md-default-fg-color--lightest: #888888;
+
+  /* Surfaces (cards, header, sidebar) */
+  --md-default-bg-color--light: #1a1a1a;
+  --md-default-bg-color--lighter: #1a1a1a;
+  --md-default-bg-color--lightest: #050505;
+
+  /* Code / typeset */
+  --md-code-bg-color: #050505;
+  --md-code-fg-color: #7ee787;
+  --md-typeset-a-color: #4ade80;
+
+  /* Borders */
+  --md-default-fg-color--dark: #2e2e2e;
+
+  /* Search highlight */
+  --md-search-result-highlight-color: #4ade80;
+}
+
+/* Header / sidebar sit on the dark surface like the app's cards. */
+.md-header {
+  background: #0a0a0a;
+  box-shadow: 0 0 12px rgba(52, 211, 153, 0.12);
+}
+
+.md-header[data-md-state="shadow"] {
+  box-shadow: 0 0 12px rgba(52, 211, 153, 0.12);
+}
+
+.md-sidebar {
+  background: #0f0f0f;
+}
+
+/* Subtle glow on the site title (pure neon green, low opacity — accent only). */
+.md-header__title {
+  text-shadow: 0 0 8px rgba(0, 255, 0, 0.2);
+}
+
+/* Active nav uses the primary emerald; only active/hover get a faint glow. */
+.md-nav__item--active > .md-nav__link {
+  color: #2bd66f;
+}
+
+.md-nav__link:focus,
+.md-nav__link:hover {
+  color: #34d399;
+  text-shadow: 0 0 6px rgba(52, 211, 153, 0.2);
+}
+
+/* Links: emerald, not pure neon green. */
+.md-typeset a {
+  color: #4ade80;
+}
+.md-typeset a:hover {
+  color: #34d399;
+}
+
+/* Inline code: muted green on near-black. */
+.md-typeset code {
+  color: #7ee787;
+  background: #050505;
+  border: 1px solid #2e2e2e;
+}
+
+/* Code blocks: dark background, keep syntax highlighting readable. */
+.md-typeset pre > code {
+  background: #050505;
+}
+
+/* Active tabs get the emerald accent. */
+.md-tabs__link--active,
+.md-tabs__link:hover {
+  color: #2bd66f;
+}
+
+/* Copy button hover glows faintly. */
+.md-clipboard:hover {
+  color: #34d399;
+}
