@@ -49,47 +49,109 @@
   --md-search-result-highlight-color: #4ade80;
 }
 
-/* Header / sidebar sit on the dark surface like the app's cards. */
+/*
+ * Header — aligned to the blog navbar (blog.open-assistant.org):
+ *   flat, no glow, a thin 1px #2e2e2e bottom border (blog's --color-border),
+ *   page-bg #0f0f0f, and the brand wordmark in pure neon green #00ff00
+ *   (blog's --color-primary, .navbar-title). The rest of the site stays toned down.
+ */
 .md-header {
-  background: #0a0a0a;
-  box-shadow: 0 0 12px rgba(52, 211, 153, 0.12);
+  background: #0f0f0f;
+  border-bottom: 1px solid #2e2e2e;
+  box-shadow: none;
 }
 
 .md-header[data-md-state="shadow"] {
-  box-shadow: 0 0 12px rgba(52, 211, 153, 0.12);
+  box-shadow: none;
+}
+
+/* A bit of vertical air, closer to the blog navbar's generous padding. */
+.md-header__inner {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+/* Tab strip stays flat on the same dark bg, separated by the border. */
+.md-tabs {
+  background: #0f0f0f;
+  border-bottom: 1px solid #2e2e2e;
 }
 
 .md-sidebar {
   background: #0f0f0f;
 }
 
-/* Subtle glow on the site title (pure neon green, low opacity — accent only). */
-.md-header__title {
-  text-shadow: 0 0 8px rgba(0, 255, 0, 0.2);
+/*
+ * Header kept calm — the green OA logo carries the brand, so the wordmark is
+ * clean white rather than neon green (pure #00ff00 looked garish on the header,
+ * especially the mobile drawer). Header + nav are identical on desktop & mobile.
+ */
+.md-header__title,
+.md-header__title:hover {
+  color: #ffffff;
 }
 
-/* Active nav uses the primary emerald; only active/hover get a faint glow. */
-.md-nav__item--active > .md-nav__link {
+/*
+ * Header links + ALL icons (hamburger, search, repo, theme) — readable on the
+ * dark bg: light grey at rest, emerald on hover. Material's default slate is
+ * near-invisible on #0f0f0f, which made the mobile hamburger invisible.
+ */
+.md-header__link,
+.md-header__button.md-icon,
+.md-search__icon,
+.md-search__input::placeholder {
+  color: #cccccc;
+}
+
+.md-header__link:hover,
+.md-header__button.md-icon:hover,
+.md-search__icon:hover {
   color: #2bd66f;
 }
 
-.md-nav__link:focus,
-.md-nav__link:hover {
-  color: #34d399;
-  text-shadow: 0 0 6px rgba(52, 211, 153, 0.2);
+/* The hamburger/back/forward buttons in the mobile nav drawer header. */
+.md-nav__icon,
+.md-nav__button.md-icon {
+  color: #cccccc;
+}
+.md-nav__icon:hover,
+.md-nav__button.md-icon:hover {
+  color: #2bd66f;
 }
 
-/* Links: emerald, not pure neon green. */
+/* Tab links (the navbar below the header): readable grey at rest. */
+.md-tabs__link {
+  color: #cccccc;
+  opacity: 0.9;
+}
+
+/*
+ * Active tab — make the current section unmistakable: bold + neon green
+ * (blog --color-primary), so it stands out from the rest of the row instead of
+ * reading as dark-on-dark.
+ */
+.md-tabs__link--active {
+  color: #00ff00;
+  font-weight: 700;
+  opacity: 1;
+}
+
+.md-tabs__link:hover {
+  color: #00ff00;
+  opacity: 1;
+}
+
+/* Links: pure neon green, matching the blog's --color-primary. */
 .md-typeset a {
-  color: #4ade80;
+  color: #00ff00;
 }
 .md-typeset a:hover {
-  color: #34d399;
+  color: #00aa00;
 }
 
-/* Inline code: muted green on near-black. */
+/* Inline code: pure neon green on near-black. */
 .md-typeset code {
-  color: #7ee787;
+  color: #00ff00;
   background: #050505;
   border: 1px solid #2e2e2e;
 }
@@ -99,10 +161,22 @@
   background: #050505;
 }
 
-/* Active tabs get the emerald accent. */
-.md-tabs__link--active,
-.md-tabs__link:hover {
-  color: #2bd66f;
+/*
+ * Search box — give it a visible border and readable typed text on the dark
+ * header (Material's default field is invisible on #0f0f0f).
+ */
+.md-search__input {
+  background: #050505;
+  border: 1px solid #2e2e2e;
+  color: #ffffff;
+}
+
+.md-search__input:hover {
+  border-color: #2bd66f;
+}
+
+.md-search__input::placeholder {
+  color: #888888;
 }
 
 /* Copy button hover glows faintly. */
