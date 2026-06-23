@@ -63,7 +63,7 @@ dependencies = [
     "groq>=0.4.0",
     "markdown>=3.5.0",
     "fpdf2>=2.7.0",
-    "python-jose[cryptography]==3.3.0",
+    "python-jose[cryptography]==3.4.0",
     "gnews>=0.4.0",
     "yfinance>=0.2.40",
     "pandas>=2.0.0",
