@@ -320,6 +320,7 @@ run_container() {
   local tmp_dir="$INSTALL_DIR/tmp"
 
   mkdir -p "$data_dir" "$logs_dir" "$tmp_dir"
+  chmod 777 "$data_dir" "$logs_dir" "$tmp_dir"
   info "Created directories: data/, logs/, tmp/"
 
   # Stop and remove existing container if present
