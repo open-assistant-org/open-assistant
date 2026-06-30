@@ -39,6 +39,17 @@ async def chat(
                 detail="LLM API key not configured. Please configure it in Settings or set LLM_API_KEY environment variable.",
             )
 
+        if settings_service.get_config_with_fallback("llm.paused", False):
+            logger.info("Chat rejected: LLM is paused")
+            raise HTTPException(
+                status_code=402,
+                detail=(
+                    "The assistant is paused — your monthly token budget has been reached. "
+                    "It resumes at the start of your next billing period, or you can raise "
+                    "your limit in your account settings."
+                ),
+            )
+
         logger.info(
             f"Chat request: channel={request.channel}, "
             f"message_length={len(request.message)}, "
@@ -131,6 +142,22 @@ async def chat_stream(
 
         return StreamingResponse(
             _err(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
+    if settings_service.get_config_with_fallback("llm.paused", False):
+        paused_msg = (
+            "The assistant is paused — your monthly token budget has been reached. "
+            "It resumes at the start of your next billing period, or you can raise "
+            "your limit in your account settings."
+        )
+
+        async def _paused_err():
+            yield f"data: {json.dumps({'type': 'error', 'error': paused_msg})}\n\n"
+
+        return StreamingResponse(
+            _paused_err(),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )

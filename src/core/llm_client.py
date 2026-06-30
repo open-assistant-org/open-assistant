@@ -8,6 +8,17 @@ from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
+
+class LLMPausedError(Exception):
+    """Raised when LLM calls are paused before reaching the provider.
+
+    The ``llm.paused`` setting is a remote-controlled kill switch (e.g. set to
+    enforce a spending limit). The guard in :meth:`LLMClient.complete` /
+    :meth:`LLMClient.complete_with_tools` raises this so every LLM-dependent
+    path (chat, cron jobs, background tools, auto-compaction) is blocked uniformly.
+    """
+
+
 # Default base URLs for each provider
 PROVIDER_BASE_URLS = {
     "openrouter": "https://openrouter.ai/api/v1",
@@ -62,6 +73,12 @@ class LLMConfig(BaseModel):
         default=None,
         description="Model for document composition tasks. Defaults to main model.",
     )
+    paused: bool = Field(
+        default=False,
+        description=(
+            "When true, all LLM calls raise LLMPausedError before reaching the " "provider."
+        ),
+    )
 
     def get_media_model(self) -> str:
         """Return the media model, falling back to the main model.
@@ -110,6 +127,7 @@ class LLMConfig(BaseModel):
             ),
             "temperature": float(settings_service.get_config_with_fallback("llm.temperature", 0.7)),
             "max_tokens": int(settings_service.get_config_with_fallback("llm.max_tokens", 4096)),
+            "paused": bool(settings_service.get_config_with_fallback("llm.paused", False)),
         }
         for key in ("media_model", "worker_model", "writer_model"):
             value = settings_service.get_config_with_fallback(f"llm.{key}", "")
@@ -239,6 +257,11 @@ class LLMClient:
         Returns:
             API response object
         """
+        if self.config.paused:
+            raise LLMPausedError(
+                "LLM is paused — the monthly budget cap has been reached. "
+                "It resumes automatically at the start of the next billing period."
+            )
         try:
             messages = self._sanitize_messages(messages)
             response = self._client.chat.completions.create(
@@ -290,6 +313,11 @@ class LLMClient:
         Returns:
             API response with potential tool_calls
         """
+        if self.config.paused:
+            raise LLMPausedError(
+                "LLM is paused — the monthly budget cap has been reached. "
+                "It resumes automatically at the start of the next billing period."
+            )
         try:
             messages = self._sanitize_messages(messages)
             response = self._client.chat.completions.create(
