@@ -75,6 +75,9 @@ htmlcov/
 # Build artifacts
 *.whl
 *.tar.gz
+
+# MkDocs build output
+site/
 /src/integrations/whatsapp/bridge/node_modules/
 /src/integrations/whatsapp/bridge/whatsapp_session/
 /src/integrations/whatsapp/bridge/.wwebjs_cache/

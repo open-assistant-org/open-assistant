@@ -589,5 +589,5 @@ Schema changes are tracked through:
 
 ## Related Documentation
 
-- [Database Implementation](../../src/core/database.py) - Python implementation
-- [Migration Files](../../src/core/migrations/) - SQL migration scripts
+- [Database Implementation](https://github.com/open-assistant-org/open-assistant/blob/main/src/core/database.py) - Python implementation
+- [Migration Files](https://github.com/open-assistant-org/open-assistant/blob/main/src/core/migrations/) - SQL migration scripts

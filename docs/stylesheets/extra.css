@@ -1,0 +1,185 @@
+/*
+ * Open Assistant docs theme.
+ *
+ * Mirrors the app UI palette from src/ui/static/css/common.css:
+ *   --color-primary: #00ff00; --color-primary-dark: #00aa00;
+ *   --color-bg: #0f0f0f; --color-bg-darker: #050505; --color-surface: #1a1a1a;
+ *   --color-text: #ffffff; --color-text-muted: #cccccc;
+ *   --color-border: #2e2e2e; --color-primary-glow: rgba(0, 255, 0, 0.3);
+ *
+ * Toned down from the pure #00ff00 of the app UI: neon green is kept as a sparing
+ * accent (active nav, logo, glow, highlights), while links, code and headings use
+ * softer emerald/mint greens that stay on-brand but read well on the dark background.
+ */
+
+:root,
+[data-md-color-scheme="slate"] {
+  /* Primary — emerald (softer than pure neon green) */
+  --md-primary-fg-color: #2bd66f;
+  --md-primary-fg-color--light: #34d399;
+  --md-primary-fg-color--dark: #00aa00;
+  --md-primary-bg-color: #0a0a0a;
+  --md-primary-bg-color--light: #0f0f0f;
+
+  /* Accent — brighter, used only on hover/focus/active edges */
+  --md-accent-fg-color: #34d399;
+  --md-accent-fg-color--transparent: rgba(52, 211, 153, 0.25);
+
+  /* Backgrounds */
+  --md-default-bg-color: #0f0f0f;
+  --md-default-fg-color: #ffffff;
+  --md-default-fg-color--light: #cccccc;
+  --md-default-fg-color--lighter: #aaaaaa;
+  --md-default-fg-color--lightest: #888888;
+
+  /* Surfaces (cards, header, sidebar) */
+  --md-default-bg-color--light: #1a1a1a;
+  --md-default-bg-color--lighter: #1a1a1a;
+  --md-default-bg-color--lightest: #050505;
+
+  /* Code / typeset */
+  --md-code-bg-color: #050505;
+  --md-code-fg-color: #7ee787;
+  --md-typeset-a-color: #4ade80;
+
+  /* Borders */
+  --md-default-fg-color--dark: #2e2e2e;
+
+  /* Search highlight */
+  --md-search-result-highlight-color: #4ade80;
+}
+
+/*
+ * Header — aligned to the blog navbar (blog.open-assistant.org):
+ *   flat, no glow, a thin 1px #2e2e2e bottom border (blog's --color-border),
+ *   page-bg #0f0f0f, and the brand wordmark in pure neon green #00ff00
+ *   (blog's --color-primary, .navbar-title). The rest of the site stays toned down.
+ */
+.md-header {
+  background: #0f0f0f;
+  border-bottom: 1px solid #2e2e2e;
+  box-shadow: none;
+}
+
+.md-header[data-md-state="shadow"] {
+  box-shadow: none;
+}
+
+/* A bit of vertical air, closer to the blog navbar's generous padding. */
+.md-header__inner {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+/* Tab strip stays flat on the same dark bg, separated by the border. */
+.md-tabs {
+  background: #0f0f0f;
+  border-bottom: 1px solid #2e2e2e;
+}
+
+.md-sidebar {
+  background: #0f0f0f;
+}
+
+/*
+ * Header kept calm — the green OA logo carries the brand, so the wordmark is
+ * clean white rather than neon green (pure #00ff00 looked garish on the header,
+ * especially the mobile drawer). Header + nav are identical on desktop & mobile.
+ */
+.md-header__title,
+.md-header__title:hover {
+  color: #ffffff;
+}
+
+/*
+ * Header links + ALL icons (hamburger, search, repo, theme) — readable on the
+ * dark bg: light grey at rest, emerald on hover. Material's default slate is
+ * near-invisible on #0f0f0f, which made the mobile hamburger invisible.
+ */
+.md-header__link,
+.md-header__button.md-icon,
+.md-search__icon,
+.md-search__input::placeholder {
+  color: #cccccc;
+}
+
+.md-header__link:hover,
+.md-header__button.md-icon:hover,
+.md-search__icon:hover {
+  color: #2bd66f;
+}
+
+/* The hamburger/back/forward buttons in the mobile nav drawer header. */
+.md-nav__icon,
+.md-nav__button.md-icon {
+  color: #cccccc;
+}
+.md-nav__icon:hover,
+.md-nav__button.md-icon:hover {
+  color: #2bd66f;
+}
+
+/* Tab links (the navbar below the header): readable grey at rest. */
+.md-tabs__link {
+  color: #cccccc;
+  opacity: 0.9;
+}
+
+/*
+ * Active tab — make the current section unmistakable: bold + neon green
+ * (blog --color-primary), so it stands out from the rest of the row instead of
+ * reading as dark-on-dark.
+ */
+.md-tabs__link--active {
+  color: #00ff00;
+  font-weight: 700;
+  opacity: 1;
+}
+
+.md-tabs__link:hover {
+  color: #00ff00;
+  opacity: 1;
+}
+
+/* Links: pure neon green, matching the blog's --color-primary. */
+.md-typeset a {
+  color: #00ff00;
+}
+.md-typeset a:hover {
+  color: #00aa00;
+}
+
+/* Inline code: pure neon green on near-black. */
+.md-typeset code {
+  color: #00ff00;
+  background: #050505;
+  border: 1px solid #2e2e2e;
+}
+
+/* Code blocks: dark background, keep syntax highlighting readable. */
+.md-typeset pre > code {
+  background: #050505;
+}
+
+/*
+ * Search box — give it a visible border and readable typed text on the dark
+ * header (Material's default field is invisible on #0f0f0f).
+ */
+.md-search__input {
+  background: #050505;
+  border: 1px solid #2e2e2e;
+  color: #ffffff;
+}
+
+.md-search__input:hover {
+  border-color: #2bd66f;
+}
+
+.md-search__input::placeholder {
+  color: #888888;
+}
+
+/* Copy button hover glows faintly. */
+.md-clipboard:hover {
+  color: #34d399;
+}

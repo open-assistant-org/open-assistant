@@ -446,6 +446,21 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
         ui_widget="text",
         placeholder="anthropic/claude-sonnet-4.6",
     ),
+    "llm.paused": SettingDefinition(
+        key="llm.paused",
+        display_name="LLM Paused",
+        description=(
+            "When true, all LLM calls (chat, cron jobs, background tools) are blocked before "
+            "they reach the provider. Set externally (e.g. via the managed settings API) to "
+            "pause the instance — for example when a spending limit is reached — and cleared "
+            "to resume. Not normally toggled manually in self-hosted deployments."
+        ),
+        value_type=SettingValueType.BOOL,
+        category=ConfigCategory.LLM,
+        default_value=False,
+        display_order=15,
+        ui_widget="toggle",
+    ),
     # ========================================================================
     # GOOGLE INTEGRATION (Gmail, Calendar, etc.)
     # ========================================================================

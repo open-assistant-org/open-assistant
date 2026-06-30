@@ -7,7 +7,7 @@ A sophisticated multi-agent personal assistant system that integrates with your 
 ## Installation
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/open-assistant-org/open-assistant/main/install.sh | bash
+bash <(curl -fsSL https://raw.githubusercontent.com/open-assistant-org/open-assistant/main/install.sh)
 ```
 
 That's it. The script will check for Docker, pull the image, and guide you through configuring your LLM provider.

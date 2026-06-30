@@ -127,7 +127,7 @@ WhatsApp voice messages are typically sent as `audio/ogg; codecs=opus`. The foll
 
 ## Other Media Types
 
-In addition to audio, the WhatsApp integration handles other media types. See the [WhatsApp Integration Guide](whatsapp.md#media-support) for full details.
+In addition to audio, the WhatsApp integration handles other media types. See the [WhatsApp Integration Guide](whatsapp.md) for full details.
 
 **Images**: Analyzed by the vision LLM to generate a text description, which is embedded in the message for both conversational and action paths. Send an image with a caption like "save this receipt" and the assistant will understand what's in the image.
 
