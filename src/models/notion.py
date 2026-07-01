@@ -94,6 +94,7 @@ class UpdatePageRequest(BaseModel):
 class AppendContentRequest(BaseModel):
     """Request model for appending content to a page."""
 
+    page_id: str = Field(..., description="Notion page ID")
     content: str = Field(..., description="Content to append")
 
 
