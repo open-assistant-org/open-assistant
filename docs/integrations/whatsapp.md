@@ -25,6 +25,48 @@ This integration uses **whatsapp-web.js**, an **unofficial** WhatsApp API that a
 - WhatsApp may block accounts that violate their Terms of Service
 - Recommended for personal use only, not for business/spam
 
+### 🔒 Privacy: Linking a Device Gives the Bridge Access to Your Messages
+
+To set up this integration you link Open Assistant as a WhatsApp Web device by scanning a QR code — exactly like logging into WhatsApp Web on a browser. **Once linked, the bridge has access to your WhatsApp conversations**, the same way WhatsApp Web does. This is inherent to how `whatsapp-web.js` works; it is not something Open Assistant can avoid.
+
+That said, **Open Assistant does NOT send every message you receive to the LLM** — that would be both invasive and very expensive. See [Which Messages Are Sent to the LLM?](#which-messages-are-sent-to-the-llm) below for the filtering logic.
+
+**Recommendation — use a second/dedicated number.** Because the linked device can see your messages, the safest setup is to run a separate WhatsApp account (e.g. on a second SIM / dual-SIM phone, or an eSIM) and pair *that* account with Open Assistant, rather than your primary personal number. This keeps your personal chats fully private and gives the assistant its own inbox to read and reply on. This is also the most reliable configuration — see [Pairing Your Own Phone / Messaging Yourself](#pairing-your-own-phone--messaging-yourself).
+
+## Which Messages Are Sent to the LLM?
+
+Only a strict subset of messages ever reach the LLM:
+
+1. **Only genuine incoming messages are forwarded.** The bridge listens for the `message` event (not `message_create`), so messages *you* send from your own phone are normally not forwarded at all.
+2. **Only messages from your configured owner number are processed.** When an incoming message arrives, the webhook compares the sender against the **Phone Number / WhatsApp ID** you configured in *Settings → Integrations → WhatsApp*. If the sender does not match, the message is dropped **before any LLM call** — it is simply logged as `Ignoring message from non-owner number …`. This is the gate that keeps cost and exposure bounded.
+3. **An LLM API key must be configured.** If no LLM key is set, matched messages are still dropped rather than processed.
+
+So in normal operation the assistant only ever reads messages that come from your own configured number, and replies to that same number. Group chats and messages from other contacts do not reach the model.
+
+## Pairing Your Own Phone / Messaging Yourself
+
+WhatsApp does **not** work well when you pair your own phone and then try to message your own number. In that situation WhatsApp identifies your "self" chat with a WhatsApp ID of the form `xxxxxxxxxxxxxxxx@lid` rather than the usual `phonenumber@c.us`, and `whatsapp-web.js` has trouble addressing `@lid` chats reliably (the bridge has a fallback send path specifically to work around this, but it remains flaky).
+
+This is the main reason a **second number is recommended** (see [Privacy](#-privacy-linking-a-device-gives-the-bridge-access-to-your-messages)): with a dedicated number, Open Assistant talks to a normal `@c.us` chat and sending/receiving works reliably.
+
+If you cannot use a second number and must pair your own phone, you can make it work by finding your own WhatsApp ID (the `@lid`) and configuring it explicitly:
+
+## Finding Your WhatsApp Number / ID
+
+If you don't know your own WhatsApp ID — common when pairing your own phone — you can read it from the logs:
+
+1. Make sure the bridge is running and linked.
+2. Send a WhatsApp message to the linked account (e.g. message yourself, or send from another device).
+3. Check the bridge/application logs for the incoming-message line:
+   ```
+   📨 Message received: <your-id> <body> hasMedia: ...
+   ```
+   The `<your-id>` field is your WhatsApp identifier. When pairing your own phone this will typically look like `123456789012345678@lid` (it can also appear as `phonenumber@c.us`). The Python webhook log line `Phone number comparison - From: '...' vs Owner: '...'` shows the same value normalized (digits only).
+4. Copy the full ID in `xxxxxxxxxxxxxxxx@lid` form.
+5. Paste it into **Settings → Integrations → WhatsApp → Phone Number / WhatsApp ID** and save.
+
+This field accepts either a phone number (e.g. `+1234567890`) **or** a full WhatsApp ID (e.g. `1234567890@lid` or `1234567890@c.us`). The owner-matching logic strips the `+`, spaces, dashes, and the `@c.us`/`@lid` suffix before comparing, so a stored `@lid` and a plain number compare equal. Logging the incoming `from` ID is the primary reason sent/received messages are written to the logs.
+
 ## Prerequisites
 
 - WhatsApp account
@@ -132,6 +174,8 @@ When sending messages, always include country code:
 ❌ +1 (415) 555-1234
 ❌ +1-415-555-1234
 ```
+
+The **Phone Number / WhatsApp ID** setting additionally accepts a full WhatsApp ID such as `123456789012345678@lid` or `1234567890@c.us`. This is required when pairing your own phone — see [Finding Your WhatsApp Number / ID](#finding-your-whatsapp-number--id).
 
 ## Troubleshooting
 
@@ -242,4 +286,4 @@ If you encounter issues:
 
 ---
 
-**Last Updated**: March 2026
+**Last Updated**: July 2026
