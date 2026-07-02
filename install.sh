@@ -465,18 +465,32 @@ print_summary() {
   echo -e "${GREEN}${BOLD}  Open Assistant is running!${RESET}"
   echo -e "${GREEN}${BOLD}══════════════════════════════════════════════════${RESET}"
   echo ""
-  echo -e "  ${BOLD}Chat UI:${RESET}       ${CYAN}${CFG_APP_URL}${RESET}"
-  echo -e "  ${BOLD}Settings:${RESET}      ${CYAN}${CFG_APP_URL}/settings${RESET}"
-  echo ""
 
-  echo -e "  ${DIM}Add integrations anytime at ${CFG_APP_URL}/settings${RESET}"
-  echo -e "  ${DIM}Stop:  docker stop ${CONTAINER_NAME}${RESET}"
-  echo ""
+  local lines header_rows
+  header_rows=7
+  lines=$(tput lines 2>/dev/null || echo 24)
 
-  # Stream logs so the user can see WhatsApp QR code and startup output
+  # Pin the URLs to the top of the terminal using an ANSI scroll region: the
+  # header (rows 1..header_rows) stays fixed while docker logs scrolls inside
+  # the region below it. The WhatsApp QR code is printed by the WhatsApp
+  # bridge into the log stream, so it appears here without burying the URLs.
+  printf '\033[2J\033[H'                              # clear screen, cursor home
+  echo -e "${GREEN}${BOLD}  Open Assistant is running!${RESET}"
+  echo -e "  ${BOLD}Chat UI:${RESET}     ${CYAN}${CFG_APP_URL}${RESET}"
+  echo -e "  ${BOLD}Settings:${RESET}    ${CYAN}${CFG_APP_URL}/settings${RESET}"
+  echo -e "  ${BOLD}Stop:${RESET}        ${DIM}docker stop ${CONTAINER_NAME}${RESET}"
+  echo -e "  ${DIM}WhatsApp QR appears in the log stream below when ready.${RESET}"
   echo -e "${DIM}────────────────────────────────────────────────────────────${RESET}"
-  echo -e "${DIM} Following logs (Ctrl+C to detach — container keeps running)${RESET}"
-  echo -e "${DIM}────────────────────────────────────────────────────────────${RESET}"
+
+  printf '\033[%d;%dr' "$((header_rows + 1))" "$lines"   # set scroll region
+  printf '\033[%d;1H' "$((header_rows + 1))"             # cursor into region
+
+  # On Ctrl+C / TERM, restore the full-screen scroll region so the terminal
+  # isn't left in a broken state after the user detaches.
+  trap 'printf "\033[1;%dr" "$lines"; echo' INT TERM
+
+  echo -e "${DIM}Following logs (Ctrl+C detaches — the container keeps running)${RESET}"
+  echo ""
   docker logs -f "$CONTAINER_NAME"
 }
 
