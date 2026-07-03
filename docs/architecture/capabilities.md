@@ -40,6 +40,34 @@ Recurring task scheduling with APScheduler running within the main process.
 - Execution history tracking
 - Run immediately option
 
+### Artifact Store
+
+Durable file storage for generated artifacts (HTML pages, PDFs, DOCX, images, Python outputs) with public/private visibility, signed temporary links, and an optional passphrase gate.
+
+**How it works**:
+- The coordinator agent calls `store_artifact` with a `source_path` (e.g. a file path returned by `create_html` or `python_execute`) to persist it into `data/artifacts/<uuid>/<filename>`
+- Artifacts survive the nightly temp-dir cleanup because they live under `data/`, not `tmp/`
+- Each artifact can be individually deleted by the user from the Artifacts tab
+
+**Visibility and sharing**:
+- **Private** (default): only accessible via a 300s signed temporary link (`?token=<HS256 JWT>`)
+- **Public**: gets a stable permanent link at `/api/artifacts/{id}/view` — no token required
+
+**Passphrase gate** (optional per artifact):
+- Owner sets a passphrase via the Artifacts tab; it is hashed with PBKDF2-SHA256 (200k iterations) and never stored in plaintext
+- Unauthenticated visitors see a branded gate page prompting for the passphrase
+- On success an httpOnly `SameSite=Lax` cookie (`oa_artifact_{id}`, 1h TTL) is set; subsequent views skip the prompt
+- Owner can change or remove the passphrase at any time; the API only exposes `has_secret: bool`
+
+**Artifacts tab** (`/artifacts`):
+- Table view: Name, Type, Size, Visibility badge, Created date
+- Per-row actions: View, Copy link (permanent or 5-min temp), Make public/private, Set/Change/Remove passphrase, Delete
+
+**`store_artifact` tool**:
+- System tool assigned to the coordinator agent by default (always available, no integration toggle needed)
+- Parameters: `source_path` (required), `title` (optional), `make_public` (default: false)
+- Returns: artifact ID, management URL, and permanent link (if public)
+
 ### Future Task Scheduling
 
 One-time task scheduling for future execution.
