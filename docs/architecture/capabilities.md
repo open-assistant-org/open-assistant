@@ -44,6 +44,27 @@ Recurring task scheduling with APScheduler running within the main process.
 
 Durable file storage for generated artifacts (HTML pages, PDFs, DOCX, images, Python outputs) with public/private visibility, signed temporary links, and an optional passphrase gate.
 
+**End-to-end flow**:
+
+```
+User: "Create a sales report and save it so I can share it later."
+
+1. Coordinator → create_html(...)           # generates /tmp/…/report.html
+2. Coordinator → store_artifact(            # persists to data/artifacts/<uuid>/report.html
+       source_path="/tmp/…/report.html",
+       title="Sales Report",
+       make_public=False                    # private by default
+   )
+3. Assistant responds with the artifact ID and a link to the Artifacts tab.
+
+Later, in the Artifacts tab:
+4. User clicks "Make public"               # permanent link becomes shareable
+   — or —
+   User clicks "Copy link" while private   # mints a 300s signed temp link
+   — or —
+   User clicks "Set passphrase"            # adds a gate; visitors see a prompt
+```
+
 **How it works**:
 - The coordinator agent calls `store_artifact` with a `source_path` (e.g. a file path returned by `create_html` or `python_execute`) to persist it into `data/artifacts/<uuid>/<filename>`
 - Artifacts survive the nightly temp-dir cleanup because they live under `data/`, not `tmp/`
@@ -52,6 +73,28 @@ Durable file storage for generated artifacts (HTML pages, PDFs, DOCX, images, Py
 **Visibility and sharing**:
 - **Private** (default): only accessible via a 300s signed temporary link (`?token=<HS256 JWT>`)
 - **Public**: gets a stable permanent link at `/api/artifacts/{id}/view` — no token required
+
+**Access check on every `/view` request**:
+
+```
+GET /api/artifacts/{id}/view[?token=...]
+        │
+        ▼
+  Is artifact public?
+  ├─ Yes ──────────────────────────────────────────┐
+  └─ No → valid ?token= present?                   │
+           ├─ No  → 401 Unauthorized               │
+           └─ Yes ──────────────────────────────── ┤
+                                                   ▼
+                                     Is passphrase gate set?
+                                     ├─ No  → serve file
+                                     └─ Yes → valid unlock cookie?
+                                              ├─ Yes → serve file
+                                              └─ No  → show gate page
+                                                        (visitor enters passphrase,
+                                                         POST /unlock sets cookie,
+                                                         page reloads → serve file)
+```
 
 **Passphrase gate** (optional per artifact):
 - Owner sets a passphrase via the Artifacts tab; it is hashed with PBKDF2-SHA256 (200k iterations) and never stored in plaintext
