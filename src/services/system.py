@@ -192,6 +192,79 @@ class SystemService:
             logger.error(f"Error cleaning tmp directory: {e}", exc_info=True)
             return {"success": False, "error": str(e), "deleted": 0, "errors": 1}
 
+    # ---- Artifact store ----
+
+    def store_artifact(
+        self,
+        source_path: str,
+        title: Optional[str] = None,
+        make_public: bool = False,
+    ) -> Dict[str, Any]:
+        """Persist a generated file into the durable artifact store.
+
+        Copies the file at ``source_path`` (e.g. a create_html/create_pdf output)
+        out of ephemeral temp storage into the artifacts directory, records it,
+        and returns its id plus a shareable link. The artifact then appears in
+        the Artifacts tab where the user can view, share, or delete it.
+
+        Args:
+            source_path: Path to the file to persist (from a document/python tool)
+            title: Optional human-readable title shown in the Artifacts tab
+            make_public: If True, the artifact gets a permanent public link;
+                otherwise it stays private (a 5-minute link can be created later).
+
+        Returns:
+            Dict with artifact_id, title, filename, is_public, links, and a message.
+        """
+        if not self._db_manager:
+            return {"success": False, "error": "Database is not available for artifact storage."}
+
+        from src.core.repositories.artifact import ArtifactRepository
+        from src.services import artifacts as artifact_store
+
+        try:
+            repo = ArtifactRepository(self._db_manager)
+            record = artifact_store.store_artifact(
+                source_path=source_path,
+                repo=repo,
+                title=title,
+                make_public=make_public,
+            )
+        except ValueError as e:
+            return {"success": False, "error": str(e)}
+        except Exception as e:
+            logger.error(f"Error storing artifact: {e}", exc_info=True)
+            return {"success": False, "error": str(e)}
+
+        artifact_id = record["artifact_id"]
+        is_public = bool(record["is_public"])
+
+        result: Dict[str, Any] = {
+            "success": True,
+            "artifact_id": artifact_id,
+            "title": record.get("title"),
+            "filename": record["filename"],
+            "size": record.get("size"),
+            "is_public": is_public,
+            "management_url": artifact_store.management_url(),
+        }
+
+        if is_public:
+            result["permanent_link"] = artifact_store.permanent_link(artifact_id)
+            result["message"] = (
+                f"Artifact '{record['filename']}' stored and made public. "
+                f"Shareable permanent link: {result['permanent_link']}"
+            )
+        else:
+            result["permanent_link"] = None
+            result["message"] = (
+                f"Artifact '{record['filename']}' stored privately. "
+                "Open the Artifacts tab to make it public (permanent link) or to "
+                "create a temporary link valid for 5 minutes."
+            )
+
+        return result
+
     # ---- Conversation text retrieval ----
 
     def get_conversation_text(

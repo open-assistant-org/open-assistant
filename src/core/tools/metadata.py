@@ -655,6 +655,13 @@ TOOL_METADATA: Dict[str, ToolMetadata] = {
         description="Generate a complete, self-contained HTML page from a plain-English description",
         category="documents",
     ),
+    "store_artifact": ToolMetadata(
+        name="store_artifact",
+        display_name="Store Artifact",
+        description="Persist a generated file into the durable artifact store so the user can "
+        "view, share, and manage it from the Artifacts tab",
+        category="documents",
+    ),
     "analyze_content": ToolMetadata(
         name="analyze_content",
         display_name="Analyze Content (LLM)",
@@ -1024,6 +1031,7 @@ def get_tool_service(tool_name: str) -> str:
         "create_docx",
         "create_pdf",
         "create_html",
+        "store_artifact",
         "calculate",
         "python_execute",
         "python_agent",

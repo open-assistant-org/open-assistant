@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Protected Artifact - Open Assistant</title>
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <style>
+        :root {
+            --bg: #0a0a0a;
+            --card: #141414;
+            --border: #262626;
+            --primary: #00ff00;
+            --text: #e5e5e5;
+            --muted: #8a8a8a;
+            --error: #ff5555;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            padding: 20px;
+        }
+        .gate-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 40px 32px;
+            width: 100%;
+            max-width: 380px;
+            text-align: center;
+            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4);
+        }
+        .gate-logo {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 16px;
+        }
+        .gate-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin: 0 0 8px;
+        }
+        .gate-subtitle {
+            color: var(--muted);
+            font-size: 0.9rem;
+            margin: 0 0 24px;
+        }
+        .gate-input {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: #0d0d0d;
+            color: var(--text);
+            font-size: 1rem;
+            margin-bottom: 14px;
+        }
+        .gate-input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+        .gate-button {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            background: var(--primary);
+            color: #0a0a0a;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .gate-button:hover { opacity: 0.85; }
+        .gate-button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .gate-error {
+            color: var(--error);
+            font-size: 0.85rem;
+            min-height: 1.2em;
+            margin: 12px 0 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="gate-card">
+        <img src="/static/robot-logo.svg" alt="Open Assistant" class="gate-logo">
+        <h1 class="gate-title">Protected Artifact</h1>
+        <p class="gate-subtitle">This content is passphrase-protected. Enter the passphrase to continue.</p>
+        <form id="gate-form">
+            <input id="passphrase" class="gate-input" type="password" placeholder="Passphrase" autocomplete="off" autofocus>
+            <button id="gate-submit" class="gate-button" type="submit">Unlock</button>
+        </form>
+        <p id="gate-error" class="gate-error"></p>
+    </div>
+
+    <script>
+        const form = document.getElementById('gate-form');
+        const errEl = document.getElementById('gate-error');
+        const btn = document.getElementById('gate-submit');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const passphrase = document.getElementById('passphrase').value;
+            if (!passphrase) return;
+
+            // The gate is shown at .../view — unlock is its sibling, keeping any ?token=.
+            const unlockUrl = window.location.pathname.replace(/\/view$/, '/unlock') + window.location.search;
+
+            errEl.textContent = '';
+            btn.disabled = true;
+            try {
+                const res = await fetch(unlockUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ passphrase })
+                });
+                if (res.ok) {
+                    // Cookie is set; reloading /view now serves the artifact.
+                    window.location.reload();
+                } else {
+                    errEl.textContent = 'Incorrect passphrase. Please try again.';
+                    btn.disabled = false;
+                }
+            } catch (err) {
+                errEl.textContent = 'Something went wrong. Please try again.';
+                btn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

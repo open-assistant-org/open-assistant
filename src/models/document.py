@@ -84,3 +84,25 @@ class CreateHtmlRequest(BaseModel):
         description="Optional data or content to embed in the page "
         "(e.g. CSV data, JSON, text to display). The LLM will incorporate it.",
     )
+
+
+class StoreArtifactRequest(BaseModel):
+    """Request model for persisting a generated file into the artifact store."""
+
+    source_path: str = Field(
+        ...,
+        description="Path to the file to persist — typically the 'filepath' returned by "
+        "create_html, create_pdf, create_docx, or a file written by python_execute "
+        "(e.g. '/app/tmp/assistant_docs/dashboard.html').",
+    )
+    title: Optional[str] = Field(
+        None,
+        description="Optional human-readable title shown in the Artifacts tab "
+        "(e.g. 'Q3 Sales Dashboard').",
+    )
+    make_public: bool = Field(
+        False,
+        description="If true, the artifact gets a permanent public shareable link immediately. "
+        "If false (default), it stays private and can only be shared via a temporary "
+        "5-minute link created from the Artifacts tab.",
+    )

@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Artifacts - Open Assistant</title>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/api/pwa/manifest.json">
+
+    <!-- Theme Colors -->
+    <meta name="theme-color" content="#00ff00">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <!-- PWA Meta Tags -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Assistant">
+    <meta name="application-name" content="Open Assistant">
+
+    <!-- Apple Touch Icons -->
+    <link rel="apple-touch-icon" href="/static/icons/icon-152x152.png">
+    <link rel="apple-touch-icon" sizes="192x192" href="/static/icons/icon-192x192.png">
+
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="/static/css/common.css">
+    <link rel="stylesheet" href="/static/css/mobile.css">
+    <style>
+        .artifacts-container {
+            background: var(--card-background);
+            border-radius: 16px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-color);
+            width: 100%;
+            max-width: 1200px;
+            padding: 30px;
+        }
+
+        .artifacts-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .artifacts-header h1 {
+            font-size: 1.75rem;
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        .jobs-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+
+        .jobs-table th {
+            text-align: left;
+            padding: 12px;
+            background: var(--background-secondary);
+            color: var(--text-secondary);
+            font-weight: 600;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .jobs-table td {
+            padding: 12px;
+            border-bottom: 1px solid var(--border-color);
+            vertical-align: middle;
+        }
+
+        .jobs-table tr:last-child td { border-bottom: none; }
+        .jobs-table tr:hover { background: var(--background-secondary); }
+
+        .table-scroll { overflow-x: auto; }
+
+        .artifact-name { font-weight: 600; }
+        .artifact-file { color: var(--text-muted); font-size: 0.82rem; }
+
+        .status-badge-inline {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        .status-badge-public {
+            background: rgba(34, 197, 94, 0.12);
+            color: var(--success-color);
+        }
+        .status-badge-private {
+            background: rgba(107, 114, 128, 0.15);
+            color: var(--text-muted);
+        }
+        .lock-badge {
+            margin-left: 6px;
+            font-size: 0.85rem;
+            cursor: default;
+        }
+
+        .job-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .job-action-btn {
+            padding: 4px 8px;
+            border: none;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            background: var(--primary-color);
+            color: #0a0a0a;
+            transition: opacity 0.2s;
+        }
+        .job-action-btn:hover { opacity: 0.8; }
+        .job-action-btn.btn-neutral { background: var(--background-secondary); color: var(--text-primary); }
+        .job-action-btn.btn-danger { background: var(--error-color); color: #fff; }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-muted);
+        }
+
+        /* Scoped ModalManager card styling (common.css base .modal is display:none). */
+        .modal-overlay .modal {
+            display: block;
+            background: var(--card-background);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            width: 90%;
+            max-width: 460px;
+            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4);
+            overflow: hidden;
+        }
+        .modal-overlay .modal-header {
+            padding: 20px 24px;
+            font-size: 1.15rem;
+            font-weight: 600;
+            color: var(--primary-color);
+            border-bottom: 1px solid var(--border-color);
+        }
+        .modal-overlay .modal-body { padding: 20px 24px; }
+        .modal-overlay .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            padding: 16px 24px;
+            border-top: 1px solid var(--border-color);
+        }
+        .modal-hint { margin: 0 0 14px; color: var(--text-secondary); font-size: 0.9rem; }
+        .artifact-input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--background-secondary);
+            color: var(--text-primary);
+            font-size: 0.95rem;
+        }
+        .artifact-input:focus { outline: none; border-color: var(--primary-color); }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-content">
+            <div class="navbar-brand">
+                <img src="/static/robot-logo.svg" alt="Logo" class="navbar-logo">
+                <span>Open Assistant</span>
+            </div>
+            <div class="navbar-links">
+                <a href="/" class="nav-link">Chat</a>
+                <a href="/artifacts" class="nav-link">Artifacts</a>
+                <a href="/settings" class="nav-link">Settings</a>
+                <a href="/monitoring" class="nav-link">Monitoring</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="main-container">
+        <div class="artifacts-container">
+            <div class="artifacts-header">
+                <h1>Artifacts</h1>
+                <button onclick="loadArtifacts()" class="btn btn-secondary">Refresh</button>
+            </div>
+            <div id="artifacts" class="table-scroll">Loading...</div>
+        </div>
+    </div>
+
+    <script src="/static/js/common.js"></script>
+    <script>
+        const BASE = window.INSTANCE_BASE_PATH || '';
+        let artifactsState = [];
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str == null ? '' : String(str);
+            return div.innerHTML;
+        }
+
+        function formatSize(bytes) {
+            if (bytes == null) return '—';
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        function shortType(mime) {
+            if (!mime) return 'file';
+            if (mime === 'text/html') return 'HTML';
+            if (mime === 'application/pdf') return 'PDF';
+            const sub = mime.split('/')[1] || mime;
+            return sub.replace('vnd.openxmlformats-officedocument.wordprocessingml.document', 'DOCX').toUpperCase();
+        }
+
+        function viewUrl(id) {
+            return BASE + '/api/artifacts/' + id + '/view';
+        }
+
+        async function loadArtifacts() {
+            try {
+                const data = await api.get('/api/artifacts');
+                artifactsState = data.artifacts || [];
+                renderArtifacts();
+            } catch (error) {
+                console.error('Failed to load artifacts:', error);
+                document.getElementById('artifacts').innerHTML =
+                    '<div class="empty-state">Failed to load artifacts</div>';
+            }
+        }
+
+        function renderArtifacts() {
+            const container = document.getElementById('artifacts');
+
+            if (artifactsState.length === 0) {
+                container.innerHTML = '<div class="empty-state">No artifacts yet. ' +
+                    'Ask the assistant to create and store an HTML page or report.</div>';
+                return;
+            }
+
+            const rows = artifactsState.map(a => {
+                const name = a.title || a.filename;
+                const visClass = a.is_public ? 'status-badge-public' : 'status-badge-private';
+                const visLabel = a.is_public ? 'Public' : 'Private';
+                const lock = a.has_secret
+                    ? '<span class="lock-badge" title="Passphrase protected">🔒</span>' : '';
+                const linkLabel = a.is_public ? 'Copy link' : 'Temp link';
+                const toggleLabel = a.is_public ? 'Make private' : 'Make public';
+                const secretLabel = a.has_secret ? 'Passphrase' : 'Set passphrase';
+                return `
+                    <tr>
+                        <td>
+                            <div class="artifact-name">${escapeHtml(name)}</div>
+                            ${a.title ? `<div class="artifact-file">${escapeHtml(a.filename)}</div>` : ''}
+                        </td>
+                        <td>${escapeHtml(shortType(a.mime_type))}</td>
+                        <td>${formatSize(a.size)}</td>
+                        <td>
+                            <span class="status-badge-inline ${visClass}">${visLabel}</span>${lock}
+                        </td>
+                        <td>${a.created_at ? formatDateTime(a.created_at) : '—'}</td>
+                        <td>
+                            <div class="job-actions">
+                                <button class="job-action-btn" onclick="viewArtifact('${a.artifact_id}')">View</button>
+                                <button class="job-action-btn btn-neutral" onclick="copyLink('${a.artifact_id}')">${linkLabel}</button>
+                                <button class="job-action-btn btn-neutral" onclick="toggleVisibility('${a.artifact_id}', ${!a.is_public})">${toggleLabel}</button>
+                                <button class="job-action-btn btn-neutral" onclick="managePassphrase('${a.artifact_id}')">${secretLabel}</button>
+                                <button class="job-action-btn btn-danger" onclick="deleteArtifact('${a.artifact_id}')">Delete</button>
+                            </div>
+                        </td>
+                    </tr>`;
+            }).join('');
+
+            container.innerHTML = `
+                <table class="jobs-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Type</th>
+                            <th>Size</th>
+                            <th>Visibility</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>`;
+        }
+
+        function find(id) {
+            return artifactsState.find(a => a.artifact_id === id);
+        }
+
+        async function viewArtifact(id) {
+            const a = find(id);
+            if (!a) return;
+            if (a.is_public) {
+                window.open(a.permanent_link || viewUrl(id), '_blank');
+                return;
+            }
+            try {
+                const res = await api.post(`/api/artifacts/${id}/temporary-link`);
+                window.open(res.url, '_blank');
+            } catch (error) {
+                toast.error('Failed to create link');
+            }
+        }
+
+        async function copyLink(id) {
+            const a = find(id);
+            if (!a) return;
+            let url;
+            let note;
+            try {
+                if (a.is_public) {
+                    url = a.permanent_link || (window.location.origin + viewUrl(id));
+                    note = 'Permanent link copied';
+                } else {
+                    const res = await api.post(`/api/artifacts/${id}/temporary-link`);
+                    url = res.url;
+                    note = 'Temporary link copied (valid 5 min)';
+                }
+                await navigator.clipboard.writeText(url);
+                toast.success(note);
+            } catch (error) {
+                // Clipboard may be unavailable — show the link so it can be copied manually.
+                if (url) {
+                    modal.show('Share link', `<p class="modal-hint">Copy this link:</p>` +
+                        `<input class="artifact-input" value="${escapeHtml(url)}" readonly onclick="this.select()">`,
+                        [{ text: 'Close', className: 'btn-secondary' }]);
+                } else {
+                    toast.error('Failed to create link');
+                }
+            }
+        }
+
+        async function toggleVisibility(id, makePublic) {
+            try {
+                await api.request('PATCH', `/api/artifacts/${id}/visibility`, { is_public: makePublic });
+                toast.success(makePublic ? 'Artifact is now public' : 'Artifact is now private');
+                await loadArtifacts();
+            } catch (error) {
+                toast.error('Failed to update visibility');
+            }
+        }
+
+        function managePassphrase(id) {
+            const a = find(id);
+            if (!a) return;
+
+            const wrap = document.createElement('div');
+            const hint = document.createElement('p');
+            hint.className = 'modal-hint';
+            hint.textContent = a.has_secret
+                ? 'Change the passphrase, or remove it to drop the gate.'
+                : 'Set a passphrase. Visitors must enter it before they can view this artifact.';
+            const input = document.createElement('input');
+            input.type = 'password';
+            input.className = 'artifact-input';
+            input.placeholder = a.has_secret ? 'New passphrase' : 'Passphrase';
+            input.autocomplete = 'new-password';
+            wrap.appendChild(hint);
+            wrap.appendChild(input);
+
+            const buttons = [{ text: 'Cancel', className: 'btn-secondary' }];
+            if (a.has_secret) {
+                buttons.push({ text: 'Remove', className: 'btn-danger', onClick: () => removeSecret(id) });
+            }
+            buttons.push({
+                text: a.has_secret ? 'Change' : 'Set',
+                className: 'btn-primary',
+                onClick: () => setSecret(id, input.value)
+            });
+
+            modal.show(a.has_secret ? 'Manage passphrase' : 'Set passphrase', wrap, buttons);
+            setTimeout(() => input.focus(), 50);
+        }
+
+        async function setSecret(id, passphrase) {
+            const value = (passphrase || '').trim();
+            if (!value) {
+                toast.error('Enter a passphrase');
+                return;
+            }
+            try {
+                await api.put(`/api/artifacts/${id}/secret`, { passphrase: value });
+                toast.success('Passphrase set');
+                await loadArtifacts();
+            } catch (error) {
+                toast.error('Failed to set passphrase');
+            }
+        }
+
+        async function removeSecret(id) {
+            try {
+                await api.delete(`/api/artifacts/${id}/secret`);
+                toast.success('Passphrase removed');
+                await loadArtifacts();
+            } catch (error) {
+                toast.error('Failed to remove passphrase');
+            }
+        }
+
+        function deleteArtifact(id) {
+            const a = find(id);
+            const name = a ? (a.title || a.filename) : 'this artifact';
+            modal.confirm('Delete artifact', `Delete "${escapeHtml(name)}"? This cannot be undone.`, async () => {
+                try {
+                    await api.delete(`/api/artifacts/${id}`);
+                    toast.success('Artifact deleted');
+                    await loadArtifacts();
+                } catch (error) {
+                    toast.error('Failed to delete artifact');
+                }
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', loadArtifacts);
+    </script>
+    <script src="/static/js/pwa.js"></script>
+</body>
+</html>

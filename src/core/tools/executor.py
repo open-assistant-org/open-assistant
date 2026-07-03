@@ -671,6 +671,9 @@ class ToolExecutor:
 
             return await create_html(**arguments, settings_service=self.settings_service)
 
+        elif tool_name == "store_artifact":
+            return self.services["system"].store_artifact(**arguments)
+
         # Calculator tools
         elif tool_name == "calculate":
             from src.services.calculator import calculate
