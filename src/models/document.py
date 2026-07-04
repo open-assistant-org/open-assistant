@@ -86,6 +86,22 @@ class CreateHtmlRequest(BaseModel):
     )
 
 
+class SearchArtifactsRequest(BaseModel):
+    """Request model for searching stored artifacts by filename or title."""
+
+    query: str = Field(
+        ...,
+        description="Regex or plain-text pattern to match against artifact filenames and titles "
+        "(e.g. 'sales', 'report_2024', r'dashboard.*html'). The match is case-insensitive.",
+    )
+    limit: int = Field(
+        20,
+        ge=1,
+        le=100,
+        description="Maximum number of results to return (default 20, max 100).",
+    )
+
+
 class StoreArtifactRequest(BaseModel):
     """Request model for persisting a generated file into the artifact store."""
 

@@ -32,6 +32,7 @@ from src.models.document import (
     CreateDocxRequest,
     CreateHtmlRequest,
     CreatePdfRequest,
+    SearchArtifactsRequest,
     StoreArtifactRequest,
 )
 from src.models.analysis import AnalyzeContentRequest
@@ -2147,6 +2148,24 @@ def define_document_tools():
                 "To upload to cloud storage, use nextcloud_upload_file or onedrive_upload_file "
                 "with source_path pointing to the returned filepath.",
                 parameters_model=CreateHtmlRequest,
+            ),
+            executor=None,
+            service_name="system",
+            requires_auth=False,
+        )
+    )
+
+    # Document: Search Artifacts
+    registry.register(
+        Tool(
+            schema=create_tool_schema(
+                name="search_artifacts",
+                description="Search previously stored artifacts by filename or title using a "
+                "regex or plain-text pattern. Use this to find artifacts from earlier conversations "
+                "so you can reference their IDs or share their links without the user having "
+                "to open the Artifacts tab. The match is case-insensitive and applied to both "
+                "the filename and the optional title.",
+                parameters_model=SearchArtifactsRequest,
             ),
             executor=None,
             service_name="system",

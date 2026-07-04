@@ -265,6 +265,63 @@ class SystemService:
 
         return result
 
+    def search_artifacts(self, query: str, limit: int = 20) -> Dict[str, Any]:
+        """Search stored artifacts by filename or title using a regex pattern.
+
+        Args:
+            query: Regex or plain-text pattern (case-insensitive) matched against
+                   both ``filename`` and ``title``.
+            limit: Maximum number of results to return (default 20).
+
+        Returns:
+            Dict with ``results`` list and ``total`` count.
+        """
+        if not self._db_manager:
+            return {"success": False, "error": "Database is not available."}
+
+        import re
+
+        from src.core.repositories.artifact import ArtifactRepository
+        from src.services import artifacts as artifact_store
+
+        try:
+            pattern = re.compile(query, re.IGNORECASE)
+        except re.error as e:
+            return {"success": False, "error": f"Invalid regex pattern: {e}"}
+
+        try:
+            repo = ArtifactRepository(self._db_manager)
+            all_artifacts = repo.list_all()
+        except Exception as e:
+            logger.error(f"Error fetching artifacts for search: {e}", exc_info=True)
+            return {"success": False, "error": str(e)}
+
+        matches = []
+        for art in all_artifacts:
+            haystack = (art.get("title") or "") + " " + (art["filename"] or "")
+            if pattern.search(haystack):
+                is_public = bool(art["is_public"])
+                matches.append(
+                    {
+                        "artifact_id": art["artifact_id"],
+                        "title": art.get("title"),
+                        "filename": art["filename"],
+                        "mime_type": art.get("mime_type"),
+                        "size": art.get("size"),
+                        "is_public": is_public,
+                        "has_secret": bool(art.get("secret_hash")),
+                        "created_at": art.get("created_at"),
+                        "link": artifact_store.permanent_link(art["artifact_id"])
+                        if is_public
+                        else None,
+                        "management_url": artifact_store.management_url(),
+                    }
+                )
+            if len(matches) >= limit:
+                break
+
+        return {"success": True, "total": len(matches), "results": matches}
+
     # ---- Conversation text retrieval ----
 
     def get_conversation_text(
