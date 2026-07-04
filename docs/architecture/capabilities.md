@@ -106,10 +106,14 @@ GET /artifact/{id}[?token=...]
 - Table view: Name, Type, Size, Visibility badge, Created date
 - Per-row actions: View, Copy link (permanent or 5-min temp), Make public/private, Set/Change/Remove passphrase, Delete
 
-**`store_artifact` tool**:
-- System tool assigned to the coordinator agent by default (always available, no integration toggle needed)
-- Parameters: `source_path` (required), `title` (optional), `make_public` (default: false)
-- Returns: artifact ID, management URL, and permanent link (if public)
+**Coordinator tools**:
+
+| Tool | Purpose |
+|------|---------|
+| `store_artifact` | Persist a file (`source_path`) into the artifact store; returns artifact ID and link |
+| `search_artifacts` | Find previously stored artifacts by filename/title using a case-insensitive regex |
+
+Both are system tools assigned to the coordinator by default (always available, no integration toggle needed). Visibility, passphrase, and deletion are managed by the user via the Artifacts tab.
 
 ### Future Task Scheduling
 

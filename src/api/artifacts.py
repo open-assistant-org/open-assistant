@@ -3,8 +3,9 @@
 Owner/management endpoints (list, delete, visibility, temporary-link, secret) are
 called by the Artifacts tab and are gated the same way as the rest of the app UI
 (by the surrounding proxy in managed deployments). The visitor endpoints
-(``/view`` and ``/unlock``) implement the public sharing + passphrase gate and
-must remain reachable without the owner's auth for external sharing to work.
+(``GET /artifact/{id}`` and ``POST /artifact/{id}/unlock``) implement the public
+sharing + passphrase gate and must remain reachable without the owner's auth for
+external sharing to work.
 """
 
 from pathlib import Path
