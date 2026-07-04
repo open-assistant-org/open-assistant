@@ -23,12 +23,19 @@ CREATE TABLE IF NOT EXISTS artifacts (
 
 CREATE INDEX IF NOT EXISTS idx_artifacts_created ON artifacts(created_at);
 
--- Assign the store_artifact tool to the coordinator agent by default.
+-- Assign the store_artifact and search_artifacts tools to the coordinator agent by default.
 UPDATE agent_definitions
 SET
     tools = json_insert(tools, '$[#]', 'store_artifact'),
     updated_at = CURRENT_TIMESTAMP
 WHERE name = 'coordinator'
   AND tools NOT LIKE '%store_artifact%';
+
+UPDATE agent_definitions
+SET
+    tools = json_insert(tools, '$[#]', 'search_artifacts'),
+    updated_at = CURRENT_TIMESTAMP
+WHERE name = 'coordinator'
+  AND tools NOT LIKE '%search_artifacts%';
 
 INSERT OR IGNORE INTO schema_migrations (version) VALUES ('053_artifacts');
