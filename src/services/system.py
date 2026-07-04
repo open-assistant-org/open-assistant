@@ -311,9 +311,9 @@ class SystemService:
                         "is_public": is_public,
                         "has_secret": bool(art.get("secret_hash")),
                         "created_at": art.get("created_at"),
-                        "link": artifact_store.permanent_link(art["artifact_id"])
-                        if is_public
-                        else None,
+                        "link": (
+                            artifact_store.permanent_link(art["artifact_id"]) if is_public else None
+                        ),
                         "management_url": artifact_store.management_url(),
                     }
                 )
