@@ -149,12 +149,12 @@ def _app_url() -> str:
 
 def permanent_link(artifact_id: str) -> str:
     """The stable public view URL for an artifact (usable when public)."""
-    return f"{_app_url()}/api/artifacts/{artifact_id}/view"
+    return f"{_app_url()}/artifact/{artifact_id}"
 
 
 def temporary_link(artifact_id: str, token: str) -> str:
     """A 300s signed view URL for a private artifact."""
-    return f"{_app_url()}/api/artifacts/{artifact_id}/view?token={token}"
+    return f"{_app_url()}/artifact/{artifact_id}?token={token}"
 
 
 def management_url() -> str:

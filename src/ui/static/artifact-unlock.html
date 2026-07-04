@@ -110,8 +110,8 @@
             const passphrase = document.getElementById('passphrase').value;
             if (!passphrase) return;
 
-            // The gate is shown at .../view — unlock is its sibling, keeping any ?token=.
-            const unlockUrl = window.location.pathname.replace(/\/view$/, '/unlock') + window.location.search;
+            // The gate is shown at /artifact/{id} — unlock lives at /artifact/{id}/unlock.
+            const unlockUrl = window.location.pathname + '/unlock' + window.location.search;
 
             errEl.textContent = '';
             btn.disabled = true;

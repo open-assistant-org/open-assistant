@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from src import __version__
 from src.api.agents import router as agents_router
 from src.api.artifacts import router as artifacts_router
+from src.api.artifacts import visitor_router as artifact_visitor_router
 from src.api.auth import router as auth_router
 from src.api.brave import router as brave_router
 from src.api.browser import router as browser_router
@@ -480,6 +481,7 @@ def create_app() -> FastAPI:
     # Include API routers
     app.include_router(agents_router)
     app.include_router(artifacts_router)
+    app.include_router(artifact_visitor_router)
     app.include_router(auth_router)
     app.include_router(brave_router)
     app.include_router(browser_router)

@@ -42,6 +42,7 @@ from src.utils.logger import get_logger
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/artifacts", tags=["artifacts"])
+visitor_router = APIRouter(prefix="/artifact", tags=["artifacts"])
 
 _TEMP_LINK_TTL_SECONDS = 300
 _UNLOCK_COOKIE_MAX_AGE = 3600
@@ -169,7 +170,7 @@ def _render_gate(status_code: int = 200) -> HTMLResponse:
     except OSError:
         html = (
             '<!DOCTYPE html><html><body><form onsubmit="event.preventDefault();'
-            "fetch(location.pathname.replace(/\\/view$/,'/unlock')+location.search,"
+            "fetch(location.pathname+'/unlock'+location.search,"
             "{method:'POST',headers:{'Content-Type':'application/json'},"
             "body:JSON.stringify({passphrase:this.p.value})}).then(r=>r.ok?location.reload():"
             "alert('Incorrect passphrase'))\">"
@@ -190,14 +191,14 @@ def _serve_file(art: dict) -> FileResponse:
     return FileResponse(path, media_type=media_type, filename=art["filename"])
 
 
-@router.get("/{artifact_id}/view", name="view_artifact")
+@visitor_router.get("/{artifact_id}", name="view_artifact")
 async def view_artifact(
     artifact_id: str,
     request: Request,
     token: Optional[str] = Query(None),
     repo: ArtifactRepository = Depends(get_artifact_repo),
 ):
-    """Serve an artifact — the permanent public link and the gated view route.
+    """Serve an artifact at the clean public URL ``/artifact/{id}``.
 
     Access is checked in two layers: (1) the artifact must be public, or a valid
     300s ``token`` must be supplied; (2) if a passphrase is set, a valid unlock
@@ -219,7 +220,7 @@ async def view_artifact(
     return _serve_file(art)
 
 
-@router.post("/{artifact_id}/unlock")
+@visitor_router.post("/{artifact_id}/unlock")
 async def unlock_artifact(
     artifact_id: str,
     request: SecretRequest,
@@ -228,7 +229,7 @@ async def unlock_artifact(
     """Verify a passphrase and, on success, set the unlock cookie.
 
     Called by the gate page via fetch. On success returns 200 with a Set-Cookie
-    header; the page then reloads ``/view`` and the file is served.
+    header; the page then reloads ``/artifact/{id}`` and the file is served.
     """
     art = _get_or_404(repo, artifact_id)
 
@@ -247,6 +248,6 @@ async def unlock_artifact(
         max_age=_UNLOCK_COOKIE_MAX_AGE,
         httponly=True,
         samesite="lax",
-        path=f"/api/artifacts/{artifact_id}",
+        path=f"/artifact/{artifact_id}",
     )
     return response

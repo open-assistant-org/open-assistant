@@ -72,12 +72,12 @@ Later, in the Artifacts tab:
 
 **Visibility and sharing**:
 - **Private** (default): only accessible via a 300s signed temporary link (`?token=<HS256 JWT>`)
-- **Public**: gets a stable permanent link at `/api/artifacts/{id}/view` — no token required
+- **Public**: gets a stable permanent link at `/artifact/{id}` — no token required
 
-**Access check on every `/view` request**:
+**Access check on every view request**:
 
 ```
-GET /api/artifacts/{id}/view[?token=...]
+GET /artifact/{id}[?token=...]
         │
         ▼
   Is artifact public?
