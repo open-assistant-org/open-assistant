@@ -385,7 +385,8 @@ class TestExecuteEndpoint401Retry:
         jwt_v2 = _make_jwt(3600)
 
         self.svc._jwt_cache["my_service"] = (
-            jwt_v1, datetime.now(timezone.utc) + timedelta(hours=1)
+            jwt_v1,
+            datetime.now(timezone.utc) + timedelta(hours=1),
         )
 
         resp_401 = MagicMock()
@@ -421,7 +422,8 @@ class TestExecuteEndpoint401Retry:
         import httpx as real_httpx
 
         self.svc._jwt_cache["my_service"] = (
-            _make_jwt(3600), datetime.now(timezone.utc) + timedelta(hours=1)
+            _make_jwt(3600),
+            datetime.now(timezone.utc) + timedelta(hours=1),
         )
 
         resp_401 = MagicMock()
