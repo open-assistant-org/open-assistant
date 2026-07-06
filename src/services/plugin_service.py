@@ -310,6 +310,25 @@ class PluginService(BaseService):
                 json=json_body if not use_ado_patch_content_type else None,
             )
 
+            if response.status_code == 401 and defn.auth.type == "api_key_with_jwt":
+                # Token was rejected — evict the stale cache entry and retry once
+                self._jwt_cache.pop(plugin_id, None)
+                retry_headers: Dict[str, str] = {"Content-Type": "application/json"}
+                retry_headers.update(
+                    await self._resolve_auth_headers(plugin_id, defn, creds, defn.base_url)
+                )
+                if use_ado_patch_content_type:
+                    retry_headers["Content-Type"] = "application/json-patch+json"
+                retry_headers.update(header_params)
+                response = await client.request(
+                    method=endpoint.method,
+                    url=url,
+                    headers=retry_headers,
+                    params=query_params if query_params else None,
+                    content=json.dumps(json_body) if use_ado_patch_content_type else None,
+                    json=json_body if not use_ado_patch_content_type else None,
+                )
+
         response.raise_for_status()
 
         # Return None body as empty dict
