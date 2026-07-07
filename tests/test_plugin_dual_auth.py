@@ -354,3 +354,139 @@ class TestSaveCredentials:
         req = PluginCredentialsRequest(api_key="NEWKEY", username="alice", password="newpass")
         self.svc.save_credentials("my_service", req)
         assert "my_service" not in self.svc._jwt_cache
+
+
+# ---------------------------------------------------------------------------
+# _execute_endpoint — reactive 401 retry for api_key_with_jwt
+# ---------------------------------------------------------------------------
+
+
+class TestExecuteEndpoint401Retry:
+    def setup_method(self):
+        self.svc = _make_plugin_service()
+        self.defn = _dual_auth_definition()
+        self.svc._definitions["my_service"] = self.defn
+        self.svc.credentials_repo.get.side_effect = lambda key: (
+            {"credential_data": {"api_key": "K", "username": "u", "password": "p"}}
+            if key == "plugin_my_service"
+            else None
+        )
+
+    def _make_api_client_mock(self, *responses):
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.request = AsyncMock(side_effect=list(responses))
+        return mock_client
+
+    @pytest.mark.asyncio
+    async def test_retries_on_401_and_succeeds(self):
+        jwt_v1 = _make_jwt(3600)
+        jwt_v2 = _make_jwt(3600)
+
+        self.svc._jwt_cache["my_service"] = (
+            jwt_v1,
+            datetime.now(timezone.utc) + timedelta(hours=1),
+        )
+
+        resp_401 = MagicMock()
+        resp_401.status_code = 401
+        resp_401.content = b""
+
+        resp_200 = MagicMock()
+        resp_200.status_code = 200
+        resp_200.content = b'{"items": []}'
+        resp_200.json.return_value = {"items": []}
+        resp_200.raise_for_status = MagicMock()
+
+        mock_client = self._make_api_client_mock(resp_401, resp_200)
+        headers_v1 = {"Authorization": f"Access_Token {jwt_v1}", "X-apikey": "K"}
+        headers_v2 = {"Authorization": f"Access_Token {jwt_v2}", "X-apikey": "K"}
+
+        with (
+            patch("src.services.plugin_service.httpx.AsyncClient", return_value=mock_client),
+            patch.object(
+                self.svc,
+                "_resolve_auth_headers",
+                AsyncMock(side_effect=[headers_v1, headers_v2]),
+            ),
+        ):
+            result = await self.svc._execute_endpoint("my_service", "list_items", {})
+
+        assert result == {"items": []}
+        assert mock_client.request.call_count == 2
+        assert "my_service" not in self.svc._jwt_cache
+
+    @pytest.mark.asyncio
+    async def test_raises_when_retry_also_returns_401(self):
+        import httpx as real_httpx
+
+        self.svc._jwt_cache["my_service"] = (
+            _make_jwt(3600),
+            datetime.now(timezone.utc) + timedelta(hours=1),
+        )
+
+        resp_401 = MagicMock()
+        resp_401.status_code = 401
+        resp_401.content = b""
+        resp_401.raise_for_status = MagicMock(
+            side_effect=real_httpx.HTTPStatusError(
+                "401", request=MagicMock(), response=MagicMock(status_code=401)
+            )
+        )
+
+        mock_client = self._make_api_client_mock(resp_401, resp_401)
+
+        with (
+            patch("src.services.plugin_service.httpx.AsyncClient", return_value=mock_client),
+            patch.object(
+                self.svc,
+                "_resolve_auth_headers",
+                AsyncMock(return_value={"Authorization": "Access_Token tok"}),
+            ),
+        ):
+            with pytest.raises(real_httpx.HTTPStatusError):
+                await self.svc._execute_endpoint("my_service", "list_items", {})
+
+        assert mock_client.request.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_non_jwt_auth_does_not_retry_on_401(self):
+        import httpx as real_httpx
+
+        bearer_defn = PluginDefinition.model_validate(
+            {
+                "id": "bearer_svc",
+                "display_name": "Bearer",
+                "description": "Bearer auth plugin.",
+                "base_url": "https://api.example.com",
+                "auth": {"type": "bearer"},
+                "endpoints": [
+                    {
+                        "name": "get_data",
+                        "display_name": "Get",
+                        "description": ".",
+                        "method": "GET",
+                        "path": "/data",
+                    }
+                ],
+            }
+        )
+        self.svc._definitions["bearer_svc"] = bearer_defn
+
+        resp_401 = MagicMock()
+        resp_401.status_code = 401
+        resp_401.content = b""
+        resp_401.raise_for_status = MagicMock(
+            side_effect=real_httpx.HTTPStatusError(
+                "401", request=MagicMock(), response=MagicMock(status_code=401)
+            )
+        )
+
+        mock_client = self._make_api_client_mock(resp_401)
+
+        with patch("src.services.plugin_service.httpx.AsyncClient", return_value=mock_client):
+            with pytest.raises(real_httpx.HTTPStatusError):
+                await self.svc._execute_endpoint("bearer_svc", "get_data", {})
+
+        assert mock_client.request.call_count == 1

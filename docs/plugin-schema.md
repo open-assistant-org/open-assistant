@@ -80,7 +80,7 @@ Plugins are JSON files that define lightweight REST API integrations. Each plugi
 - **JWT login only** (omit `api_key_header`): POSTs `{"username": ..., "password": ...}` to `{token_endpoint}`, then attaches `Authorization: {token_prefix} {jwt}` to every API call. User provides **Username** and **Password**.
 - **JWT login + static API key** (set `api_key_header`): same as above, but also sends `{api_key_header}: {api_key}` on both the login request and every API call. User provides **API Key**, **Username**, and **Password**.
 
-In both cases the JWT is cached (TTL from the `exp` claim; defaults to 55 minutes) and refreshed automatically before expiry.
+In both cases the JWT is cached (TTL from the `exp` claim; defaults to 55 minutes) and refreshed automatically before expiry. If the server rejects a request with a 401 (e.g. the token was revoked early or there is clock skew), the cache is cleared and the request is retried once with a freshly fetched token.
 
 ---
 
@@ -276,7 +276,7 @@ Some APIs additionally require a permanent API key header alongside the JWT. Add
 }
 ```
 
-The user provides **API Key**, **Username**, and **Password**. The API key is sent as `X-apikey` on both the login request and every subsequent API call. The JWT is cached and refreshed automatically before expiry.
+The user provides **API Key**, **Username**, and **Password**. The API key is sent as `X-apikey` on both the login request and every subsequent API call. The JWT is cached, refreshed automatically before expiry, and re-fetched on 401 responses.
 
 ---
 
