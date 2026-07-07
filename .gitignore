@@ -81,6 +81,5 @@ site/
 /src/integrations/whatsapp/bridge/node_modules/
 /src/integrations/whatsapp/bridge/whatsapp_session/
 /src/integrations/whatsapp/bridge/.wwebjs_cache/
-/src/integrations/whatsapp/bridge/package-lock.json
 /tmp/
 /.claude/

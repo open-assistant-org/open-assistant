@@ -20,24 +20,43 @@ jobs:
           node-version: '20'
 
       - name: Install bridge dependencies
-        run: npm install --production
+        run: npm ci --omit=dev
         working-directory: src/integrations/whatsapp/bridge
+        env:
+          # We use the system Chromium via executablePath; skip puppeteer's download.
+          PUPPETEER_SKIP_DOWNLOAD: '1'
 
-      - name: Install supervisord
-        run: sudo pip install supervisor
+      - name: Locate system Chromium
+        id: chromium
+        run: |
+          # ubuntu-latest typically has google-chrome-stable pre-installed;
+          # fall back to installing chromium from apt if not.
+          CHROMIUM_PATH=$(which chromium 2>/dev/null \
+            || which chromium-browser 2>/dev/null \
+            || which google-chrome-stable 2>/dev/null \
+            || which google-chrome 2>/dev/null \
+            || true)
+          if [ -z "$CHROMIUM_PATH" ] || [ ! -x "$CHROMIUM_PATH" ]; then
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends chromium
+            CHROMIUM_PATH=$(which chromium)
+          fi
+          echo "path=$CHROMIUM_PATH" >> "$GITHUB_OUTPUT"
+          echo "Chromium: $CHROMIUM_PATH ($($CHROMIUM_PATH --version 2>/dev/null || echo 'unknown version'))"
+
+      - name: Validate Chromium launch flags (launch-check.js)
+        run: node src/integrations/whatsapp/bridge/launch-check.js
+        env:
+          CHROMIUM_EXECUTABLE_PATH: ${{ steps.chromium.outputs.path }}
 
       - name: Test bridge HTTP server endpoints
         run: |
           BRIDGE_DIR="$(pwd)/src/integrations/whatsapp/bridge"
-          CHROMIUM_PATH=$(cd "$BRIDGE_DIR" && node -e "try{const p=require('puppeteer');console.log(p.executablePath())}catch(e){}" 2>/dev/null)
-          [ -z "$CHROMIUM_PATH" ] || [ ! -x "$CHROMIUM_PATH" ] && \
-            CHROMIUM_PATH=$(which chromium-browser chromium google-chrome 2>/dev/null | head -1) || true
-          CHROMIUM_EXECUTABLE_PATH="$CHROMIUM_PATH" \
+          CHROMIUM_EXECUTABLE_PATH="${{ steps.chromium.outputs.path }}" \
           WHATSAPP_SESSION_DIR="/tmp/wa-ci-session" \
           node "$BRIDGE_DIR/server.js" > /tmp/bridge-server.log 2>&1 &
           SERVER_PID=$!
-          # Wait up to 15s for the HTTP server to bind (client.initialize() runs
-          # async in the background, so the express server binds almost immediately)
+
           READY=0
           for i in $(seq 1 15); do
             curl -sf http://localhost:3001/health > /dev/null 2>&1 && READY=1 && break
@@ -52,31 +71,25 @@ jobs:
 
           fail() { echo "FAIL: $1"; cat /tmp/bridge-server.log; kill "$SERVER_PID" 2>/dev/null; exit 1; }
 
-          # /health → {"status":"ok","service":"whatsapp-bridge","ready":false}
           curl -sf http://localhost:3001/health | grep -q '"status":"ok"' \
             || fail "/health did not return status ok"
 
-          # /status → {"ready":false,...}
           curl -sf http://localhost:3001/status | grep -q '"ready":false' \
             || fail "/status did not return ready:false"
 
-          # /send with empty body → 400 missing fields
           CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:3001/send \
                    -H 'Content-Type: application/json' -d '{}')
           [ "$CODE" = "400" ] || fail "/send with empty body returned $CODE, want 400"
 
-          # /send with valid body but not authenticated → 503
           CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:3001/send \
                    -H 'Content-Type: application/json' \
                    -d '{"phone_number":"+15550001234","message":"ci-test"}')
           [ "$CODE" = "503" ] || fail "/send unauthenticated returned $CODE, want 503"
 
-          # /webhook with no url → 400
           CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:3001/webhook \
                    -H 'Content-Type: application/json' -d '{}')
           [ "$CODE" = "400" ] || fail "/webhook with no url returned $CODE, want 400"
 
-          # /webhook with url → 200
           curl -sf -X POST http://localhost:3001/webhook \
             -H 'Content-Type: application/json' \
             -d '{"url":"http://localhost:8080/api/whatsapp/webhook/incoming"}' \
@@ -84,22 +97,6 @@ jobs:
 
           kill "$SERVER_PID" 2>/dev/null || true
           echo "All bridge endpoint tests passed"
-
-      - name: Run Chromium launch check under supervisord as PID 1
-        run: |
-          BRIDGE_DIR="$(pwd)/src/integrations/whatsapp/bridge"
-          CHROMIUM_PATH=$(cd "$BRIDGE_DIR" && node -e "const p = require('puppeteer'); console.log(p.executablePath())" 2>/dev/null)
-          if [ -z "$CHROMIUM_PATH" ] || [ ! -x "$CHROMIUM_PATH" ]; then
-            echo "Could not find puppeteer chromium; falling back to system chromium"
-            CHROMIUM_PATH=$(which chromium-browser chromium google-chrome 2>/dev/null | head -1)
-          fi
-          echo "Using Chromium: $CHROMIUM_PATH"
-          export BRIDGE_DIR CHROMIUM_EXECUTABLE_PATH="$CHROMIUM_PATH"
-          sudo -E unshare --pid --fork --mount-proc \
-            supervisord -c supervisord.validate.conf || true
-          cat /tmp/launch-check.log 2>/dev/null || echo "(launch-check.log not found — supervisord may not have started)"
-          grep -q "LAUNCH_CHECK_OK" /tmp/launch-check.log \
-            && ! grep -q "Failed to launch the browser process" /tmp/launch-check.log
 
   lint-and-test:
     runs-on: ubuntu-latest

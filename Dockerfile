@@ -27,6 +27,7 @@ RUN apt-get update && \
         ca-certificates \
         gnupg \
         supervisor \
+        dumb-init \
         chromium \
         chromium-sandbox \
         fonts-liberation \
@@ -71,9 +72,12 @@ COPY src/ ./src/
 # Copy supervisord configuration
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-# Install WhatsApp bridge Node.js dependencies
+# Install WhatsApp bridge Node.js dependencies.
+# package-lock.json is committed — npm ci gives a reproducible install so no
+# dep can silently upgrade between builds. PUPPETEER_SKIP_DOWNLOAD=1 prevents
+# puppeteer from downloading its own Chrome; we use the system Chromium instead.
 WORKDIR /app/src/integrations/whatsapp/bridge
-RUN npm install --production && npm cache clean --force
+RUN PUPPETEER_SKIP_DOWNLOAD=1 npm ci --omit=dev && npm cache clean --force
 WORKDIR /app
 
 # Create necessary directories
@@ -129,5 +133,7 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8080/health || exit 1
 
-# Run supervisord to manage both processes
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+# dumb-init is PID 1: it reaps orphaned processes correctly without interfering
+# with Chrome's own child-process tracking. Supervisord runs as its child so it
+# never sees Chrome's helper processes as "unknown pids" to steal.
+CMD ["/usr/bin/dumb-init", "--", "/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
