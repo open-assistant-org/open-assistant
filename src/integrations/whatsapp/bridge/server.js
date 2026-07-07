@@ -193,19 +193,19 @@ app.get('/status', (req, res) => {
 // Send message
 app.post('/send', async (req, res) => {
     try {
-        if (!isReady) {
-            return res.status(503).json({
-                error: 'WhatsApp client not ready',
-                message: 'Please authenticate first'
-            });
-        }
-
         const { phone_number, message } = req.body;
 
         if (!phone_number || !message) {
             return res.status(400).json({
                 error: 'Missing required fields',
                 message: 'phone_number and message are required'
+            });
+        }
+
+        if (!isReady) {
+            return res.status(503).json({
+                error: 'WhatsApp client not ready',
+                message: 'Please authenticate first'
             });
         }
 
