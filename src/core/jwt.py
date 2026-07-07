@@ -1,4 +1,4 @@
-"""JWT helpers for managed mode OAuth state."""
+"""JWT helpers for signed, expiring tokens (OAuth state and artifact links)."""
 
 import secrets
 from datetime import UTC, datetime, timedelta
@@ -11,16 +11,17 @@ _STATE_TTL_SECONDS = 300  # 5 minutes
 
 
 def get_jwt_secret() -> str:
-    """Get JWT secret from ENCRYPTION_KEY env var.
+    """Get the JWT signing secret from the ENCRYPTION_KEY env var.
 
-    The ENCRYPTION_KEY is already a secure random key pushed from the platform
-    during provisioning, making it suitable for JWT signing.
+    ENCRYPTION_KEY is a secure random key required by the app for encryption,
+    so it is reused here to sign JWTs. It must be set before any token is
+    issued or verified.
     """
     import os
 
     secret = os.getenv("ENCRYPTION_KEY")
     if not secret:
-        raise RuntimeError("ENCRYPTION_KEY not set - required for managed mode OAuth")
+        raise RuntimeError("ENCRYPTION_KEY not set - required for signing JWTs")
     return secret
 
 
