@@ -5,6 +5,46 @@ on:
     branches: [main]
 
 jobs:
+  whatsapp-bridge-check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install bridge dependencies
+        run: npm install --production
+        working-directory: src/integrations/whatsapp/bridge
+
+      - name: Install supervisord
+        run: pip install supervisor
+
+      - name: Run Chromium launch check under supervisord as PID 1
+        run: |
+          BRIDGE_DIR="$(pwd)/src/integrations/whatsapp/bridge"
+          # Resolve the chromium bundled with puppeteer
+          CHROMIUM_PATH=$(node -e "const p = require('puppeteer'); console.log(p.executablePath())" 2>/dev/null)
+          if [ -z "$CHROMIUM_PATH" ] || [ ! -x "$CHROMIUM_PATH" ]; then
+            echo "Could not find puppeteer chromium; falling back to system chromium"
+            CHROMIUM_PATH=$(which chromium-browser chromium google-chrome 2>/dev/null | head -1)
+          fi
+          echo "Using Chromium: $CHROMIUM_PATH"
+          export BRIDGE_DIR CHROMIUM_EXECUTABLE_PATH="$CHROMIUM_PATH"
+          # unshare --pid makes supervisord PID 1 of the new namespace,
+          # reproducing the exact container runtime condition.
+          sudo -E unshare --pid --fork --mount-proc \
+            "$(which supervisord)" -c supervisord.validate.conf || true
+          cat /tmp/launch-check.log
+          grep -q "LAUNCH_CHECK_OK" /tmp/launch-check.log \
+            && ! grep -q "Failed to launch the browser process" /tmp/launch-check.log
+
   lint-and-test:
     runs-on: ubuntu-latest
     permissions:

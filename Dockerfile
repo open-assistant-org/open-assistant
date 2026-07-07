@@ -76,21 +76,6 @@ WORKDIR /app/src/integrations/whatsapp/bridge
 RUN npm install --production && npm cache clean --force
 WORKDIR /app
 
-# Build-pipeline validation: confirm Chromium actually launches for the WhatsApp
-# bridge under the real runtime condition (supervisord as PID 1 reaping Chromium's
-# children). This is what catches the "Failed to launch the browser process:
-# Code: null" regression that a plain `chromium`/`node` invocation would miss.
-#
-# The first step MUST use exec form so /usr/bin/supervisord is PID 1 of the build
-# container; launch-check.js launches Chromium with the production flags and, on
-# completion, signals PID 1 (supervisord) to shut down. The second step asserts the
-# check succeeded and fails the build otherwise.
-COPY supervisord.validate.conf /app/supervisord.validate.conf
-RUN ["/usr/bin/supervisord", "-c", "/app/supervisord.validate.conf"]
-RUN cat /tmp/launch-check.log && \
-    grep -q "LAUNCH_CHECK_OK" /tmp/launch-check.log && \
-    ! grep -q "Failed to launch the browser process" /tmp/launch-check.log
-
 # Create necessary directories
 RUN mkdir -p data logs tmp && \
     chmod 755 data logs tmp
