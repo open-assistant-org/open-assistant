@@ -8,7 +8,7 @@ sharing + passphrase gate and must remain reachable without the owner's auth for
 external sharing to work.
 """
 
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -224,7 +224,8 @@ async def view_artifact(
 @visitor_router.post("/{artifact_id}/unlock")
 async def unlock_artifact(
     artifact_id: str,
-    request: SecretRequest,
+    body: SecretRequest,
+    request: Request,
     repo: ArtifactRepository = Depends(get_artifact_repo),
 ):
     """Verify a passphrase and, on success, set the unlock cookie.
@@ -239,8 +240,10 @@ async def unlock_artifact(
         # No passphrase configured — nothing to unlock.
         return JSONResponse({"success": True})
 
-    if not verify_secret(request.passphrase, stored):
+    if not verify_secret(body.passphrase, stored):
         return JSONResponse({"success": False}, status_code=401)
+
+    cookie_path = str(PurePosixPath(request.url.path).parent) + "/"
 
     response = JSONResponse({"success": True})
     response.set_cookie(
@@ -249,6 +252,6 @@ async def unlock_artifact(
         max_age=_UNLOCK_COOKIE_MAX_AGE,
         httponly=True,
         samesite="lax",
-        path=f"/artifact/{artifact_id}",
+        path=cookie_path,
     )
     return response
