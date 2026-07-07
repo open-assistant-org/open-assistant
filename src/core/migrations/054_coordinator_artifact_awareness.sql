@@ -1,4 +1,4 @@
--- Migration: 055_coordinator_artifact_awareness
+-- Migration: 054_coordinator_artifact_awareness
 -- Extends the coordinator backstory with artifact store guidance so the agent
 -- knows when to call store_artifact and search_artifacts proactively.
 
@@ -24,4 +24,4 @@ When to use search_artifacts:
 - The query supports plain text and regex; match on filename or title.'
 WHERE name = 'coordinator';
 
-INSERT OR IGNORE INTO schema_migrations (version) VALUES ('055_coordinator_artifact_awareness');
+INSERT OR IGNORE INTO schema_migrations (version) VALUES ('054_coordinator_artifact_awareness');
