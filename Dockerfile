@@ -72,11 +72,12 @@ COPY src/ ./src/
 # Copy supervisord configuration
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-# Install WhatsApp bridge Node.js dependencies (package-lock.json is committed so
-# npm ci gives a reproducible install — no silent dep upgrades between builds).
+# Install WhatsApp bridge Node.js dependencies.
+# package-lock.json is committed — npm ci gives a reproducible install so no
+# dep can silently upgrade between builds. PUPPETEER_SKIP_DOWNLOAD=1 prevents
+# puppeteer from downloading its own Chrome; we use the system Chromium instead.
 WORKDIR /app/src/integrations/whatsapp/bridge
-COPY src/integrations/whatsapp/bridge/package-lock.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+RUN PUPPETEER_SKIP_DOWNLOAD=1 npm ci --omit=dev && npm cache clean --force
 WORKDIR /app
 
 # Create necessary directories
