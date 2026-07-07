@@ -1,16 +1,6 @@
-/**
- * Chromium launch flags for the WhatsApp bridge.
- *
- * Kept in a shared module so the runtime bridge (server.js) and the build-time
- * launch check (launch-check.js) always use the exact same flags and cannot drift.
- *
- * NOTE: `--no-zygote` is deliberately absent. Under supervisord (PID 1) the
- * container's init reaps Chromium's child processes; without a zygote Chromium
- * forks those children directly and must wait() on them itself, so the PID-1
- * reaper steals them and the browser aborts its launch ("Failed to launch the
- * browser process: Code: null"). Keeping the zygote lets Chromium manage its own
- * process subtree, which is also what Puppeteer's recommended Docker args do.
- */
+// --no-zygote omitted: under supervisord-as-PID-1, it causes Chromium's child
+// processes to be reaped by the container init before Chromium can wait() on them,
+// aborting the launch ("Failed to launch the browser process: Code: null").
 const CHROMIUM_ARGS = [
     '--no-sandbox',
     '--disable-setuid-sandbox',
