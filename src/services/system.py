@@ -192,6 +192,136 @@ class SystemService:
             logger.error(f"Error cleaning tmp directory: {e}", exc_info=True)
             return {"success": False, "error": str(e), "deleted": 0, "errors": 1}
 
+    # ---- Artifact store ----
+
+    def store_artifact(
+        self,
+        source_path: str,
+        title: Optional[str] = None,
+        make_public: bool = False,
+    ) -> Dict[str, Any]:
+        """Persist a generated file into the durable artifact store.
+
+        Copies the file at ``source_path`` (e.g. a create_html/create_pdf output)
+        out of ephemeral temp storage into the artifacts directory, records it,
+        and returns its id plus a shareable link. The artifact then appears in
+        the Artifacts tab where the user can view, share, or delete it.
+
+        Args:
+            source_path: Path to the file to persist (from a document/python tool)
+            title: Optional human-readable title shown in the Artifacts tab
+            make_public: If True, the artifact gets a permanent public link;
+                otherwise it stays private (a 5-minute link can be created later).
+
+        Returns:
+            Dict with artifact_id, title, filename, is_public, links, and a message.
+        """
+        if not self._db_manager:
+            return {"success": False, "error": "Database is not available for artifact storage."}
+
+        from src.core.repositories.artifact import ArtifactRepository
+        from src.services import artifacts as artifact_store
+
+        try:
+            repo = ArtifactRepository(self._db_manager)
+            record = artifact_store.store_artifact(
+                source_path=source_path,
+                repo=repo,
+                title=title,
+                make_public=make_public,
+            )
+        except ValueError as e:
+            return {"success": False, "error": str(e)}
+        except Exception as e:
+            logger.error(f"Error storing artifact: {e}", exc_info=True)
+            return {"success": False, "error": str(e)}
+
+        artifact_id = record["artifact_id"]
+        is_public = bool(record["is_public"])
+
+        result: Dict[str, Any] = {
+            "success": True,
+            "artifact_id": artifact_id,
+            "title": record.get("title"),
+            "filename": record["filename"],
+            "size": record.get("size"),
+            "is_public": is_public,
+            "management_url": artifact_store.management_url(),
+        }
+
+        if is_public:
+            result["permanent_link"] = artifact_store.permanent_link(artifact_id)
+            result["message"] = (
+                f"Artifact '{record['filename']}' stored and made public. "
+                f"Shareable permanent link: {result['permanent_link']}"
+            )
+        else:
+            result["permanent_link"] = None
+            result["message"] = (
+                f"Artifact '{record['filename']}' stored privately. "
+                "Open the Artifacts tab to make it public (permanent link) or to "
+                "create a temporary link valid for 5 minutes."
+            )
+
+        return result
+
+    def search_artifacts(self, query: str, limit: int = 20) -> Dict[str, Any]:
+        """Search stored artifacts by filename or title using a regex pattern.
+
+        Args:
+            query: Regex or plain-text pattern (case-insensitive) matched against
+                   both ``filename`` and ``title``.
+            limit: Maximum number of results to return (default 20).
+
+        Returns:
+            Dict with ``results`` list and ``total`` count.
+        """
+        if not self._db_manager:
+            return {"success": False, "error": "Database is not available."}
+
+        import re
+
+        from src.core.repositories.artifact import ArtifactRepository
+        from src.services import artifacts as artifact_store
+
+        try:
+            pattern = re.compile(query, re.IGNORECASE)
+        except re.error as e:
+            return {"success": False, "error": f"Invalid regex pattern: {e}"}
+
+        try:
+            repo = ArtifactRepository(self._db_manager)
+            all_artifacts = repo.list_all()
+        except Exception as e:
+            logger.error(f"Error fetching artifacts for search: {e}", exc_info=True)
+            return {"success": False, "error": str(e)}
+
+        matches = []
+        for art in all_artifacts:
+            haystack = (art.get("title") or "") + " " + (art["filename"] or "")
+            if pattern.search(haystack):
+                is_public = bool(art["is_public"])
+                matches.append(
+                    {
+                        "artifact_id": art["artifact_id"],
+                        "title": art.get("title"),
+                        "filename": art["filename"],
+                        "mime_type": art.get("mime_type"),
+                        "size": art.get("size"),
+                        "is_public": is_public,
+                        "has_secret": bool(art.get("secret_hash")),
+                        "created_at": art.get("created_at"),
+                        "link": (
+                            artifact_store.permanent_link(art["artifact_id"]) if is_public else None
+                        ),
+                        "management_url": artifact_store.management_url(),
+                    }
+                )
+            if len(matches) >= limit:
+                break
+
+        return {"success": True, "total": len(matches), "results": matches}
+
     # ---- Conversation text retrieval ----
 
     def get_conversation_text(

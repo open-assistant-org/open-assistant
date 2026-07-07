@@ -7,6 +7,7 @@ from fastapi import Depends, Request
 from src.core.database import DatabaseManager
 from src.core.encryption import EncryptionService, get_encryption_service
 from src.core.repositories.agent_task import AgentTaskRepository
+from src.core.repositories.artifact import ArtifactRepository
 from src.core.repositories.audit import AuditLogRepository
 from src.core.repositories.conversation import ConversationRepository
 from src.core.repositories.credentials import CredentialsRepository
@@ -62,6 +63,19 @@ def get_conversation_repo(db: DatabaseManager = Depends(get_db_manager)) -> Conv
         ConversationRepository instance
     """
     return ConversationRepository(db)
+
+
+def get_artifact_repo(db: DatabaseManager = Depends(get_db_manager)) -> ArtifactRepository:
+    """
+    Get artifact repository.
+
+    Args:
+        db: Database manager (injected)
+
+    Returns:
+        ArtifactRepository instance
+    """
+    return ArtifactRepository(db)
 
 
 def get_message_repo(db: DatabaseManager = Depends(get_db_manager)) -> MessageRepository:

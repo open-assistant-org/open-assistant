@@ -13,6 +13,19 @@ erDiagram
     cron_jobs ||--o{ job_executions : has
     future_tasks ||--o{ job_executions : has
     agent_definitions ||--o{ agent_tasks : defines
+    artifacts {
+        int id PK
+        text artifact_id UK
+        text title
+        text filename
+        text rel_path
+        text mime_type
+        int size
+        int is_public
+        text secret_hash
+        timestamp created_at
+        timestamp updated_at
+    }
 
     conversations {
         int id PK
@@ -424,7 +437,25 @@ Stores conversation context and memory for each conversation.
 - `facts`: Extracted facts (names, preferences, dates)
 - `working`: Current task context
 
-#### 14. Search Index
+#### 14. Artifacts
+
+Durable storage metadata for files persisted via the `store_artifact` tool.
+
+**Purpose**: Track generated files (HTML, PDF, DOCX, images, etc.) with visibility and passphrase controls
+**Key Fields**:
+- `artifact_id`: UUID identifying the artifact (also used as the on-disk directory name)
+- `filename`: Original filename
+- `rel_path`: Path relative to the artifacts directory (`<uuid>/<filename>`)
+- `mime_type`: Detected MIME type (used for `Content-Type` when serving)
+- `size`: File size in bytes
+- `is_public`: `1` = publicly accessible via permanent link; `0` = private (temp-link only)
+- `secret_hash`: PBKDF2-SHA256 hash of the passphrase gate (`NULL` = no gate); the plaintext passphrase is never stored
+
+**On-disk layout**: `data/artifacts/<artifact_id>/<filename>`
+
+**Relationships**: None (standalone table; not tied to a specific conversation)
+
+#### 15. Search Index
 
 Stores searchable content with embeddings for semantic search.
 
@@ -441,7 +472,7 @@ Stores searchable content with embeddings for semantic search.
 
 **Constraints**: Unique on (source, source_id)
 
-#### 15. Schema Migrations
+#### 16. Schema Migrations
 
 Tracks applied database migrations.
 
@@ -496,6 +527,7 @@ flowchart TD
 
 | Table | Retention Policy |
 |-------|------------------|
+| artifacts | Indefinite (user-managed via Artifacts tab) |
 | conversations | Indefinite (user-managed) |
 | messages | Indefinite (user-managed) |
 | agent_tasks | Last 1000 per conversation |
