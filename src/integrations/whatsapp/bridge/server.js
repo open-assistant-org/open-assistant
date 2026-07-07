@@ -10,6 +10,7 @@ const bodyParser = require('body-parser');
 const qrcode = require('qrcode-terminal');
 const fs = require('fs');
 const path = require('path');
+const { CHROMIUM_ARGS } = require('./launch-args');
 
 const app = express();
 app.use(bodyParser.json({ limit: '50mb' }));
@@ -71,17 +72,7 @@ const client = new Client({
     puppeteer: {
         headless: true,
         executablePath: CHROMIUM_PATH,
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
-            '--no-first-run',
-            '--no-zygote',
-            '--disable-gpu',
-            '--disable-dbus',
-            '--disable-features=Translate,BackForwardCache,AcceptCHFrame,MediaRouter,OptimizationHints'
-        ]
+        args: CHROMIUM_ARGS
     }
 });
 
