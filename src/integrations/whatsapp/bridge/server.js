@@ -10,6 +10,7 @@ const bodyParser = require('body-parser');
 const qrcode = require('qrcode-terminal');
 const fs = require('fs');
 const path = require('path');
+const { CHROMIUM_ARGS } = require('./launch-args');
 
 const app = express();
 app.use(bodyParser.json({ limit: '50mb' }));
@@ -71,17 +72,7 @@ const client = new Client({
     puppeteer: {
         headless: true,
         executablePath: CHROMIUM_PATH,
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
-            '--no-first-run',
-            '--no-zygote',
-            '--disable-gpu',
-            '--disable-dbus',
-            '--disable-features=Translate,BackForwardCache,AcceptCHFrame,MediaRouter,OptimizationHints'
-        ]
+        args: CHROMIUM_ARGS
     }
 });
 
@@ -202,19 +193,19 @@ app.get('/status', (req, res) => {
 // Send message
 app.post('/send', async (req, res) => {
     try {
-        if (!isReady) {
-            return res.status(503).json({
-                error: 'WhatsApp client not ready',
-                message: 'Please authenticate first'
-            });
-        }
-
         const { phone_number, message } = req.body;
 
         if (!phone_number || !message) {
             return res.status(400).json({
                 error: 'Missing required fields',
                 message: 'phone_number and message are required'
+            });
+        }
+
+        if (!isReady) {
+            return res.status(503).json({
+                error: 'WhatsApp client not ready',
+                message: 'Please authenticate first'
             });
         }
 
