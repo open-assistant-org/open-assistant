@@ -71,7 +71,7 @@ const client = new Client({
         dataPath: SESSION_PATH
     }),
     puppeteer: {
-        headless: 'shell',
+        headless: true,
         executablePath: CHROMIUM_PATH,
         args: CHROMIUM_ARGS
     }
