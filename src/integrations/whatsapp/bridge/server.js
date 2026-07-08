@@ -18,10 +18,7 @@ app.use(bodyParser.json({ limit: '50mb' }));
 const PORT = process.env.WHATSAPP_BRIDGE_PORT || 3001;
 const SESSION_PATH = process.env.WHATSAPP_SESSION_DIR || './whatsapp_session';
 const WEBHOOK_URL = process.env.WHATSAPP_WEBHOOK_URL || 'http://localhost:8080/api/whatsapp/webhook/incoming';
-// Default matches the Debian `chromium` apt package installed in the Dockerfile
-// (/usr/bin/chromium, not chromium-browser) and launch-check.js. supervisord
-// sets CHROMIUM_EXECUTABLE_PATH explicitly; this fallback keeps the bridge
-// launchable if it's ever run without that env (e.g. locally or in CI).
+// Default to /usr/bin/chromium (the Debian apt package path), matching the Dockerfile.
 const CHROMIUM_PATH = process.env.CHROMIUM_EXECUTABLE_PATH || '/usr/bin/chromium';
 
 /**
@@ -163,14 +160,8 @@ client.on('message', async (message) => {
     }
 });
 
-// Initialize client with self-healing retry.
-//
-// A failed Chromium launch (transient dbus race, resource contention at boot,
-// a stale profile lock) rejects the initialize() promise. Because the HTTP
-// server keeps listening on :3001, supervisord sees the process as "up" and
-// never restarts it — so without a retry here the bridge sits permanently
-// not-ready until a manual restart. Retry with backoff, cleaning up between
-// attempts, so a one-off launch failure self-heals instead of wedging the bridge.
+// Retry init with backoff so a transient Chromium launch failure self-heals.
+// The HTTP server stays up on :3001 either way, so supervisord won't restart us.
 const MAX_INIT_ATTEMPTS = parseInt(process.env.WHATSAPP_INIT_MAX_ATTEMPTS || '5', 10);
 const INIT_RETRY_BASE_MS = parseInt(process.env.WHATSAPP_INIT_RETRY_MS || '5000', 10);
 
@@ -187,9 +178,7 @@ async function initializeWithRetry(attempt = 1) {
             return;
         }
 
-        // A failed launch can leave a half-open browser and stale singleton
-        // lock files behind. Tear down and clean up so the next attempt starts
-        // from a clean profile.
+        // Clean up a half-open browser and stale locks before retrying.
         try { await client.destroy(); } catch (_) { /* browser may never have started */ }
         cleanupStaleLockFiles(SESSION_PATH);
 
