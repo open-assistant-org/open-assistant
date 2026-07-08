@@ -203,6 +203,38 @@ function setActiveNavLink() {
     });
 }
 
+// Hamburger Menu
+function initHamburgerMenu() {
+    const hamburger = document.getElementById('navHamburger');
+    const navLinks = document.querySelector('.navbar-links');
+    if (!hamburger || !navLinks) return;
+
+    hamburger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = navLinks.classList.toggle('open');
+        hamburger.classList.toggle('open', isOpen);
+        hamburger.setAttribute('aria-expanded', isOpen);
+    });
+
+    // Close when a nav link is clicked
+    navLinks.querySelectorAll('.nav-link').forEach(link => {
+        link.addEventListener('click', () => {
+            navLinks.classList.remove('open');
+            hamburger.classList.remove('open');
+            hamburger.setAttribute('aria-expanded', 'false');
+        });
+    });
+
+    // Close when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.navbar')) {
+            navLinks.classList.remove('open');
+            hamburger.classList.remove('open');
+            hamburger.setAttribute('aria-expanded', 'false');
+        }
+    });
+}
+
 // Tab Manager
 function initTabs() {
     const tabs = document.querySelectorAll('.tab');
@@ -310,6 +342,7 @@ function debounce(func, wait) {
 document.addEventListener('DOMContentLoaded', () => {
     setActiveNavLink();
     initTabs();
+    initHamburgerMenu();
 });
 
 // Export for use in other scripts

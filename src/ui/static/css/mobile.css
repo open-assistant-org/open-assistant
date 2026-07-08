@@ -136,18 +136,53 @@ body.is-pwa {
    MOBILE NAVIGATION IMPROVEMENTS
    ============================================================================ */
 
+/* Hamburger button — hidden on desktop */
+.navbar-hamburger {
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 5px;
+    width: 40px;
+    height: 40px;
+    padding: 8px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: background 0.2s;
+    flex-shrink: 0;
+}
+
+.navbar-hamburger:hover {
+    background: rgba(0, 255, 0, 0.1);
+}
+
+.navbar-hamburger span {
+    display: block;
+    width: 22px;
+    height: 2px;
+    background: var(--color-text);
+    border-radius: 2px;
+    transition: transform 0.25s ease, opacity 0.25s ease;
+    transform-origin: center;
+}
+
+/* Animate to X when open */
+.navbar-hamburger.open span:nth-child(1) {
+    transform: translateY(7px) rotate(45deg);
+}
+
+.navbar-hamburger.open span:nth-child(2) {
+    opacity: 0;
+    transform: scaleX(0);
+}
+
+.navbar-hamburger.open span:nth-child(3) {
+    transform: translateY(-7px) rotate(-45deg);
+}
+
 @media (max-width: 768px) {
-    /* Make navigation links more touch-friendly */
-    .navbar-links {
-        gap: 2px;
-    }
-
-    .nav-link {
-        padding: 10px 12px;
-        font-size: 0.9rem;
-        border-radius: 6px;
-    }
-
     /* Brand logo slightly smaller on mobile */
     .navbar-logo {
         width: 28px;
@@ -160,6 +195,38 @@ body.is-pwa {
 
     .navbar-brand span {
         display: none;
+    }
+
+    /* Show hamburger, hide inline links */
+    .navbar-hamburger {
+        display: flex;
+    }
+
+    .navbar-links {
+        display: none;
+        position: absolute;
+        top: 60px;
+        left: 0;
+        right: 0;
+        background: var(--color-surface);
+        border-bottom: 1px solid var(--color-border);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+        flex-direction: column;
+        gap: 4px;
+        padding: 8px 16px 12px;
+        z-index: 999;
+    }
+
+    .navbar-links.open {
+        display: flex;
+    }
+
+    .nav-link {
+        padding: 12px 16px;
+        font-size: 1rem;
+        border-radius: 8px;
+        width: 100%;
+        box-sizing: border-box;
     }
 }
 
