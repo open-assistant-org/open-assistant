@@ -52,9 +52,11 @@ jobs:
       - name: Test bridge HTTP server endpoints
         run: |
           BRIDGE_DIR="$(pwd)/src/integrations/whatsapp/bridge"
+          # Launch via start-bridge.sh so the DBus setup (needed for Chrome >=114)
+          # is exercised, matching how supervisord runs the bridge in production.
           CHROMIUM_EXECUTABLE_PATH="${{ steps.chromium.outputs.path }}" \
           WHATSAPP_SESSION_DIR="/tmp/wa-ci-session" \
-          node "$BRIDGE_DIR/server.js" > /tmp/bridge-server.log 2>&1 &
+          sh "$BRIDGE_DIR/start-bridge.sh" > /tmp/bridge-server.log 2>&1 &
           SERVER_PID=$!
 
           READY=0

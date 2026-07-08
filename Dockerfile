@@ -28,6 +28,7 @@ RUN apt-get update && \
         gnupg \
         supervisor \
         dumb-init \
+        dbus \
         chromium \
         chromium-sandbox \
         fonts-liberation \
