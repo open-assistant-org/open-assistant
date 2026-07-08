@@ -18,7 +18,8 @@ app.use(bodyParser.json({ limit: '50mb' }));
 const PORT = process.env.WHATSAPP_BRIDGE_PORT || 3001;
 const SESSION_PATH = process.env.WHATSAPP_SESSION_DIR || './whatsapp_session';
 const WEBHOOK_URL = process.env.WHATSAPP_WEBHOOK_URL || 'http://localhost:8080/api/whatsapp/webhook/incoming';
-const CHROMIUM_PATH = process.env.CHROMIUM_EXECUTABLE_PATH || '/usr/bin/chromium-browser';
+// Default to /usr/bin/chromium (the Debian apt package path), matching the Dockerfile.
+const CHROMIUM_PATH = process.env.CHROMIUM_EXECUTABLE_PATH || '/usr/bin/chromium';
 
 /**
  * Clean up stale Chromium lock files that prevent browser launch.
@@ -159,14 +160,35 @@ client.on('message', async (message) => {
     }
 });
 
-// Initialize client with error handling
-console.log('🔄 Initializing WhatsApp client...');
-client.initialize().catch((error) => {
-    console.error('❌ Failed to initialize WhatsApp client:', error);
-    console.error('Stack trace:', error.stack);
-    // Don't exit immediately - let supervisord handle retries
-    // The server will still be running but not ready
-});
+// Retry init with backoff so a transient Chromium launch failure self-heals.
+// The HTTP server stays up on :3001 either way, so supervisord won't restart us.
+const MAX_INIT_ATTEMPTS = parseInt(process.env.WHATSAPP_INIT_MAX_ATTEMPTS || '5', 10);
+const INIT_RETRY_BASE_MS = parseInt(process.env.WHATSAPP_INIT_RETRY_MS || '5000', 10);
+
+async function initializeWithRetry(attempt = 1) {
+    try {
+        console.log(`🔄 Initializing WhatsApp client (attempt ${attempt}/${MAX_INIT_ATTEMPTS})...`);
+        await client.initialize();
+    } catch (error) {
+        console.error(`❌ Failed to initialize WhatsApp client (attempt ${attempt}/${MAX_INIT_ATTEMPTS}):`, error.message);
+        console.error('Stack trace:', error.stack);
+
+        if (attempt >= MAX_INIT_ATTEMPTS) {
+            console.error('❌ Exhausted WhatsApp init attempts; bridge HTTP API stays up but WhatsApp is not ready.');
+            return;
+        }
+
+        // Clean up a half-open browser and stale locks before retrying.
+        try { await client.destroy(); } catch (_) { /* browser may never have started */ }
+        cleanupStaleLockFiles(SESSION_PATH);
+
+        const delay = INIT_RETRY_BASE_MS * attempt;
+        console.log(`⏳ Retrying WhatsApp init in ${delay}ms...`);
+        setTimeout(() => { initializeWithRetry(attempt + 1); }, delay);
+    }
+}
+
+initializeWithRetry();
 
 // ============================================================================
 // API ENDPOINTS
