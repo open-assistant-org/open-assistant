@@ -22,7 +22,7 @@ const timer = setTimeout(() => {
     let browser;
     try {
         browser = await puppeteer.launch({
-            headless: 'shell',
+            headless: true,
             executablePath: CHROMIUM_PATH,
             args: CHROMIUM_ARGS
         });
