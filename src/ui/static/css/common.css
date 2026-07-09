@@ -111,6 +111,10 @@ body {
     height: 32px;
 }
 
+.navbar-brand-short {
+    display: none;
+}
+
 .navbar-links {
     display: flex;
     gap: 8px;

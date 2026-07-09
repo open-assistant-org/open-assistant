@@ -197,6 +197,10 @@ body.is-pwa {
         display: none;
     }
 
+    .navbar-brand-short {
+        display: inline;
+    }
+
     /* Show hamburger, hide inline links */
     .navbar-hamburger {
         display: flex;
