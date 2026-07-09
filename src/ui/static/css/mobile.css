@@ -197,7 +197,7 @@ body.is-pwa {
         display: none;
     }
 
-    .navbar-brand-short {
+    .navbar-brand .navbar-brand-short {
         display: inline;
     }
 
