@@ -20,15 +20,25 @@ RUN uv venv /app/.venv && \
 # Stage 2: Runtime - Minimal production image
 FROM python:3.11-slim
 
-# Install Node.js, curl, supervisor, and Chromium dependencies for Puppeteer
-RUN apt-get update && \
+# Install Node.js, curl, supervisor, and Chromium dependencies for Puppeteer.
+#
+# Chromium pin: Debian trixie's chromium 150.0.7871.46 (and only that point
+# release) crashes headless at startup with SIGTRAP — Debian bugs #1141488/#1141613.
+# Prefer the known-good 149.0.7821.196 (what shipped in the working v1.2.0 image);
+# if that version has left the archive, accept any other version (incl. the fixed
+# 150.0.7871.100+), but NEVER the broken 150.0.7871.46. Pin-Priority 1001 forces
+# the downgrade to 149 when it's available; -1 makes the broken point release
+# uninstallable (build fails loudly rather than shipping a broken image).
+RUN printf '%s\n' \
+        'Package: chromium' 'Pin: version 149.0.7821.196*' 'Pin-Priority: 1001' '' \
+        'Package: chromium' 'Pin: version 150.0.7871.46*' 'Pin-Priority: -1' \
+        > /etc/apt/preferences.d/chromium && \
+    apt-get update && \
     apt-get install -y --no-install-recommends \
         curl \
         ca-certificates \
         gnupg \
         supervisor \
-        dumb-init \
-        dbus \
         chromium \
         chromium-sandbox \
         fonts-liberation \
@@ -134,7 +144,5 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8080/health || exit 1
 
-# dumb-init is PID 1: it reaps orphaned processes correctly without interfering
-# with Chrome's own child-process tracking. Supervisord runs as its child so it
-# never sees Chrome's helper processes as "unknown pids" to steal.
-CMD ["/usr/bin/dumb-init", "--", "/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+# Run supervisord to manage both processes
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
