@@ -43,7 +43,11 @@ def _make_plugin_service() -> PluginService:
 
 
 def _array_plugin_dict(param_in: str = "body") -> Dict[str, Any]:
-    """A minimal plugin whose single endpoint takes array params."""
+    """A minimal, domain-neutral plugin whose endpoint takes array params.
+
+    ``tag_ids`` exercises an integer-element array and ``labels`` a
+    string-element array; ``title`` is a plain primitive for contrast.
+    """
     return {
         "id": "array_test",
         "display_name": "Array Test",
@@ -52,33 +56,33 @@ def _array_plugin_dict(param_in: str = "body") -> Dict[str, Any]:
         "auth": {"type": "bearer"},
         "endpoints": [
             {
-                "name": "create_post",
-                "display_name": "Create Post",
-                "description": "Create a post across social accounts.",
+                "name": "create_item",
+                "display_name": "Create Item",
+                "description": "Create a record that references multiple tags and labels.",
                 "method": "POST",
-                "path": "/v1/posts",
+                "path": "/v1/items",
                 "parameters": [
                     {
-                        "name": "caption",
+                        "name": "title",
                         "in": param_in,
                         "type": "string",
-                        "description": "Post caption.",
+                        "description": "Item title.",
                         "required": True,
                     },
                     {
-                        "name": "social_accounts",
+                        "name": "tag_ids",
                         "in": param_in,
                         "type": "array",
                         "items": {"type": "integer"},
-                        "description": "Numeric social account IDs.",
+                        "description": "Numeric tag IDs to associate.",
                         "required": True,
                     },
                     {
-                        "name": "media_urls",
+                        "name": "labels",
                         "in": param_in,
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "Media URLs.",
+                        "description": "Free-text labels.",
                         "required": False,
                     },
                 ],
@@ -201,11 +205,11 @@ class TestArrayParameterValidation:
     def test_array_in_query_accepted(self):
         param = PluginEndpointParameter.model_validate(
             {
-                "name": "types",
+                "name": "kinds",
                 "in": "query",
                 "type": "array",
                 "items": {"type": "string"},
-                "description": "Types.",
+                "description": "Kinds.",
             }
         )
         assert param.type == "array"
@@ -225,25 +229,25 @@ class TestArrayToolSchema:
         tool = self.svc._create_tool("array_test", defn, defn.endpoints[0])
         return tool.schema.parameters
 
-    def test_array_param_emits_json_schema_array(self):
+    def test_integer_array_emits_json_schema_array(self):
         props = self._build_schema()["properties"]
-        assert props["social_accounts"]["type"] == "array"
-        assert props["social_accounts"]["items"] == {"type": "integer"}
+        assert props["tag_ids"]["type"] == "array"
+        assert props["tag_ids"]["items"] == {"type": "integer"}
 
     def test_string_array_items_type(self):
         props = self._build_schema()["properties"]
-        assert props["media_urls"]["type"] == "array"
-        assert props["media_urls"]["items"] == {"type": "string"}
+        assert props["labels"]["type"] == "array"
+        assert props["labels"]["items"] == {"type": "string"}
 
     def test_primitive_param_has_no_items(self):
         props = self._build_schema()["properties"]
-        assert props["caption"]["type"] == "string"
-        assert "items" not in props["caption"]
+        assert props["title"]["type"] == "string"
+        assert "items" not in props["title"]
 
     def test_required_list_reflects_required_flag(self):
         schema = self._build_schema()
-        assert "social_accounts" in schema["required"]
-        assert "media_urls" not in schema["required"]
+        assert "tag_ids" in schema["required"]
+        assert "labels" not in schema["required"]
 
 
 # ---------------------------------------------------------------------------
@@ -283,7 +287,7 @@ class TestArraySerialization:
             mock_client.request = AsyncMock(side_effect=fake_request)
             mock_cls.return_value = mock_client
 
-            await self.svc._execute_endpoint("array_test", "create_post", arguments)
+            await self.svc._execute_endpoint("array_test", "create_item", arguments)
 
         return captured
 
@@ -291,33 +295,33 @@ class TestArraySerialization:
     async def test_body_array_is_native_json_array(self):
         captured = await self._run(
             "body",
-            {"caption": "hi", "social_accounts": [75205, 75209]},
+            {"title": "hi", "tag_ids": [11, 22]},
         )
         # httpx json= receives the raw Python structure
-        assert captured["json"]["social_accounts"] == [75205, 75209]
-        assert isinstance(captured["json"]["social_accounts"], list)
+        assert captured["json"]["tag_ids"] == [11, 22]
+        assert isinstance(captured["json"]["tag_ids"], list)
         # And it serializes to a genuine JSON array, not a quoted string
         serialized = json.dumps(captured["json"])
-        assert '"social_accounts": [75205, 75209]' in serialized
-        assert '"[75205' not in serialized
+        assert '"tag_ids": [11, 22]' in serialized
+        assert '"[11' not in serialized
 
     @pytest.mark.asyncio
     async def test_query_array_is_list(self):
         captured = await self._run(
             "query",
-            {"caption": "hi", "media_urls": ["a.png", "b.png"]},
+            {"title": "hi", "labels": ["alpha", "beta"]},
         )
         # httpx serializes a list value as repeated query params.
-        assert captured["params"]["media_urls"] == ["a.png", "b.png"]
+        assert captured["params"]["labels"] == ["alpha", "beta"]
 
     @pytest.mark.asyncio
     async def test_single_element_array_stays_array(self):
         captured = await self._run(
             "body",
-            {"caption": "hi", "social_accounts": [75205]},
+            {"title": "hi", "tag_ids": [11]},
         )
-        assert captured["json"]["social_accounts"] == [75205]
-        assert isinstance(captured["json"]["social_accounts"], list)
+        assert captured["json"]["tag_ids"] == [11]
+        assert isinstance(captured["json"]["tag_ids"], list)
 
 
 # ---------------------------------------------------------------------------
