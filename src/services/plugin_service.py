@@ -137,6 +137,13 @@ class PluginService(BaseService):
                 prop["type"] = "number"
             elif param.type == "boolean":
                 prop["type"] = "boolean"
+            elif param.type == "array":
+                # Emit a proper JSON-Schema array so the model returns a real
+                # array instead of a stringified one. ``items`` is guaranteed
+                # present for array params by PluginEndpointParameter validation.
+                prop["type"] = "array"
+                element_type = param.items.type if param.items else "string"
+                prop["items"] = {"type": element_type}
             else:
                 prop["type"] = "string"
 

@@ -2,20 +2,67 @@
 
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+# Primitive parameter types (also the allowed element types for arrays).
+PARAM_PRIMITIVE_TYPES = {"string", "integer", "number", "boolean"}
+# Full set of allowed parameter types (primitives + array).
+PARAM_TYPES = PARAM_PRIMITIVE_TYPES | {"array"}
+
+
+class PluginParameterItems(BaseModel):
+    """Element-type descriptor for an ``array``-typed parameter.
+
+    Only single-level arrays of primitives are supported; nested arrays and
+    objects are intentionally disallowed for now.
+    """
+
+    type: Literal["string", "integer", "number", "boolean"]
 
 
 class PluginEndpointParameter(BaseModel):
     """A parameter for a plugin endpoint."""
 
     name: str
-    type: str = "string"  # "string", "integer", "number", "boolean"
+    type: str = "string"  # "string", "integer", "number", "boolean", "array"
     description: str
     required: bool = True
     in_: str = Field("query", alias="in")  # "path", "query", "body", "header"
     default: Optional[Any] = None
+    # Required when type == "array"; describes the array element type.
+    items: Optional[PluginParameterItems] = None
 
     model_config = {"populate_by_name": True}
+
+    @model_validator(mode="after")
+    def _validate_type_and_items(self) -> "PluginEndpointParameter":
+        if self.type not in PARAM_TYPES:
+            allowed = ", ".join(sorted(PARAM_TYPES))
+            raise ValueError(
+                f"Parameter '{self.name}' has invalid type '{self.type}'. "
+                f"Must be one of: {allowed}."
+            )
+
+        if self.type == "array":
+            if self.items is None:
+                raise ValueError(
+                    f"Parameter '{self.name}' has type 'array' but is missing the required "
+                    f"'items' field describing the element type "
+                    f"(e.g. \"items\": {{\"type\": \"integer\"}})."
+                )
+            if self.in_ in ("path", "header"):
+                raise ValueError(
+                    f"Parameter '{self.name}' has type 'array' with in='{self.in_}', which is "
+                    f"not supported. Array parameters are only meaningful for in='body' "
+                    f"(JSON array in the request body) or in='query' (repeated query params)."
+                )
+        elif self.items is not None:
+            raise ValueError(
+                f"Parameter '{self.name}' defines 'items' but its type is '{self.type}', not "
+                f"'array'. The 'items' field is only allowed when type is 'array'."
+            )
+
+        return self
 
 
 class PluginEndpoint(BaseModel):
