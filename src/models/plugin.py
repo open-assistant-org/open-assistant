@@ -48,7 +48,7 @@ class PluginEndpointParameter(BaseModel):
                 raise ValueError(
                     f"Parameter '{self.name}' has type 'array' but is missing the required "
                     f"'items' field describing the element type "
-                    f"(e.g. \"items\": {{\"type\": \"integer\"}})."
+                    f'(e.g. "items": {{"type": "integer"}}).'
                 )
             if self.in_ in ("path", "header"):
                 raise ValueError(

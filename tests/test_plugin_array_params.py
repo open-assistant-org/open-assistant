@@ -25,7 +25,6 @@ from src.models.plugin import (
 )
 from src.services.plugin_service import PluginService
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -259,9 +258,7 @@ class TestArraySerialization:
     def _install_array_plugin(self, param_in: str = "body"):
         defn = PluginDefinition.model_validate(_array_plugin_dict(param_in))
         self.svc._definitions["array_test"] = defn
-        self.svc.credentials_repo.get.return_value = {
-            "credential_data": {"token": "fake-token"}
-        }
+        self.svc.credentials_repo.get.return_value = {"credential_data": {"token": "fake-token"}}
 
     def _make_mock_response(self):
         resp = MagicMock()
