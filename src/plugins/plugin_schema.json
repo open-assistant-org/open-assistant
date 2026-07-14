@@ -155,8 +155,21 @@
                 },
                 "type": {
                   "type": "string",
-                  "enum": ["string", "integer", "number", "boolean"],
-                  "description": "JSON Schema type for the parameter."
+                  "enum": ["string", "integer", "number", "boolean", "array"],
+                  "description": "JSON Schema type for the parameter. Use 'array' for a list of primitives; pair it with an 'items' field describing the element type."
+                },
+                "items": {
+                  "type": "object",
+                  "required": ["type"],
+                  "additionalProperties": false,
+                  "description": "Required when type is 'array'. Describes the array element type. Nested arrays/objects are not supported.",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": ["string", "integer", "number", "boolean"],
+                      "description": "Element type of the array. Must be a primitive."
+                    }
+                  }
                 },
                 "description": {
                   "type": "string",
@@ -169,7 +182,27 @@
                 "default": {
                   "description": "Default value when the parameter is not provided."
                 }
-              }
+              },
+              "allOf": [
+                {
+                  "if": {
+                    "properties": { "type": { "const": "array" } },
+                    "required": ["type"]
+                  },
+                  "then": {
+                    "required": ["items"],
+                    "properties": {
+                      "in": {
+                        "enum": ["query", "body"],
+                        "description": "Array parameters are only supported for in='query' or in='body'."
+                      }
+                    }
+                  },
+                  "else": {
+                    "not": { "required": ["items"] }
+                  }
+                }
+              ]
             }
           }
         }

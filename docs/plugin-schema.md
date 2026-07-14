@@ -126,7 +126,8 @@ Each endpoint becomes one LLM tool named `plugin_{id}_{endpoint.name}`.
 |---|---|---|---|
 | `name` | string | ✅ | Parameter name. |
 | `in` | `"path"` \| `"query"` \| `"body"` \| `"header"` | ✅ | Where the parameter is placed. |
-| `type` | `"string"` \| `"integer"` \| `"number"` \| `"boolean"` | ✅ | JSON Schema type. |
+| `type` | `"string"` \| `"integer"` \| `"number"` \| `"boolean"` \| `"array"` | ✅ | JSON Schema type. Use `array` for a list of primitives (see below). |
+| `items` | object | required **when** `type = "array"` | Describes the array element type: `{ "type": "<primitive>" }`. |
 | `description` | string | ✅ | Description shown to the LLM. |
 | `required` | boolean | | Default: `true`. |
 | `default` | any | | Default value when not provided. |
@@ -139,6 +140,43 @@ Each endpoint becomes one LLM tool named `plugin_{id}_{endpoint.name}`.
 | `query` | Appended as `?name=value` |
 | `body` | Included in the JSON request body |
 | `header` | Added as an HTTP request header |
+
+#### Array parameters
+
+Set `type: "array"` when the target API expects a JSON array (e.g. a list of
+IDs in the request body). Pair it with an `items` object describing the element
+type — one of `string`, `integer`, `number`, or `boolean`:
+
+```json
+{
+  "name": "social_accounts",
+  "in": "body",
+  "type": "array",
+  "items": { "type": "integer" },
+  "description": "Numeric social account IDs to post to.",
+  "required": true
+}
+```
+
+Serialization depends on placement:
+
+| `in` | Serialization |
+|---|---|
+| `body` | Native JSON array in the request body: `"social_accounts": [75205, 75209]` |
+| `query` | Repeated query params: `?type=image&type=video` |
+
+**Rules:**
+
+- `items` is required **if and only if** `type` is `array`. Declaring `array`
+  without `items`, or supplying `items` on a non-array parameter, is rejected
+  with a descriptive error.
+- `items.type` must be one of the four primitives. Nested arrays and objects
+  are not supported in this iteration.
+- Array parameters are only meaningful for `in: "body"` and `in: "query"`.
+  `path` and `header` placements reject `type: "array"`.
+
+Because the tool schema advertises a real array type, the model emits an actual
+JSON array — no stringified `"[75205]"` workaround, and no runtime coercion.
 
 ---
 
