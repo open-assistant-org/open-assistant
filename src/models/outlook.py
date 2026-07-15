@@ -35,11 +35,11 @@ class ListEventsRequest(BaseModel):
     )
     start_date: Optional[str] = Field(
         None,
-        description="Start date filter (ISO format, e.g. 2026-01-01T00:00:00). If not specified, defaults to current time. For 'today' queries, use start of today (e.g. 2026-01-15T00:00:00).",
+        description="Start date filter. Accepts ISO-8601 (e.g. 2026-01-01T00:00:00) or relative terms like 'today', 'tomorrow', 'yesterday', 'now', 'this week'. If not specified, defaults to the current time.",
     )
     end_date: Optional[str] = Field(
         None,
-        description="End date filter (ISO format, e.g. 2026-01-01T23:59:59). Always set this to scope the query to the relevant period. For 'today' queries, use end of today (e.g. 2026-01-15T23:59:59).",
+        description="End date filter. Accepts ISO-8601 (e.g. 2026-01-01T23:59:59) or relative terms like 'today', 'tomorrow', 'this week'. Always set this to scope the query to the relevant period; relative terms and bare dates resolve to end-of-day.",
     )
     limit: int = Field(
         10, description="Maximum events. Use 25 for a single day, 50 for a week.", ge=1, le=100

@@ -1,8 +1,10 @@
 """Outlook service for email, calendar, and OneDrive operations."""
 
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
+
+from dateutil import parser as dateutil_parser
 
 from src.core.repositories.audit import AuditLogRepository
 from src.core.repositories.credentials import CredentialsRepository
@@ -18,6 +20,91 @@ from src.services.base import BaseService
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+_GRAPH_DATETIME_FMT = "%Y-%m-%dT%H:%M:%S"
+
+
+def _apply_boundary(dt: datetime, boundary: str) -> datetime:
+    """Apply a time-of-day to a bare date based on the filter boundary."""
+    if boundary == "end":
+        return dt.replace(hour=23, minute=59, second=59, microsecond=0)
+    return dt.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def _normalize_calendar_date(value: Optional[str], boundary: str = "start") -> Optional[str]:
+    """Normalize a loose date term into a Graph-compatible ISO-8601 string.
+
+    Microsoft Graph's OData ``$filter`` requires a strict ISO-8601 datetime
+    (e.g. ``2026-07-15T00:00:00``). LLM tool calls frequently pass relative
+    terms like ``"today"`` instead, which Graph rejects with a 400. This helper
+    converts those terms into the exact format the calendar filter expects.
+
+    Handles relative keywords (``now``, ``today``, ``tomorrow``, ``yesterday``,
+    ``this week``) and any ``dateutil``-parsable date/datetime. Bare dates get a
+    time-of-day from ``boundary``: ``"start"`` -> ``00:00:00``,
+    ``"end"`` -> ``23:59:59``.
+
+    Args:
+        value: The date string to normalize. ``None`` is passed through.
+        boundary: ``"start"`` or ``"end"`` — controls the time-of-day applied to
+            bare dates and relative keywords.
+
+    Returns:
+        A ``"YYYY-MM-DDTHH:MM:SS"`` string (no timezone suffix, matching the
+        existing filter format), or ``None`` if ``value`` is ``None``.
+
+    Raises:
+        ValueError: If the value cannot be parsed into a date.
+    """
+    if value is None:
+        return None
+
+    raw = value.strip()
+    if not raw:
+        return None
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    keyword = raw.lower()
+
+    # Relative keywords that dateutil cannot parse on its own.
+    if keyword == "now":
+        return now.strftime(_GRAPH_DATETIME_FMT)
+    if keyword == "today":
+        return _apply_boundary(now, boundary).strftime(_GRAPH_DATETIME_FMT)
+    if keyword == "tomorrow":
+        return _apply_boundary(now + timedelta(days=1), boundary).strftime(_GRAPH_DATETIME_FMT)
+    if keyword == "yesterday":
+        return _apply_boundary(now - timedelta(days=1), boundary).strftime(_GRAPH_DATETIME_FMT)
+    if keyword in ("this week", "week"):
+        target = now if boundary == "start" else now + timedelta(days=7)
+        return _apply_boundary(target, boundary).strftime(_GRAPH_DATETIME_FMT)
+
+    # Try strict ISO-8601 first (fast path, preserves explicit time-of-day).
+    try:
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        if dt.tzinfo is not None:
+            dt = dt.replace(tzinfo=None)
+        # A bare date (e.g. "2026-07-15") parses to midnight — apply the
+        # end-of-day boundary so end filters cover the whole day.
+        if boundary == "end" and (dt.hour, dt.minute, dt.second) == (0, 0, 0) and "T" not in raw:
+            dt = _apply_boundary(dt, boundary)
+        return dt.strftime(_GRAPH_DATETIME_FMT)
+    except (ValueError, AttributeError):
+        pass
+
+    # Fall back to fuzzy natural-language parsing.
+    try:
+        dt = dateutil_parser.parse(raw, fuzzy=True)
+        if dt.tzinfo is not None:
+            dt = dt.replace(tzinfo=None)
+        return dt.strftime(_GRAPH_DATETIME_FMT)
+    except (ValueError, TypeError, OverflowError):
+        pass
+
+    raise ValueError(
+        f"Could not parse date '{value}'. Use ISO-8601 like "
+        f"'2026-07-15T00:00:00' or terms like 'today'/'tomorrow'."
+    )
 
 
 class OutlookService(BaseService):
@@ -133,9 +220,14 @@ class OutlookService(BaseService):
         """
         client = self._get_client()
 
-        # Default to current time if start_date not specified (show only future events)
+        # Default to current time if start_date not specified (show only future events).
+        # Otherwise normalize loose/relative terms (e.g. "today") into strict ISO-8601
+        # so Microsoft Graph's OData $filter accepts them instead of returning a 400.
         if start_date is None:
             start_date = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+        else:
+            start_date = _normalize_calendar_date(start_date, boundary="start")
+        end_date = _normalize_calendar_date(end_date, boundary="end")
 
         return client.list_events(
             start_date=start_date, end_date=end_date, limit=limit, calendar_id=calendar_id
