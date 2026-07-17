@@ -385,6 +385,386 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0.3; }
         }
+
+        /* ================================================================
+           RECIPE GRAPH VISUALIZATION
+           ================================================================ */
+        .recipe-graph-modal-content {
+            max-width: 780px;
+        }
+
+        .modal-close-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.5rem;
+            line-height: 1;
+            cursor: pointer;
+            padding: 0 4px;
+            transition: color 0.2s;
+        }
+
+        .modal-close-btn:hover { color: var(--primary-color); }
+
+        .recipe-graph-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 18px;
+        }
+
+        .graph-meta-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 10px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            background: var(--background-color);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+        }
+
+        .graph-meta-chip code {
+            font-size: 0.8rem;
+            color: var(--primary-color);
+        }
+
+        .recipe-graph {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .graph-node {
+            width: 100%;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            background: var(--background-color);
+            padding: 14px 16px;
+            box-sizing: border-box;
+        }
+
+        .graph-node--trigger,
+        .graph-node--delivery {
+            border-style: dashed;
+            background: transparent;
+        }
+
+        .graph-node--trigger { border-color: var(--primary-color); }
+
+        .graph-node-head {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .graph-step-num {
+            flex-shrink: 0;
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            background: var(--primary-color);
+            color: #05130a;
+            font-weight: 700;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .graph-node-title {
+            font-weight: 600;
+            color: var(--text-secondary);
+            flex: 1;
+            min-width: 120px;
+            word-break: break-word;
+        }
+
+        .graph-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 3px 9px;
+            border-radius: 10px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .graph-badge--tool {
+            background: rgba(59, 130, 246, 0.14);
+            color: #7fb0ff;
+        }
+
+        .graph-badge--llm {
+            background: rgba(168, 85, 247, 0.16);
+            color: #c99bff;
+        }
+
+        .graph-node-detail {
+            margin-top: 12px;
+            margin-left: 36px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .graph-field-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        .graph-tool-name {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.85rem;
+            color: #7fb0ff;
+            background: rgba(59, 130, 246, 0.1);
+            padding: 4px 8px;
+            border-radius: 6px;
+            display: inline-block;
+            word-break: break-all;
+        }
+
+        .graph-params {
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .graph-param-row {
+            display: flex;
+            gap: 10px;
+            padding: 6px 10px;
+            font-size: 0.82rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .graph-param-row:last-child { border-bottom: none; }
+
+        .graph-param-key {
+            color: var(--text-muted);
+            font-weight: 600;
+            flex-shrink: 0;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        .graph-param-val {
+            color: var(--text-secondary);
+            word-break: break-word;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        .graph-prompt {
+            position: relative;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.82rem;
+            line-height: 1.5;
+            color: #cdd6c4;
+            background: #0d0d0d;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 10px 12px;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .graph-prompt.collapsed {
+            max-height: 6.6em;
+            overflow: hidden;
+        }
+
+        .graph-prompt.collapsed::after {
+            content: "";
+            position: absolute;
+            left: 0; right: 0; bottom: 0;
+            height: 2.4em;
+            background: linear-gradient(transparent, #0d0d0d);
+        }
+
+        .graph-prompt-toggle {
+            align-self: flex-start;
+            background: none;
+            border: none;
+            color: var(--primary-color);
+            cursor: pointer;
+            font-size: 0.78rem;
+            padding: 2px 0;
+        }
+
+        .graph-vars {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .graph-var-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 3px 9px;
+            border-radius: 10px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            border: 1px solid;
+        }
+
+        .graph-var-chip code {
+            font-size: 0.75rem;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        .graph-connector {
+            width: 2px;
+            height: 26px;
+            background: var(--border-color);
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .graph-connector::after {
+            content: "";
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-top: 6px solid var(--border-color);
+        }
+
+        .graph-connector-label {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            white-space: nowrap;
+            font-size: 0.72rem;
+            padding: 2px 8px;
+            border-radius: 8px;
+            background: var(--card-background);
+            border: 1px solid;
+        }
+
+        .graph-empty {
+            text-align: center;
+            color: var(--text-muted);
+            padding: 24px;
+        }
+
+        /* ================================================================
+           RESPONSIVE / MOBILE  (Jobs tab & tables)
+           ================================================================ */
+        .jobs-table-wrap {
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        @media (max-width: 768px) {
+            .monitoring-container {
+                padding: 16px;
+                border-radius: 0;
+            }
+
+            /* Graph modal goes full-screen like other modals */
+            .recipe-graph-modal-content {
+                max-width: 100%;
+            }
+
+            .graph-node-detail {
+                margin-left: 0;
+            }
+
+            .monitoring-header {
+                flex-wrap: wrap;
+                gap: 12px;
+            }
+
+            .monitoring-header h1 {
+                font-size: 1.4rem;
+            }
+
+            /* Card headers with filters wrap cleanly */
+            .card-header {
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+
+            .card-header select.form-control {
+                flex: 1 1 auto;
+                min-width: 0;
+            }
+
+            /* Transform data tables into stacked cards */
+            .jobs-table,
+            .jobs-table thead,
+            .jobs-table tbody,
+            .jobs-table tr,
+            .jobs-table td {
+                display: block;
+                width: 100%;
+                box-sizing: border-box;
+            }
+
+            .jobs-table thead {
+                position: absolute;
+                width: 1px;
+                height: 1px;
+                overflow: hidden;
+                clip: rect(0 0 0 0);
+                white-space: nowrap;
+            }
+
+            .jobs-table tr {
+                border: 1px solid var(--border-color);
+                border-radius: 10px;
+                margin-bottom: 12px;
+                padding: 6px 12px;
+                background: var(--background-color);
+            }
+
+            .jobs-table tr:hover { background: var(--background-color); }
+
+            .jobs-table td {
+                padding: 8px 0;
+                border-bottom: 1px solid var(--border-color);
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                gap: 12px;
+                text-align: right;
+            }
+
+            .jobs-table td:last-child { border-bottom: none; }
+
+            .jobs-table td[data-label]::before {
+                content: attr(data-label);
+                font-weight: 600;
+                color: var(--text-muted);
+                text-align: left;
+                flex-shrink: 0;
+                white-space: nowrap;
+            }
+
+            /* Detail rows (colspan) span full width without label */
+            .jobs-table td[colspan] {
+                text-align: left;
+            }
+
+            .job-actions {
+                flex-wrap: wrap;
+                justify-content: flex-end;
+            }
+
+            .job-action-btn {
+                min-height: 36px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -573,6 +953,20 @@
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeEditPromptModal()">Cancel</button>
                 <button class="btn btn-primary" onclick="savePrompt()">Save Recipe</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recipe Graph Modal -->
+    <div id="recipeGraphModal" class="modal">
+        <div class="modal-content recipe-graph-modal-content">
+            <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+                <span id="graphModalTitle">Recipe Flow</span>
+                <button class="modal-close-btn" onclick="closeRecipeGraphModal()" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="recipeGraphMeta" class="recipe-graph-meta"></div>
+                <div id="recipeGraphContainer" class="recipe-graph"></div>
             </div>
         </div>
     </div>
@@ -1010,18 +1404,21 @@
                             const stepDetail = pinnedCount > 0 ? ` (${pinnedCount} pinned)` : '';
                             return `
                             <tr>
-                                <td><strong>${escapeHtml(job.name)}</strong></td>
-                                <td><code style="font-size: 0.85rem;">${escapeHtml(job.cron_expression)}</code></td>
-                                <td style="white-space:nowrap">${stepLabel}<span style="color:var(--text-secondary);font-size:0.8rem">${stepDetail}</span></td>
-                                <td>
+                                <td data-label="Name"><strong>${escapeHtml(job.name)}</strong></td>
+                                <td data-label="Schedule"><code style="font-size: 0.85rem;">${escapeHtml(job.cron_expression)}</code></td>
+                                <td data-label="Steps" style="white-space:nowrap">${stepLabel}<span style="color:var(--text-secondary);font-size:0.8rem">${stepDetail}</span></td>
+                                <td data-label="Status">
                                     <span class="status-badge-inline status-badge-${job.enabled ? 'enabled' : 'disabled'}">
                                         ${job.enabled ? 'Enabled' : 'Disabled'}
                                     </span>
                                 </td>
-                                <td>${job.last_run_at ? formatDateTime(job.last_run_at) : 'Never'}</td>
-                                <td>${job.next_run_at ? formatDateTime(job.next_run_at) : 'N/A'}</td>
-                                <td>
+                                <td data-label="Last Run">${job.last_run_at ? formatDateTime(job.last_run_at) : 'Never'}</td>
+                                <td data-label="Next Run">${job.next_run_at ? formatDateTime(job.next_run_at) : 'N/A'}</td>
+                                <td data-label="Actions">
                                     <div class="job-actions">
+                                        <button class="job-action-btn" onclick="openRecipeGraphModal('${job.job_id}')" title="Visualize recipe flow">
+                                            Graph
+                                        </button>
                                         <button class="job-action-btn" onclick="openEditPromptModal('${job.job_id}')">
                                             Edit Recipe
                                         </button>
@@ -1043,7 +1440,7 @@
                 </table>
             `;
 
-            container.innerHTML = html;
+            container.innerHTML = `<div class="jobs-table-wrap">${html}</div>`;
         }
 
         async function toggleCronJob(jobId, enabled) {
@@ -1123,21 +1520,21 @@
                     <tbody>
                         ${jobsState.futureTasks.map(task => `
                             <tr>
-                                <td><strong>${task.name}</strong></td>
-                                <td>${formatDateTime(task.scheduled_time)}</td>
-                                <td>${task.job_type || 'unknown'}</td>
-                                <td>
+                                <td data-label="Name"><strong>${escapeHtml(task.name)}</strong></td>
+                                <td data-label="Scheduled Time">${formatDateTime(task.scheduled_time)}</td>
+                                <td data-label="Type">${escapeHtml(task.job_type || 'unknown')}</td>
+                                <td data-label="Status">
                                     <span class="status-badge-inline status-badge-${task.status}">
                                         ${task.status.charAt(0).toUpperCase() + task.status.slice(1)}
                                     </span>
                                 </td>
-                                <td>
+                                <td data-label="Actions">
                                     <div class="job-actions">
                                         ${task.status === 'pending' ? `
                                             <button class="job-action-btn btn-danger" onclick="cancelFutureTask('${task.task_id}')">
                                                 Cancel
                                             </button>
-                                        ` : ''}
+                                        ` : '<span style="color:var(--text-muted)">—</span>'}
                                     </div>
                                 </td>
                             </tr>
@@ -1146,7 +1543,7 @@
                 </table>
             `;
 
-            container.innerHTML = html;
+            container.innerHTML = `<div class="jobs-table-wrap">${html}</div>`;
         }
 
         async function cancelFutureTask(taskId) {
@@ -1224,16 +1621,16 @@
 
                             return `
                                 <tr>
-                                    <td><strong>${escapeHtml(exec.job_name || 'Unknown')}</strong></td>
-                                    <td>${exec.job_type === 'cron' ? 'Cron Job' : 'Future Task'}</td>
-                                    <td>${formatDateTime(exec.started_at)}</td>
-                                    <td>${duration !== 'N/A' ? duration + 's' : duration}</td>
-                                    <td>
+                                    <td data-label="Job Name"><strong>${escapeHtml(exec.job_name || 'Unknown')}</strong></td>
+                                    <td data-label="Type">${exec.job_type === 'cron' ? 'Cron Job' : 'Future Task'}</td>
+                                    <td data-label="Started">${formatDateTime(exec.started_at)}</td>
+                                    <td data-label="Duration">${duration !== 'N/A' ? duration + 's' : duration}</td>
+                                    <td data-label="Status">
                                         <span class="status-badge-inline status-badge-${statusBadge}">
                                             ${statusText}
                                         </span>
                                     </td>
-                                    <td>
+                                    <td data-label="Details">
                                         ${exec.error_message || exec.result ? `
                                             <button class="job-action-btn" onclick="toggleExecutionDetails('exec-${idx}')">
                                                 Show Details
@@ -1267,7 +1664,7 @@
                 </table>
             `;
 
-            container.innerHTML = html;
+            container.innerHTML = `<div class="jobs-table-wrap">${html}</div>`;
         }
 
         function toggleExecutionDetails(id) {
@@ -1388,17 +1785,231 @@
             }
         }
 
+        // ============================================================================
+        // RECIPE GRAPH VISUALIZATION
+        // ============================================================================
+
+        // Stable palette so a variable keeps the same colour wherever it appears
+        // (producer via "stores_as" and consumer via "uses_variable" match up).
+        const GRAPH_VAR_COLORS = [
+            '#a855f7', '#3b82f6', '#ec4899', '#f59e0b',
+            '#10b981', '#06b6d4', '#ef4444', '#84cc16',
+        ];
+
+        function graphVarColor(name) {
+            let h = 0;
+            for (let i = 0; i < name.length; i++) {
+                h = (h * 31 + name.charCodeAt(i)) >>> 0;
+            }
+            return GRAPH_VAR_COLORS[h % GRAPH_VAR_COLORS.length];
+        }
+
+        function varChip(prefix, name) {
+            const color = graphVarColor(name);
+            return `<span class="graph-var-chip" style="border-color:${color};color:${color};background:${color}1a">`
+                + `${prefix} <code>${escapeHtml(name)}</code></span>`;
+        }
+
+        function graphPromptBlock(text) {
+            const t = String(text || '');
+            const isLong = t.length > 220 || (t.match(/\n/g) || []).length > 3;
+            const collapsedClass = isLong ? ' collapsed' : '';
+            const toggle = isLong
+                ? `<button class="graph-prompt-toggle" onclick="toggleGraphPrompt(this)">Show full prompt</button>`
+                : '';
+            return `<div>
+                <div class="graph-field-label">Prompt</div>
+                <div class="graph-prompt${collapsedClass}">${escapeHtml(t)}</div>
+                ${toggle}
+            </div>`;
+        }
+
+        function toggleGraphPrompt(btn) {
+            const pre = btn.previousElementSibling;
+            if (!pre) return;
+            const collapsed = pre.classList.toggle('collapsed');
+            btn.textContent = collapsed ? 'Show full prompt' : 'Show less';
+        }
+
+        function graphParamsBlock(params) {
+            const entries = Object.entries(params || {});
+            if (entries.length === 0) return '';
+            const rows = entries.map(([k, v]) => {
+                const val = typeof v === 'object' ? JSON.stringify(v) : String(v);
+                return `<div class="graph-param-row">
+                    <span class="graph-param-key">${escapeHtml(k)}</span>
+                    <span class="graph-param-val">${escapeHtml(val)}</span>
+                </div>`;
+            }).join('');
+            return `<div>
+                <div class="graph-field-label">Parameters</div>
+                <div class="graph-params">${rows}</div>
+            </div>`;
+        }
+
+        function graphConnector(varName) {
+            if (varName) {
+                const color = graphVarColor(varName);
+                return `<div class="graph-connector" style="background:${color}">
+                    <span class="graph-connector-label" style="border-color:${color};color:${color}">passes <code>${escapeHtml(varName)}</code></span>
+                </div>`;
+            }
+            return '<div class="graph-connector"></div>';
+        }
+
+        // Build the ordered list of steps for any job shape (recipe or legacy).
+        function normalizeRecipe(job) {
+            if (job.steps && job.steps.length > 0) {
+                return job.steps.slice().sort((a, b) => (a.order || 0) - (b.order || 0));
+            }
+            // Legacy single-action jobs -> synthesize one step.
+            if (job.tool_name) {
+                return [{
+                    order: 1,
+                    description: job.description || 'Run tool',
+                    tool_name: job.tool_name,
+                    tool_parameters: job.tool_parameters || null,
+                }];
+            }
+            if (job.prompt) {
+                return [{
+                    order: 1,
+                    description: job.description || 'Agent prompt',
+                    prompt_template: job.prompt,
+                }];
+            }
+            return [];
+        }
+
+        function renderStepNode(step, index) {
+            const isTool = !!step.tool_name;
+            const badge = isTool
+                ? `<span class="graph-badge graph-badge--tool">&#128295; ${escapeHtml(step.tool_name)}</span>`
+                : `<span class="graph-badge graph-badge--llm">&#129504; LLM step</span>`;
+
+            const detailParts = [];
+
+            if (step.uses_variable) {
+                detailParts.push(`<div class="graph-vars">${varChip('&#9666; uses', step.uses_variable)}</div>`);
+            }
+            if (isTool) {
+                detailParts.push(`<div>
+                    <div class="graph-field-label">Tool</div>
+                    <span class="graph-tool-name">${escapeHtml(step.tool_name)}</span>
+                </div>`);
+                detailParts.push(graphParamsBlock(step.tool_parameters));
+            } else if (step.prompt_template) {
+                detailParts.push(graphPromptBlock(step.prompt_template));
+            }
+            if (step.stores_as) {
+                detailParts.push(`<div class="graph-vars">${varChip('stores &#9656;', step.stores_as)}</div>`);
+            }
+
+            const detail = detailParts.filter(Boolean).join('');
+
+            return `<div class="graph-node graph-node--step">
+                <div class="graph-node-head">
+                    <span class="graph-step-num">${step.order || index + 1}</span>
+                    <span class="graph-node-title">${escapeHtml(step.description || 'Step ' + (step.order || index + 1))}</span>
+                    ${badge}
+                </div>
+                ${detail ? `<div class="graph-node-detail">${detail}</div>` : ''}
+            </div>`;
+        }
+
+        function buildRecipeGraph(job) {
+            const steps = normalizeRecipe(job);
+            const metaEl = document.getElementById('recipeGraphMeta');
+            const container = document.getElementById('recipeGraphContainer');
+
+            // Meta chips: schedule, status, step count, delivery
+            const stepCount = steps.length;
+            const metaChips = [
+                `<span class="graph-meta-chip">&#9201; <code>${escapeHtml(job.cron_expression || '')}</code></span>`,
+                `<span class="graph-meta-chip">${job.enabled ? '&#9679; Enabled' : '&#9675; Disabled'}</span>`,
+                `<span class="graph-meta-chip">${stepCount} step${stepCount === 1 ? '' : 's'}</span>`,
+            ];
+            if (job.delivery_channel) {
+                const target = job.delivery_contact_identifier ? ` &rarr; ${escapeHtml(job.delivery_contact_identifier)}` : '';
+                metaChips.push(`<span class="graph-meta-chip">&#128228; ${escapeHtml(job.delivery_channel)}${target}</span>`);
+            }
+            metaEl.innerHTML = metaChips.join('');
+
+            if (stepCount === 0) {
+                container.innerHTML = '<div class="graph-empty">This job has no recipe steps to visualize.</div>';
+                return;
+            }
+
+            // Map of variable name -> producing step index (for connector labels)
+            const producedAt = {};
+            steps.forEach((s, i) => { if (s.stores_as) producedAt[s.stores_as] = i; });
+
+            const parts = [];
+
+            // Trigger node
+            parts.push(`<div class="graph-node graph-node--trigger">
+                <div class="graph-node-head">
+                    <span class="graph-node-title">&#9201; Trigger &mdash; scheduled run</span>
+                    <span class="graph-badge graph-badge--tool"><code style="color:inherit">${escapeHtml(job.cron_expression || '')}</code></span>
+                </div>
+            </div>`);
+
+            steps.forEach((step, i) => {
+                // Connector into this step; label it if this step consumes a variable
+                parts.push(graphConnector(step.uses_variable || null));
+                parts.push(renderStepNode(step, i));
+            });
+
+            // Delivery node
+            parts.push(graphConnector(null));
+            if (job.delivery_channel) {
+                const target = job.delivery_contact_identifier ? ` (${escapeHtml(job.delivery_contact_identifier)})` : '';
+                parts.push(`<div class="graph-node graph-node--delivery">
+                    <div class="graph-node-head">
+                        <span class="graph-node-title">&#128228; Deliver via ${escapeHtml(job.delivery_channel)}${target}</span>
+                    </div>
+                </div>`);
+            } else {
+                parts.push(`<div class="graph-node graph-node--delivery">
+                    <div class="graph-node-head">
+                        <span class="graph-node-title">&#128274; Runs silently (system execution only)</span>
+                    </div>
+                </div>`);
+            }
+
+            container.innerHTML = parts.join('');
+        }
+
+        function openRecipeGraphModal(jobId) {
+            const job = jobsState.cronJobs.find(j => j.job_id === jobId);
+            if (!job) { toast.error('Job not found'); return; }
+            document.getElementById('graphModalTitle').textContent = `Recipe Flow — ${job.name}`;
+            buildRecipeGraph(job);
+            document.getElementById('recipeGraphModal').classList.add('active');
+        }
+
+        function closeRecipeGraphModal() {
+            document.getElementById('recipeGraphModal').classList.remove('active');
+            document.getElementById('recipeGraphContainer').innerHTML = '';
+            document.getElementById('recipeGraphMeta').innerHTML = '';
+        }
+
         // Close modal when clicking outside
         document.addEventListener('click', (e) => {
-            const modal = document.getElementById('editPromptModal');
-            if (e.target === modal) {
+            if (e.target === document.getElementById('editPromptModal')) {
                 closeEditPromptModal();
+            }
+            if (e.target === document.getElementById('recipeGraphModal')) {
+                closeRecipeGraphModal();
             }
         });
 
         // Close modal on Escape key
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && document.getElementById('editPromptModal').classList.contains('active')) {
+            if (e.key !== 'Escape') return;
+            if (document.getElementById('recipeGraphModal').classList.contains('active')) {
+                closeRecipeGraphModal();
+            } else if (document.getElementById('editPromptModal').classList.contains('active')) {
                 closeEditPromptModal();
             }
         });
