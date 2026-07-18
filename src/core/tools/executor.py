@@ -944,9 +944,7 @@ class ToolExecutor:
             wa_on = whatsapp_service and _is_enabled(
                 whatsapp_service.settings_repo.get("whatsapp.enabled")
             )
-            sl_on = slack_service and _is_enabled(
-                slack_service.settings_repo.get("slack.enabled")
-            )
+            sl_on = slack_service and _is_enabled(slack_service.settings_repo.get("slack.enabled"))
             if wa_on:
                 channel = "whatsapp"
             elif sl_on:
