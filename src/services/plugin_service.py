@@ -20,6 +20,7 @@ from src.models.plugin import (
     PluginDefinition,
     PluginListItem,
 )
+from src.plugins.openapi_import import looks_like_openapi, looks_like_plugin, openapi_to_plugin_definition
 from src.services.base import BaseService
 from src.utils.logger import get_logger
 
@@ -714,6 +715,394 @@ class PluginService(BaseService):
             return {"success": False, "message": "Connection timed out"}
         except Exception as e:
             return {"success": False, "message": str(e)}
+
+    # ------------------------------------------------------------------
+    # Plugin-builder tool methods
+    # ------------------------------------------------------------------
+
+    async def _fetch_and_analyze(
+        self, source_url: str
+    ) -> Tuple[str, Optional[Dict[str, Any]], Optional[str]]:
+        """Fetch *source_url* and return ``(detected_format, parsed_obj, error)``.
+
+        ``detected_format`` is one of ``"plugin"``, ``"openapi"``, ``"json_unknown"``,
+        ``"html"``, or ``"error"``.  ``parsed_obj`` is the decoded JSON (or ``None`` on
+        HTML/error).  ``error`` is a human-readable message when the fetch fails.
+        """
+        try:
+            async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
+                response = await client.get(source_url)
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            return "error", None, f"HTTP {exc.response.status_code} fetching {source_url!r}."
+        except httpx.TimeoutException:
+            return "error", None, f"Request timed out fetching {source_url!r}."
+        except Exception as exc:  # noqa: BLE001
+            return "error", None, f"Failed to fetch {source_url!r}: {exc}"
+
+        content_type = response.headers.get("content-type", "").lower()
+        body = response.text
+
+        if "html" in content_type or body.lstrip().startswith("<"):
+            return "html", None, None
+
+        try:
+            parsed = json.loads(body)
+        except json.JSONDecodeError:
+            return "error", None, (
+                f"The response from {source_url!r} is not valid JSON (content-type: "
+                f"{content_type!r}). If this is a docs page, use the browser tool to find the "
+                "raw OpenAPI JSON URL."
+            )
+
+        if looks_like_plugin(parsed):
+            return "plugin", parsed, None
+        if looks_like_openapi(parsed):
+            return "openapi", parsed, None
+        return "json_unknown", parsed, None
+
+    def _required_credentials_info(self, defn: PluginDefinition) -> Dict[str, Any]:
+        """Return a human-readable description of what credentials the user must enter."""
+        auth_type = defn.auth.type
+        fields: List[str] = []
+        if auth_type == "bearer":
+            fields = ["token (API key / Bearer token)"]
+        elif auth_type == "header":
+            fields = [f"token (sent as {defn.auth.header_name or 'X-API-Key'} header)"]
+        elif auth_type == "basic":
+            if defn.auth.fixed_password is not None:
+                fields = ["token (used as username; password is hardcoded)"]
+            else:
+                fields = ["username", "password"]
+        elif auth_type == "api_key_with_jwt":
+            if defn.auth.api_key_header:
+                fields = ["api_key", "username", "password"]
+            else:
+                fields = ["username", "password"]
+
+        # Sensitive config fields are also entered as credentials.
+        for cf in defn.config_fields:
+            if cf.sensitive:
+                fields.append(f"{cf.key} ({cf.display_name})")
+
+        return {
+            "auth_type": auth_type,
+            "fields_to_enter": fields,
+            "note": (
+                f"Go to Settings → Plugins → {defn.display_name!r} and enter the credential(s) "
+                "listed above, then call test_plugin_connection to verify."
+            ),
+        }
+
+    async def install_from_source(
+        self,
+        source_url: Optional[str] = None,
+        definition_json: Optional[str] = None,
+        base_url_override: Optional[str] = None,
+        plugin_id_override: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Install a plugin from a URL or a JSON string.
+
+        Returns a structured response dict with ``status`` one of:
+        - ``"installed"`` — success, full details + connection-test result.
+        - ``"invalid"`` — schema validation failed; includes error and the converted definition.
+        - ``"needs_input"`` — can't proceed without more info; message names what's missing.
+        - ``"error"`` — unexpected failure; message has details.
+        """
+        # --- Require exactly one source ---
+        if source_url and definition_json:
+            return {
+                "status": "needs_input",
+                "message": (
+                    "Provide either source_url OR definition_json, not both. "
+                    "Use source_url for a URL to a JSON spec, or definition_json for an "
+                    "already-formed plugin definition string."
+                ),
+            }
+        if not source_url and not definition_json:
+            return {
+                "status": "needs_input",
+                "message": (
+                    "No source provided. Supply one of:\n"
+                    "• source_url: a URL to an OpenAPI/Swagger JSON spec or a plugin-definition JSON.\n"
+                    "• definition_json: a complete plugin definition as a JSON string.\n"
+                    "If you only have the API's HTML docs page, use web_search or the browser "
+                    "tool to find the raw OpenAPI JSON URL, then retry with that as source_url."
+                ),
+            }
+
+        conversion_warnings: List[str] = []
+        raw_dict: Optional[Dict[str, Any]] = None
+
+        if definition_json:
+            try:
+                raw_dict = json.loads(definition_json)
+            except json.JSONDecodeError as exc:
+                return {
+                    "status": "invalid",
+                    "message": f"definition_json is not valid JSON: {exc}",
+                }
+        else:
+            # Fetch the URL
+            fmt, parsed, err = await self._fetch_and_analyze(source_url)  # type: ignore[arg-type]
+            if fmt == "html":
+                return {
+                    "status": "needs_input",
+                    "message": (
+                        f"{source_url!r} returned an HTML page, not a JSON spec. "
+                        "Use the browser tool to browse that page and find the direct link to the "
+                        "OpenAPI/Swagger JSON (look for openapi.json, swagger.json, /api-docs, or "
+                        "similar), then retry with source_url pointing to the JSON file."
+                    ),
+                }
+            if fmt == "error":
+                return {"status": "error", "message": err}
+            if fmt == "json_unknown":
+                return {
+                    "status": "needs_input",
+                    "message": (
+                        f"The JSON at {source_url!r} is not an OpenAPI/Swagger spec and doesn't "
+                        "look like an Open Assistant plugin definition (missing id/endpoints/auth). "
+                        "Check that the URL points to the correct file, or paste the plugin "
+                        "definition JSON directly as definition_json."
+                    ),
+                }
+            raw_dict = parsed
+
+        # --- Convert OpenAPI → plugin if needed ---
+        if looks_like_openapi(raw_dict):
+            raw_dict, conversion_warnings = openapi_to_plugin_definition(
+                raw_dict,  # type: ignore[arg-type]
+                base_url_override=base_url_override,
+                plugin_id=plugin_id_override,
+            )
+
+            # Missing base URL is a hard blocker.
+            if not raw_dict.get("base_url"):
+                return {
+                    "status": "needs_input",
+                    "message": (
+                        "The spec has no base URL (no 'servers' entry). "
+                        "Please provide base_url_override (e.g. 'https://api.example.com/v1') "
+                        "and retry."
+                    ),
+                    "partial_definition": raw_dict,
+                    "conversion_warnings": conversion_warnings,
+                }
+
+            if not raw_dict.get("endpoints"):
+                return {
+                    "status": "needs_input",
+                    "message": (
+                        "No endpoints could be derived from the spec. "
+                        "The spec may be empty or use a format that isn't fully supported. "
+                        "Try passing a hand-crafted definition_json instead."
+                    ),
+                    "partial_definition": raw_dict,
+                    "conversion_warnings": conversion_warnings,
+                }
+
+        # --- Install ---
+        try:
+            defn = self.install_user_plugin(raw_dict)  # type: ignore[arg-type]
+        except Exception as exc:  # noqa: BLE001
+            return {
+                "status": "invalid",
+                "message": str(exc),
+                "definition": raw_dict,
+                "conversion_warnings": conversion_warnings,
+            }
+
+        # --- Auto connectivity/auth test ---
+        try:
+            connection_test = await self.test_plugin(defn.id)
+        except Exception as exc:  # noqa: BLE001
+            connection_test = {"success": False, "message": str(exc)}
+
+        cred_info = self._required_credentials_info(defn)
+
+        next_steps: List[str] = []
+        if conversion_warnings:
+            next_steps.append("Review conversion_warnings for dropped or approximated fields.")
+        if defn.config_fields and any(not f.sensitive for f in defn.config_fields):
+            config_names = [f.display_name for f in defn.config_fields if not f.sensitive]
+            next_steps.append(
+                f"Set config values in Settings → Plugins → {defn.display_name!r}: "
+                + ", ".join(config_names) + "."
+            )
+        next_steps.append(
+            f"Enter credentials in Settings → Plugins → {defn.display_name!r}: "
+            + ", ".join(cred_info["fields_to_enter"] or ["(none required)"]) + "."
+        )
+        if not connection_test.get("success"):
+            next_steps.append(
+                "Connection test did not succeed — enter credentials first, then call "
+                "test_plugin_connection to verify."
+            )
+        else:
+            next_steps.append("Plugin is installed and the API is reachable. Assign it to an agent.")
+
+        return {
+            "status": "installed",
+            "plugin_id": defn.id,
+            "display_name": defn.display_name,
+            "endpoint_count": len(defn.endpoints),
+            "auth_type": defn.auth.type,
+            "required_credentials": cred_info,
+            "config_fields": [
+                {"key": f.key, "display_name": f.display_name, "required": f.required}
+                for f in defn.config_fields
+            ],
+            "conversion_warnings": conversion_warnings,
+            "connection_test": connection_test,
+            "next_steps": next_steps,
+        }
+
+    async def inspect_api_source(self, source_url: str) -> Dict[str, Any]:
+        """Fetch *source_url* and analyse its contents WITHOUT installing anything.
+
+        Returns a structured report useful for gathering information before calling
+        ``install_from_source``.
+        """
+        fmt, parsed, err = await self._fetch_and_analyze(source_url)
+
+        if fmt == "error":
+            return {
+                "status": "error",
+                "message": err,
+                "next_steps": [
+                    "Check that the URL is correct and publicly accessible.",
+                    "Use web_search to find the correct API docs or OpenAPI spec URL.",
+                ],
+            }
+
+        if fmt == "html":
+            # Try to surface likely spec links from raw HTML
+            import re as _re
+            html = (await self._fetch_raw_text(source_url)) or ""
+            spec_candidates: List[str] = _re.findall(
+                r'href=["\']([^"\']*(?:openapi|swagger|api[\-_]?docs|api\.json|spec\.json)[^"\']*)["\']',
+                html,
+                _re.IGNORECASE,
+            )
+            return {
+                "status": "html_page",
+                "message": (
+                    "The URL returned an HTML page, not a JSON spec. "
+                    "Use the browser tool to browse the page and find the raw OpenAPI JSON URL."
+                ),
+                "candidate_spec_links": spec_candidates[:10],
+                "next_steps": [
+                    "Browse the page with the browser tool and look for a link to "
+                    "openapi.json, swagger.json, or /api-docs.",
+                    "Retry inspect_api_source with the direct JSON spec URL.",
+                ],
+            }
+
+        if fmt == "json_unknown":
+            return {
+                "status": "unrecognised_json",
+                "message": (
+                    "The URL returned JSON but it doesn't look like an OpenAPI/Swagger spec "
+                    "or an Open Assistant plugin definition."
+                ),
+                "detected_keys": list((parsed or {}).keys())[:20],
+                "next_steps": [
+                    "Verify the URL points to the API's OpenAPI/Swagger spec.",
+                    "If you already have the plugin JSON, use install_plugin with definition_json.",
+                ],
+            }
+
+        if fmt == "plugin":
+            return {
+                "status": "plugin_definition",
+                "detected_format": "plugin",
+                "plugin_id": parsed.get("id"),  # type: ignore[union-attr]
+                "display_name": parsed.get("display_name"),  # type: ignore[union-attr]
+                "auth_type": (parsed.get("auth") or {}).get("type"),  # type: ignore[union-attr]
+                "endpoint_count": len(parsed.get("endpoints") or []),  # type: ignore[union-attr]
+                "message": "This is already a valid-looking plugin definition. Call install_plugin with this source_url.",
+            }
+
+        # OpenAPI spec
+        conversion_warnings: List[str] = []
+        converted, conversion_warnings = openapi_to_plugin_definition(parsed)  # type: ignore[arg-type]
+        info = (parsed or {}).get("info", {})  # type: ignore[union-attr]
+
+        missing: List[str] = []
+        if not converted.get("base_url"):
+            missing.append("base_url (no 'servers' entry in spec — provide base_url_override)")
+        if not converted.get("endpoints"):
+            missing.append("endpoints (spec has no paths or they couldn't be parsed)")
+
+        return {
+            "status": "openapi_spec",
+            "detected_format": "openapi",
+            "spec_version": (parsed or {}).get("openapi") or (parsed or {}).get("swagger"),  # type: ignore[union-attr]
+            "title": info.get("title") if isinstance(info, dict) else None,
+            "candidate_base_urls": [
+                s.get("url")
+                for s in ((parsed or {}).get("servers") or [])  # type: ignore[union-attr]
+                if isinstance(s, dict) and s.get("url")
+            ][:5],
+            "detected_auth": converted.get("auth"),
+            "endpoint_count": len(converted.get("endpoints") or []),
+            "endpoint_summary": [
+                {
+                    "name": ep.get("name"),
+                    "method": ep.get("method"),
+                    "path": ep.get("path"),
+                    "display_name": ep.get("display_name"),
+                }
+                for ep in (converted.get("endpoints") or [])[:15]
+            ],
+            "missing": missing,
+            "conversion_warnings": conversion_warnings[:10],
+            "next_steps": [
+                *(
+                    [f"Provide base_url_override (e.g. 'https://api.example.com'). {missing[0]}."]
+                    if missing
+                    else []
+                ),
+                "Call install_plugin with source_url (or definition_json with the converted JSON) "
+                "to install. Optionally supply base_url_override or plugin_id_override.",
+            ],
+        }
+
+    async def _fetch_raw_text(self, url: str) -> Optional[str]:
+        """Return raw response text for a URL, or None on failure."""
+        try:
+            async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
+                r = await client.get(url)
+                return r.text
+        except Exception:  # noqa: BLE001
+            return None
+
+    async def test_connection(self, plugin_id: str) -> Dict[str, Any]:
+        """Test connectivity and auth for an installed plugin by id.
+
+        A thin, LLM-friendly wrapper around :meth:`test_plugin`.
+        """
+        if plugin_id not in self._definitions:
+            installed = list(self._definitions.keys())
+            return {
+                "success": False,
+                "message": (
+                    f"Plugin '{plugin_id}' is not installed. "
+                    f"Installed plugin ids: {installed or ['(none)']}"
+                ),
+            }
+        result = await self.test_plugin(plugin_id)
+        if result.get("success"):
+            return result
+        return {
+            **result,
+            "hint": (
+                "If you see 401 or 403, the server is reachable but credentials are wrong or "
+                f"missing. Enter them in Settings → Plugins → '{self._definitions[plugin_id].display_name}', "
+                "then retry."
+            ),
+        }
 
     # ------------------------------------------------------------------
     # Metadata for Tools assignment screen

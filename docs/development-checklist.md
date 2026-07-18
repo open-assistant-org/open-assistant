@@ -145,3 +145,36 @@ python -m py_compile src/agents/base.py
 | Settings UI (JS) | `src/ui/static/js/settings.js` |
 | Integration status API | `src/api/integrations.py` |
 | Dependencies | `pyproject.toml` |
+
+---
+
+## Changing the Plugin JSON Schema or Pydantic Model
+
+When you modify `src/plugins/plugin_schema.json` or `src/models/plugin.py`, also update:
+
+- [ ] **Built-in plugins** — validate all `src/plugins/builtins/*.json` still pass
+  `PluginDefinition.model_validate()`.
+- [ ] **OpenAPI converter** — update `src/plugins/openapi_import.py` if field names or types
+  change (type enum, auth type enum, parameter `in` enum, etc.).
+- [ ] **Doc examples** — update the JSON blocks in `docs/plugin-schema.md` to match.
+- [ ] **Drift-guard test** — run `pytest tests/test_plugin_schema_docs.py` to verify all of
+  the above in CI.
+- [ ] **Plugin-builder tool descriptions** — if the set of auth types, parameter types, or
+  top-level fields changes, update the `Field(...)` descriptions in
+  `src/models/plugin_builder.py` and the tool descriptions in `src/core/tools/definitions.py`
+  so the LLM knows the correct options.
+
+## Plugin-builder tools & Plugin Creator agent
+
+When you change the plugin-builder toolset (add/remove/rename a tool):
+
+- [ ] **Tool definition** — `src/core/tools/definitions.py` (`define_plugin_builder_tools`)
+- [ ] **Tool routing** — `src/core/tools/executor.py` (`_route_tool_call`)
+- [ ] **Tool metadata** — `src/core/tools/metadata.py` (add to `TOOL_METADATA` and
+  `system_tools` set)
+- [ ] **Request models** — `src/models/plugin_builder.py`
+- [ ] **Service methods** — `src/services/plugin_service.py`
+- [ ] **Agent tools list** — update the `plugin_creator` entry in `src/agents/base.py`
+- [ ] **DB migration** — add a new `XXX_plugin_creator_tools_update.sql` to update the
+  `agent_definitions` tools JSON for existing users
+- [ ] **Drift-guard test** — `tests/test_plugin_schema_docs.py` (`test_plugin_builder_tools_registered`)
