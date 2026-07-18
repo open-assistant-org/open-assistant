@@ -327,3 +327,59 @@ npx ajv validate -s src/plugins/plugin_schema.json -d my_plugin.json
 ```
 
 The server also validates on install — invalid definitions are rejected with a 422 error and a descriptive message.
+
+
+---
+
+## Install a plugin from an API spec (assistant-driven)
+
+Open Assistant ships a **Plugin Creator agent** that can turn an OpenAPI/Swagger spec (or an
+already-formed plugin JSON) into an installed, working plugin — progressively, without requiring
+the user to front-load every detail.
+
+### Three plugin-builder tools
+
+| Tool | What it does |
+|---|---|
+| `inspect_api_source` | Fetch a URL and analyse it **without installing** — returns detected format, base URL, auth type, endpoint list, and what's missing. Use this to gather information before committing to an install. |
+| `install_plugin` | Install from a spec URL or a pasted JSON string. Auto-converts OpenAPI/Swagger specs, validates the result, installs it, and immediately runs a connectivity/auth test. Returns clear feedback on every gap so the agent can ask for exactly what's missing and retry. |
+| `test_plugin_connection` | Re-test connectivity and auth for an already-installed plugin after the user has entered credentials in Settings → Plugins. |
+
+### Enabling the Plugin Creator agent
+
+The agent ships **disabled by default** (Settings → Agents → Plugin Creator). Enable it to
+make the three tools available to the assistant. For the best experience also enable:
+
+- **Browser** integration — lets the agent browse docs pages to find spec URLs.
+- **Web Search** (Brave) — lets the agent search for OpenAPI specs by service name.
+
+When a complex request needs both plugin-builder tools and web browsing, the planner
+automatically expands the active tool set to include all enabled agents' tools in one loop.
+
+### Typical workflow
+
+```
+User: "Add a plugin for the Petstore API"
+→ Agent uses web_search to find the OpenAPI spec URL.
+→ Agent calls inspect_api_source(source_url="https://.../openapi.json")
+  → returns base URL, auth type, endpoint list, nothing missing.
+→ Agent calls install_plugin(source_url="https://.../openapi.json")
+  → returns status "installed", required_credentials, connection_test.
+→ Agent tells user: "Plugin installed. Enter your Bearer token in Settings → Plugins → Pet Store API."
+→ User enters token.
+→ Agent calls test_plugin_connection(plugin_id="pet_store_api")
+  → returns success: true.
+→ Agent: "Connection verified. Assign the plugin to an agent in Settings → Tools."
+```
+
+### Keeping the docs in sync
+
+The test `tests/test_plugin_schema_docs.py` is a CI drift guard that:
+
+1. Validates every built-in plugin in `src/plugins/builtins/` against `PluginDefinition`.
+2. Validates every full plugin JSON block in this file.
+3. Validates sample `openapi_to_plugin_definition` output.
+4. Confirms the three plugin-builder tools are registered in the `ToolRegistry`.
+
+**Any change to `src/plugins/plugin_schema.json` or `src/models/plugin.py` that isn't
+reflected in the built-ins, this doc, or the converter will fail CI** — update them together.

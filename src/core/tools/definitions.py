@@ -207,6 +207,86 @@ from src.models.yahoo_finance import (
     YahooFinanceGetQuoteRequest,
     YahooFinanceSearchRequest,
 )
+from src.models.plugin_builder import (
+    InspectApiSourceRequest,
+    InstallPluginRequest,
+    TestPluginConnectionRequest,
+)
+
+
+def define_plugin_builder_tools():
+    """Define plugin-builder tools for the Plugin Creator agent."""
+    registry = get_tool_registry()
+
+    # Plugin Builder: Install Plugin
+    registry.register(
+        Tool(
+            schema=create_tool_schema(
+                name="install_plugin",
+                description=(
+                    "Install an Open Assistant plugin from a URL (OpenAPI/Swagger JSON spec or "
+                    "plugin-definition JSON) or from a pasted JSON string. "
+                    "If the URL points to an HTML docs page the tool returns needs_input with "
+                    "guidance to use the browser/web-search tools to locate the raw spec URL. "
+                    "When information is missing (no base URL, unknown auth, etc.) the tool "
+                    "returns needs_input with the exact gap to fill. "
+                    "On success, includes a connectivity/auth test result and lists the "
+                    "credentials the user must enter in Settings → Plugins before the plugin "
+                    "can be used. Use inspect_api_source first if you are unsure whether a "
+                    "URL returns the right content."
+                ),
+                parameters_model=InstallPluginRequest,
+            ),
+            executor=None,
+            service_name="system",
+            requires_auth=False,
+        )
+    )
+
+    # Plugin Builder: Inspect API Source
+    registry.register(
+        Tool(
+            schema=create_tool_schema(
+                name="inspect_api_source",
+                description=(
+                    "Fetch a URL and analyse it WITHOUT installing anything. "
+                    "Returns: detected format (openapi/plugin/html/unknown), candidate base URL, "
+                    "detected auth type, endpoint list, and a 'missing' list of fields that must "
+                    "be supplied before install_plugin will succeed. "
+                    "Useful when you have only a service name: search for the OpenAPI spec URL "
+                    "with web_search, browse the docs page, then call inspect_api_source to check "
+                    "what's there before calling install_plugin. "
+                    "For HTML pages the response includes candidate spec link URLs found in the page."
+                ),
+                parameters_model=InspectApiSourceRequest,
+            ),
+            executor=None,
+            service_name="system",
+            requires_auth=False,
+        )
+    )
+
+    # Plugin Builder: Test Plugin Connection
+    registry.register(
+        Tool(
+            schema=create_tool_schema(
+                name="test_plugin_connection",
+                description=(
+                    "Test connectivity and auth for an already-installed plugin. "
+                    "Sends an authenticated request to the plugin's base URL and reports success "
+                    "or the reason for failure. "
+                    "A status code below 500 counts as 'reachable', so a 401 or 403 means the "
+                    "server is up but the credentials are wrong or missing — direct the user to "
+                    "Settings → Plugins to enter them, then call this tool again. "
+                    "Call this after install_plugin and again after the user enters credentials."
+                ),
+                parameters_model=TestPluginConnectionRequest,
+            ),
+            executor=None,
+            service_name="system",
+            requires_auth=False,
+        )
+    )
 
 
 def define_google_tools():
@@ -2960,3 +3040,4 @@ def initialize_all_tools():
     define_google_ads_tools()
     define_google_news_tools()
     define_yahoo_finance_tools()
+    define_plugin_builder_tools()

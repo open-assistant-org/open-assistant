@@ -988,6 +988,25 @@ TOOL_METADATA: Dict[str, ToolMetadata] = {
         description="Get performance metrics for ad groups",
         category="advertising",
     ),
+    # Plugin Builder Tools
+    "install_plugin": ToolMetadata(
+        name="install_plugin",
+        display_name="Install Plugin",
+        description="Install an Open Assistant plugin from a URL or pasted JSON definition",
+        category="system",
+    ),
+    "inspect_api_source": ToolMetadata(
+        name="inspect_api_source",
+        display_name="Inspect API Source",
+        description="Analyse a URL for plugin content (OpenAPI spec, plugin JSON, or docs page) without installing",
+        category="system",
+    ),
+    "test_plugin_connection": ToolMetadata(
+        name="test_plugin_connection",
+        display_name="Test Plugin Connection",
+        description="Test connectivity and auth for an installed plugin",
+        category="system",
+    ),
 }
 
 
@@ -1043,6 +1062,9 @@ def get_tool_service(tool_name: str) -> str:
         "calculate",
         "python_execute",
         "python_agent",
+        "install_plugin",
+        "inspect_api_source",
+        "test_plugin_connection",
     }
     if tool_name in system_tools:
         return "system"

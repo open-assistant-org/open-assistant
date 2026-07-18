@@ -677,6 +677,22 @@ class ToolExecutor:
         elif tool_name == "store_artifact":
             return self.services["system"].store_artifact(**arguments)
 
+        # Plugin-builder tools
+        elif tool_name == "install_plugin":
+            if not self.plugin_service:
+                return {"status": "error", "message": "Plugin service is not available."}
+            return await self.plugin_service.install_from_source(**arguments)
+
+        elif tool_name == "inspect_api_source":
+            if not self.plugin_service:
+                return {"status": "error", "message": "Plugin service is not available."}
+            return await self.plugin_service.inspect_api_source(**arguments)
+
+        elif tool_name == "test_plugin_connection":
+            if not self.plugin_service:
+                return {"status": "error", "message": "Plugin service is not available."}
+            return await self.plugin_service.test_connection(**arguments)
+
         # Calculator tools
         elif tool_name == "calculate":
             from src.services.calculator import calculate
