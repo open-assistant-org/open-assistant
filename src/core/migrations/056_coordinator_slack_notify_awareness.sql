@@ -20,7 +20,7 @@ SENDING:
 - Send WhatsApp to a specific number: USE whatsapp_send_message
 - Notify the owner/user (WhatsApp or Slack): USE notify_owner
   - The channel parameter selects the delivery service (''whatsapp'' or ''slack'').
-  - If you do not specify a channel, the tool picks whichever service is currently enabled automatically.
+  - If you do not specify a channel, WhatsApp is used when enabled; Slack is used as a fallback when only Slack is configured.
   - Use this when the user says "send me a message", "notify me", "let me know", "WhatsApp me", "Slack me", or when you need to proactively reach the owner (e.g. scheduled task results, reminders, alerts).
   - The tool will inform you if the chosen channel is not enabled or not configured.
 
