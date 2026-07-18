@@ -65,6 +65,14 @@ async def send_message(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/test-connection")
+async def test_connection(
+    whatsapp_service: WhatsAppService = Depends(get_whatsapp_service),
+) -> Dict[str, Any]:
+    """Test WhatsApp bridge connectivity and authentication status."""
+    return whatsapp_service.test_connection()
+
+
 @router.post("/webhook/configure")
 async def configure_webhook(
     request: WebhookConfigRequest, whatsapp_service: WhatsAppService = Depends(get_whatsapp_service)
