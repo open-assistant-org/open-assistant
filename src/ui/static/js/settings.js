@@ -1395,7 +1395,11 @@ async function pollWhatsAppQr() {
             statusText.textContent = 'WhatsApp is linked and ready.';
             toast.success('WhatsApp is connected!');
             stopWhatsAppQrPolling();
-            setTimeout(closeWhatsAppQrModal, 2000);
+            await toggleIntegration('whatsapp', true);
+            setTimeout(async () => {
+                closeWhatsAppQrModal();
+                await loadIntegrations();
+            }, 2000);
             return;
         }
 
