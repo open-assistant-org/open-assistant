@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -15,7 +15,6 @@ from src.plugins.openapi_import import (
     openapi_to_plugin_definition,
     slugify,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -228,6 +227,7 @@ class TestOpenapiConversionPetstore:
 
     def test_id_is_slug(self):
         import re
+
         assert re.match(r"^[a-z][a-z0-9_]*$", self.defn["id"])
 
     def test_display_name(self):
@@ -238,7 +238,9 @@ class TestOpenapiConversionPetstore:
 
     def test_get_pets_endpoint(self):
         # operationId "listPets" slugifies to "listpets" (camelCase not split)
-        ep = next(e for e in self.defn["endpoints"] if e["path"] == "/pets" and e["method"] == "GET")
+        ep = next(
+            e for e in self.defn["endpoints"] if e["path"] == "/pets" and e["method"] == "GET"
+        )
         assert ep["method"] == "GET"
         assert ep["path"] == "/pets"
         params = ep["parameters"]
@@ -248,7 +250,9 @@ class TestOpenapiConversionPetstore:
         assert limit["required"] is False
 
     def test_post_pets_body_params(self):
-        ep = next(e for e in self.defn["endpoints"] if e["path"] == "/pets" and e["method"] == "POST")
+        ep = next(
+            e for e in self.defn["endpoints"] if e["path"] == "/pets" and e["method"] == "POST"
+        )
         assert ep["method"] == "POST"
         params = {p["name"]: p for p in ep["parameters"]}
         assert "name" in params
@@ -267,6 +271,7 @@ class TestOpenapiConversionPetstore:
 
     def test_validates_as_plugin(self):
         from src.models.plugin import PluginDefinition
+
         defn = PluginDefinition.model_validate(self.defn)
         assert defn.id
 
@@ -279,6 +284,7 @@ class TestOpenapiConversionApiKey:
 
     def test_validates_as_plugin(self):
         from src.models.plugin import PluginDefinition
+
         defn, _ = openapi_to_plugin_definition(APIKEY_OPENAPI_3)
         PluginDefinition.model_validate(defn)
 
@@ -295,6 +301,7 @@ class TestOpenapiConversionArrayBody:
 
     def test_validates_as_plugin(self):
         from src.models.plugin import PluginDefinition
+
         defn, _ = openapi_to_plugin_definition(ARRAY_BODY_OPENAPI)
         PluginDefinition.model_validate(defn)
 
@@ -316,6 +323,7 @@ class TestOpenapiConversionSwagger2:
 
     def test_validates_as_plugin(self):
         from src.models.plugin import PluginDefinition
+
         defn, _ = openapi_to_plugin_definition(SWAGGER_2_SPEC)
         PluginDefinition.model_validate(defn)
 
@@ -349,9 +357,11 @@ def _make_plugin_service():
     credentials_repo.get.return_value = {}
 
     import tempfile, os
+
     tmpdir = tempfile.mkdtemp()
 
     from src.services.plugin_service import PluginService
+
     svc = PluginService(
         settings_repo=settings_repo,
         credentials_repo=credentials_repo,
@@ -362,6 +372,7 @@ def _make_plugin_service():
 
 def _make_httpx_response(body: Any, status: int = 200, content_type: str = "application/json"):
     import httpx
+
     content = json.dumps(body).encode() if isinstance(body, dict) else body
     response = httpx.Response(
         status_code=status,
@@ -455,16 +466,12 @@ async def test_install_from_source_openapi_no_base_url():
 async def test_install_from_source_openapi_happy_path(tmp_path):
     svc, tmpdir = _make_plugin_service()
     spec_response = _make_httpx_response(PETSTORE_OPENAPI_3)
-    test_response = _make_httpx_response(b"", status=200)
 
     head_response = type(
         "R",
         (),
         {"status_code": 200, "content": b""},
     )()
-
-    async def mock_head(*a, **kw):
-        return head_response
 
     with patch("httpx.AsyncClient") as mock_client_cls:
         mock_client = AsyncMock()
@@ -474,9 +481,7 @@ async def test_install_from_source_openapi_happy_path(tmp_path):
         mock_client.head = AsyncMock(return_value=head_response)
         mock_client_cls.return_value = mock_client
 
-        result = await svc.install_from_source(
-            source_url="http://example.com/openapi.json"
-        )
+        result = await svc.install_from_source(source_url="http://example.com/openapi.json")
 
     assert result["status"] == "installed"
     assert result["plugin_id"]
@@ -492,8 +497,13 @@ async def test_install_from_source_openapi_happy_path(tmp_path):
 @pytest.mark.asyncio
 async def test_install_from_source_invalid_definition():
     svc, _ = _make_plugin_service()
-    bad = {"id": "INVALID ID!", "display_name": "x", "base_url": "https://x.com",
-           "auth": {"type": "bearer"}, "endpoints": []}
+    bad = {
+        "id": "INVALID ID!",
+        "display_name": "x",
+        "base_url": "https://x.com",
+        "auth": {"type": "bearer"},
+        "endpoints": [],
+    }
     result = await svc.install_from_source(definition_json=json.dumps(bad))
     assert result["status"] == "invalid"
     assert "definition" in result
@@ -565,9 +575,7 @@ async def test_inspect_openapi_spec():
 @pytest.mark.asyncio
 async def test_inspect_html_page():
     svc, _ = _make_plugin_service()
-    html_body = (
-        b'<html><body><a href="/openapi.json">OpenAPI</a></body></html>'
-    )
+    html_body = b'<html><body><a href="/openapi.json">OpenAPI</a></body></html>'
     response = _make_httpx_response(html_body, content_type="text/html")
 
     with patch("httpx.AsyncClient") as mock_client_cls:

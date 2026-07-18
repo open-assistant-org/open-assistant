@@ -20,7 +20,11 @@ from src.models.plugin import (
     PluginDefinition,
     PluginListItem,
 )
-from src.plugins.openapi_import import looks_like_openapi, looks_like_plugin, openapi_to_plugin_definition
+from src.plugins.openapi_import import (
+    looks_like_openapi,
+    looks_like_plugin,
+    openapi_to_plugin_definition,
+)
 from src.services.base import BaseService
 from src.utils.logger import get_logger
 
@@ -749,10 +753,14 @@ class PluginService(BaseService):
         try:
             parsed = json.loads(body)
         except json.JSONDecodeError:
-            return "error", None, (
-                f"The response from {source_url!r} is not valid JSON (content-type: "
-                f"{content_type!r}). If this is a docs page, use the browser tool to find the "
-                "raw OpenAPI JSON URL."
+            return (
+                "error",
+                None,
+                (
+                    f"The response from {source_url!r} is not valid JSON (content-type: "
+                    f"{content_type!r}). If this is a docs page, use the browser tool to find the "
+                    "raw OpenAPI JSON URL."
+                ),
             )
 
         if looks_like_plugin(parsed):
@@ -928,11 +936,13 @@ class PluginService(BaseService):
             config_names = [f.display_name for f in defn.config_fields if not f.sensitive]
             next_steps.append(
                 f"Set config values in Settings → Plugins → {defn.display_name!r}: "
-                + ", ".join(config_names) + "."
+                + ", ".join(config_names)
+                + "."
             )
         next_steps.append(
             f"Enter credentials in Settings → Plugins → {defn.display_name!r}: "
-            + ", ".join(cred_info["fields_to_enter"] or ["(none required)"]) + "."
+            + ", ".join(cred_info["fields_to_enter"] or ["(none required)"])
+            + "."
         )
         if not connection_test.get("success"):
             next_steps.append(
@@ -940,7 +950,9 @@ class PluginService(BaseService):
                 "test_plugin_connection to verify."
             )
         else:
-            next_steps.append("Plugin is installed and the API is reachable. Assign it to an agent.")
+            next_steps.append(
+                "Plugin is installed and the API is reachable. Assign it to an agent."
+            )
 
         return {
             "status": "installed",
@@ -979,6 +991,7 @@ class PluginService(BaseService):
         if fmt == "html":
             # Try to surface likely spec links from raw HTML
             import re as _re
+
             html = (await self._fetch_raw_text(source_url)) or ""
             spec_candidates: List[str] = _re.findall(
                 r'href=["\']([^"\']*(?:openapi|swagger|api[\-_]?docs|api\.json|spec\.json)[^"\']*)["\']',
@@ -993,8 +1006,7 @@ class PluginService(BaseService):
                 ),
                 "candidate_spec_links": spec_candidates[:10],
                 "next_steps": [
-                    "Browse the page with the browser tool and look for a link to "
-                    "openapi.json, swagger.json, or /api-docs.",
+                    "Browse the page with the browser tool and look for a link to openapi.json, swagger.json, or /api-docs.",
                     "Retry inspect_api_source with the direct JSON spec URL.",
                 ],
             }

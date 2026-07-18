@@ -36,17 +36,16 @@ def test_builtin_plugin_validates(json_path):
     try:
         defn = PluginDefinition.model_validate(raw)
     except Exception as exc:
-        pytest.fail(
-            f"Built-in plugin {json_path.name!r} failed validation: {exc}"
-        )
-    assert defn.id == json_path.stem, (
-        f"Plugin id {defn.id!r} in {json_path.name!r} doesn't match the filename stem."
-    )
+        pytest.fail(f"Built-in plugin {json_path.name!r} failed validation: {exc}")
+    assert (
+        defn.id == json_path.stem
+    ), f"Plugin id {defn.id!r} in {json_path.name!r} doesn't match the filename stem."
 
 
 # ---------------------------------------------------------------------------
 # 2. Full JSON examples in docs/plugin-schema.md validate.
 # ---------------------------------------------------------------------------
+
 
 def _extract_json_blocks(md_text: str):
     """Yield (label, parsed_dict) for each ```json block that looks like a full plugin."""
@@ -190,14 +189,15 @@ def test_converter_no_warnings_for_clean_spec():
 # 4. Plugin-builder tools are registered in the ToolRegistry after init.
 # ---------------------------------------------------------------------------
 
+
 def test_plugin_builder_tools_registered():
     """install_plugin, inspect_api_source, test_plugin_connection must be in the ToolRegistry."""
     from src.core.tools.definitions import initialize_all_tools
-    from src.core.tools.registry import ToolRegistry
-
-    registry = ToolRegistry()
-    # Temporarily redirect the global registry to our local instance
     import src.core.tools.registry as reg_module
+
+    registry = reg_module.ToolRegistry()
+    # Temporarily redirect the global registry to our local instance
+
     original = reg_module._registry
     reg_module._registry = registry
     try:

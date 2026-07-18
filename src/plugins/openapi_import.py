@@ -24,19 +24,12 @@ _HTTP_METHODS = ("get", "post", "put", "patch", "delete")
 
 def looks_like_openapi(obj: Any) -> bool:
     """True if ``obj`` looks like an OpenAPI 3.x or Swagger 2.0 document."""
-    return isinstance(obj, dict) and (
-        "openapi" in obj or "swagger" in obj or "paths" in obj
-    )
+    return isinstance(obj, dict) and ("openapi" in obj or "swagger" in obj or "paths" in obj)
 
 
 def looks_like_plugin(obj: Any) -> bool:
     """True if ``obj`` already looks like an Open Assistant plugin definition."""
-    return (
-        isinstance(obj, dict)
-        and "id" in obj
-        and "endpoints" in obj
-        and "auth" in obj
-    )
+    return isinstance(obj, dict) and "id" in obj and "endpoints" in obj and "auth" in obj
 
 
 def slugify(text: str, fallback: str = "api") -> str:
@@ -202,12 +195,16 @@ def _params_from_operation(
                 entry["type"] = "string"
             else:
                 items = schema.get("items") if isinstance(schema, dict) else None
-                entry["items"] = {"type": _json_type(items) if _json_type(items) != "array" else "string"}
+                entry["items"] = {
+                    "type": _json_type(items) if _json_type(items) != "array" else "string"
+                }
         params.append(entry)
         seen.add(name)
 
     # Request body (OpenAPI 3) → flat body params.
-    body = _resolve_ref(spec, operation.get("requestBody")) if operation.get("requestBody") else None
+    body = (
+        _resolve_ref(spec, operation.get("requestBody")) if operation.get("requestBody") else None
+    )
     if isinstance(body, dict):
         content = body.get("content", {})
         json_schema = None
@@ -338,11 +335,7 @@ def openapi_to_plugin_definition(
             used_names.add(name)
 
             op_label = f"{method.upper()} {path}"
-            description = (
-                operation.get("description")
-                or operation.get("summary")
-                or op_label
-            )
+            description = operation.get("description") or operation.get("summary") or op_label
             endpoint: Dict[str, Any] = {
                 "name": name,
                 "display_name": (operation.get("summary") or name.replace("_", " ").title())[:80],
