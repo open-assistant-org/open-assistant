@@ -65,3 +65,5 @@ Available tools:
     0,
     '["plugin","integration","api","openapi","swagger","connect","add integration","install plugin","rest api","new tool","new integration","connect service","api key","third party"]'
 );
+
+INSERT OR IGNORE INTO schema_migrations (version) VALUES ('055_plugin_creator_agent');
