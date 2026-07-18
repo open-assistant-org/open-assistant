@@ -112,6 +112,8 @@ In Slack, invite the bot to any channel where you want it to listen:
 4. Click **Save Settings**
 5. Click **Test Connection** to verify
 
+> **Note:** After saving, you'll need to **restart your Open Assistant instance** for the Slack integration to start working.
+
 ---
 
 ## Setup: HTTP Webhooks (Alternative)
@@ -187,6 +189,8 @@ In Slack, invite the bot to any channel where you want it to listen:
    - **Allowed User IDs** (optional): Comma-separated list of Slack user IDs that are allowed to interact with the bot. Leave empty to allow all users.
 4. Click **Save Settings**
 5. Click **Test Connection** to verify
+
+> **Note:** After saving, you'll need to **restart your Open Assistant instance** for the Slack integration to start working.
 
 ## Configuration Options
 
