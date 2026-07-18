@@ -1653,14 +1653,15 @@ def define_whatsapp_tools():
                     "Use this when: (1) The user asks you to send them a message or notification "
                     "(e.g., 'send me a message', 'message me', 'notify me', 'WhatsApp me', 'Slack me'), "
                     "(2) You need to proactively notify the owner (e.g., scheduled task results, reminders, alerts). "
-                    "The 'channel' parameter selects the delivery channel — defaults to 'whatsapp'; use 'slack' to send via Slack instead. "
+                    "The 'channel' parameter selects the delivery channel ('whatsapp' or 'slack'). "
+                    "If omitted, the channel is chosen automatically based on which service is enabled. "
                     "The phone number (WhatsApp) and default channel ID (Slack) are resolved automatically from settings. "
                     "The tool will inform you if the chosen channel is not enabled or not fully configured."
                 ),
                 parameters_model=NotifyOwnerRequest,
             ),
             executor=None,
-            service_name="whatsapp",
+            service_name="messaging",
         )
     )
 

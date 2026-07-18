@@ -927,10 +927,35 @@ class ToolExecutor:
         attempting delivery, and returns an informative error if not.
         """
         message = arguments.get("message", "")
-        channel = arguments.get("channel", "whatsapp")
+        channel = arguments.get("channel")
 
         whatsapp_service = self.services.get("whatsapp")
         slack_service = self.services.get("slack")
+
+        def _is_enabled(val) -> bool:
+            if val is None:
+                return False
+            if isinstance(val, bool):
+                return val
+            return str(val).lower() == "true"
+
+        if channel is None:
+            # Auto-detect: prefer whatsapp if enabled, otherwise fall back to slack
+            wa_on = whatsapp_service and _is_enabled(
+                whatsapp_service.settings_repo.get("whatsapp.enabled")
+            )
+            sl_on = slack_service and _is_enabled(
+                slack_service.settings_repo.get("slack.enabled")
+            )
+            if wa_on:
+                channel = "whatsapp"
+            elif sl_on:
+                channel = "slack"
+            else:
+                return {
+                    "success": False,
+                    "error": "Neither WhatsApp nor Slack is enabled. Enable one in settings.",
+                }
 
         if channel == "whatsapp":
             if not whatsapp_service:

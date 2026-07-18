@@ -96,12 +96,28 @@ class ToolRegistry:
             "yahoo_finance": "yahoo_finance.enabled",
         }
 
+        def _setting_truthy(val) -> bool:
+            if val is None:
+                return False
+            if isinstance(val, bool):
+                return val
+            return str(val).lower() == "true"
+
         # Check which integrations are enabled
         enabled_tools = []
         for tool in self._tools.values():
             # System and search tools are always available
             if tool.service_name in ("system", "search"):
                 enabled_tools.append(tool.schema)
+                continue
+
+            # "messaging" tools (notify_owner) are available when either
+            # WhatsApp or Slack is enabled — not gated on a single service.
+            if tool.service_name == "messaging":
+                wa = _setting_truthy(settings_repo.get("whatsapp.enabled"))
+                sl = _setting_truthy(settings_repo.get("slack.enabled"))
+                if wa or sl:
+                    enabled_tools.append(tool.schema)
                 continue
 
             # Plugin tools: check plugin.{id}.enabled
@@ -117,11 +133,7 @@ class ToolRegistry:
             # Check if integration is enabled
             service_enabled = settings_repo.get(setting_key)
             # Handle both bool and string storage: "false" as string is truthy in Python
-            if service_enabled is None:
-                continue
-            if isinstance(service_enabled, bool) and not service_enabled:
-                continue
-            if isinstance(service_enabled, str) and service_enabled.lower() != "true":
+            if not _setting_truthy(service_enabled):
                 continue
 
             # Service is enabled — all its tools are available.
