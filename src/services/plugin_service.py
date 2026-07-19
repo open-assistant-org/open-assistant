@@ -14,6 +14,7 @@ from src.core.repositories.credentials import CredentialsRepository
 from src.core.repositories.settings import SettingsRepository
 from src.core.tools.registry import Tool, get_tool_registry
 from src.core.tools.schema import ToolSchema
+from src.utils.settings import settings_truthy
 from src.models.plugin import (
     PluginAuth,
     PluginCredentialsRequest,
@@ -477,12 +478,7 @@ class PluginService(BaseService):
     def _is_plugin_enabled(self, plugin_id: str) -> bool:
         """Check if a plugin is enabled, handling both bool and string storage."""
         value = self.settings_repo.get(f"plugin.{plugin_id}.enabled")
-        if value is None:
-            return False
-        if isinstance(value, bool):
-            return value
-        # Backwards compat: value stored as string before the fix
-        return str(value).lower() == "true"
+        return settings_truthy(value)
 
     # ------------------------------------------------------------------
     # Config helpers

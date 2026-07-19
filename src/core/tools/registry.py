@@ -4,6 +4,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from src.core.repositories.settings import SettingsRepository
 from src.core.tools.schema import ToolSchema
+from src.utils.settings import settings_truthy
 
 
 class Tool:
@@ -96,13 +97,6 @@ class ToolRegistry:
             "yahoo_finance": "yahoo_finance.enabled",
         }
 
-        def _setting_truthy(val) -> bool:
-            if val is None:
-                return False
-            if isinstance(val, bool):
-                return val
-            return str(val).lower() == "true"
-
         # Check which integrations are enabled
         enabled_tools = []
         for tool in self._tools.values():
@@ -114,8 +108,8 @@ class ToolRegistry:
             # "messaging" tools (notify_owner) are available when either
             # WhatsApp or Slack is enabled — not gated on a single service.
             if tool.service_name == "messaging":
-                wa = _setting_truthy(settings_repo.get("whatsapp.enabled"))
-                sl = _setting_truthy(settings_repo.get("slack.enabled"))
+                wa = settings_truthy(settings_repo.get("whatsapp.enabled"))
+                sl = settings_truthy(settings_repo.get("slack.enabled"))
                 if wa or sl:
                     enabled_tools.append(tool.schema)
                 continue
@@ -133,7 +127,7 @@ class ToolRegistry:
             # Check if integration is enabled
             service_enabled = settings_repo.get(setting_key)
             # Handle both bool and string storage: "false" as string is truthy in Python
-            if not _setting_truthy(service_enabled):
+            if not settings_truthy(service_enabled):
                 continue
 
             # Service is enabled — all its tools are available.
