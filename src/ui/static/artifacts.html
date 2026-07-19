@@ -162,6 +162,85 @@
             font-size: 0.95rem;
         }
         .artifact-input:focus { outline: none; border-color: var(--primary-color); }
+
+        /* ================================================================
+           RESPONSIVE / MOBILE
+           ================================================================ */
+        @media (max-width: 768px) {
+            .artifacts-container {
+                padding: 16px;
+                border-radius: 0;
+            }
+
+            .artifacts-header {
+                flex-wrap: wrap;
+                gap: 12px;
+            }
+
+            .artifacts-header h1 {
+                font-size: 1.4rem;
+            }
+
+            /* Card-stacking table pattern */
+            .jobs-table,
+            .jobs-table thead,
+            .jobs-table tbody,
+            .jobs-table tr,
+            .jobs-table td {
+                display: block;
+                width: 100%;
+                box-sizing: border-box;
+            }
+
+            .jobs-table thead {
+                position: absolute;
+                width: 1px;
+                height: 1px;
+                overflow: hidden;
+                clip: rect(0 0 0 0);
+                white-space: nowrap;
+            }
+
+            .jobs-table tr {
+                border: 1px solid var(--border-color);
+                border-radius: 10px;
+                margin-bottom: 12px;
+                padding: 6px 12px;
+                background: var(--background-color);
+            }
+
+            .jobs-table tr:hover { background: var(--background-color); }
+
+            .jobs-table td {
+                padding: 8px 0;
+                border-bottom: 1px solid var(--border-color);
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                gap: 12px;
+                text-align: right;
+            }
+
+            .jobs-table td:last-child { border-bottom: none; }
+
+            .jobs-table td[data-label]::before {
+                content: attr(data-label);
+                font-weight: 600;
+                color: var(--text-muted);
+                text-align: left;
+                flex-shrink: 0;
+                white-space: nowrap;
+            }
+
+            .job-actions {
+                flex-wrap: wrap;
+                justify-content: flex-end;
+            }
+
+            .job-action-btn {
+                min-height: 36px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -258,17 +337,17 @@
                 const secretLabel = a.has_secret ? 'Passphrase' : 'Set passphrase';
                 return `
                     <tr>
-                        <td>
+                        <td data-label="Name">
                             <div class="artifact-name">${escapeHtml(name)}</div>
                             ${a.title ? `<div class="artifact-file">${escapeHtml(a.filename)}</div>` : ''}
                         </td>
-                        <td>${escapeHtml(shortType(a.mime_type))}</td>
-                        <td>${formatSize(a.size)}</td>
-                        <td>
+                        <td data-label="Type">${escapeHtml(shortType(a.mime_type))}</td>
+                        <td data-label="Size">${formatSize(a.size)}</td>
+                        <td data-label="Visibility">
                             <span class="status-badge-inline ${visClass}">${visLabel}</span>${lock}
                         </td>
-                        <td>${a.created_at ? formatDateTime(a.created_at) : '—'}</td>
-                        <td>
+                        <td data-label="Created">${a.created_at ? formatDateTime(a.created_at) : '—'}</td>
+                        <td data-label="Actions">
                             <div class="job-actions">
                                 <button class="job-action-btn" onclick="viewArtifact('${a.artifact_id}')">View</button>
                                 <button class="job-action-btn btn-neutral" onclick="copyLink('${a.artifact_id}')">${linkLabel}</button>
