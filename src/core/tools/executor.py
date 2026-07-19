@@ -7,6 +7,7 @@ from src.core.tools.registry import get_tool_registry
 from src.models.nextcloud import UploadFileRequest as NextcloudUploadFileRequest
 from src.models.outlook import UploadFileRequest as OutlookUploadFileRequest
 from src.utils.logger import get_logger
+from src.utils.settings import settings_truthy
 
 logger = get_logger(__name__)
 
@@ -181,7 +182,11 @@ class ToolExecutor:
                 return error_result
 
         service = self.services.get(tool.service_name)
-        if not service:
+        # "messaging" (notify_owner) is a pseudo-service gated on either WhatsApp
+        # or Slack in the registry; it has no service instance because
+        # _handle_notify_owner resolves the whatsapp/slack services itself. Let it
+        # fall through to _route_tool_call instead of short-circuiting.
+        if not service and tool.service_name != "messaging":
             error_result = {
                 "success": False,
                 "error": f"Service not available: {tool.service_name}",
@@ -927,10 +932,28 @@ class ToolExecutor:
         attempting delivery, and returns an informative error if not.
         """
         message = arguments.get("message", "")
-        channel = arguments.get("channel", "whatsapp")
+        channel = arguments.get("channel")
 
         whatsapp_service = self.services.get("whatsapp")
         slack_service = self.services.get("slack")
+
+        if channel is None:
+            # Auto-detect: prefer whatsapp if enabled, otherwise fall back to slack
+            wa_on = whatsapp_service and settings_truthy(
+                whatsapp_service.settings_repo.get("whatsapp.enabled")
+            )
+            sl_on = slack_service and settings_truthy(
+                slack_service.settings_repo.get("slack.enabled")
+            )
+            if wa_on:
+                channel = "whatsapp"
+            elif sl_on:
+                channel = "slack"
+            else:
+                return {
+                    "success": False,
+                    "error": "Neither WhatsApp nor Slack is enabled. Enable one in settings.",
+                }
 
         if channel == "whatsapp":
             if not whatsapp_service:
