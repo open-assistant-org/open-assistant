@@ -405,18 +405,18 @@ class GoogleDriveClient:
                     }
                 }
             ]
-            result = self.docs.documents().batchUpdate(
-                documentId=document_id, body={"requests": requests}
-            ).execute()
+            result = (
+                self.docs.documents()
+                .batchUpdate(documentId=document_id, body={"requests": requests})
+                .execute()
+            )
 
             replies = result.get("replies", [])
             occurrences = 0
             if replies:
                 occurrences = replies[0].get("replaceAllText", {}).get("occurrencesChanged", 0)
 
-            logger.info(
-                f"Replaced text in Google Doc {document_id}: {occurrences} occurrence(s)"
-            )
+            logger.info(f"Replaced text in Google Doc {document_id}: {occurrences} occurrence(s)")
             return {
                 "document_id": document_id,
                 "status": "replaced",
@@ -803,9 +803,7 @@ class GoogleDriveClient:
                     {"insertText": {"objectId": f"{slide_id}_title", "text": title}}
                 )
             if body:
-                text_requests.append(
-                    {"insertText": {"objectId": f"{slide_id}_body", "text": body}}
-                )
+                text_requests.append({"insertText": {"objectId": f"{slide_id}_body", "text": body}})
             if text_requests:
                 self.slides.presentations().batchUpdate(
                     presentationId=presentation_id, body={"requests": text_requests}
@@ -851,9 +849,11 @@ class GoogleDriveClient:
                     }
                 }
             ]
-            result = self.slides.presentations().batchUpdate(
-                presentationId=presentation_id, body={"requests": requests}
-            ).execute()
+            result = (
+                self.slides.presentations()
+                .batchUpdate(presentationId=presentation_id, body={"requests": requests})
+                .execute()
+            )
 
             replies = result.get("replies", [])
             occurrences = 0
