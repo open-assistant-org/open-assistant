@@ -148,6 +148,22 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
         ui_widget="text",
         placeholder="/path/to/data",
     ),
+    "application.message_retention_days": SettingDefinition(
+        key="application.message_retention_days",
+        display_name="Message Retention (days)",
+        description=(
+            "Age threshold for the nightly compaction job. Messages and LLM "
+            "consumption rows older than this are collapsed into summary rows "
+            "to bound database growth. Billing totals are preserved."
+        ),
+        value_type=SettingValueType.INT,
+        category=ConfigCategory.APPLICATION,
+        default_value=90,
+        min_value=1,
+        max_value=3650,
+        display_order=3,
+        ui_widget="number",
+    ),
     # ========================================================================
     # LOGGING SETTINGS
     # ========================================================================

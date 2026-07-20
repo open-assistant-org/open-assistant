@@ -47,7 +47,22 @@ erDiagram
         text content
         int token_count
         boolean is_summary
+        boolean is_internal
         timestamp timestamp
+        json metadata
+    }
+
+    llm_consumption {
+        int id PK
+        timestamp timestamp
+        text provider
+        text model
+        int prompt_tokens
+        int completion_tokens
+        int total_tokens
+        int cached_tokens
+        int reasoning_tokens
+        text conversation_id
         json metadata
     }
 
@@ -245,14 +260,48 @@ Individual messages within conversations.
 **Key Fields**:
 - `role`: Message source (user, assistant, system)
 - `content`: Message text
-- `token_count`: Number of tokens in the message
+- `token_count`: Number of tokens in the message (local estimate, used by the
+  conversation-stats UI; **not** the billing source — see `llm_consumption` below)
 - `is_summary`: Whether this message is a generated summary
-- `metadata`: Attachments, agent info, etc.
+- `is_internal`: Transparency rows (system prompt and auxiliary LLM outputs
+  persisted for visibility) are flagged `is_internal=1` and excluded from the
+  conversation history re-sent to the LLM on subsequent turns. Billing-neutral.
+- `metadata`: Attachments, agent info, etc. (internal rows carry a `kind` tag
+  such as `planner`, `memory_summary`, `document`; compacted rows carry
+  `{"compacted": true, ...}`)
 
 **Relationships**:
 - Many-to-one with `conversations`
 
-#### 3. Agent Definitions
+#### 3. LLM Consumption
+
+Per-call LLM token usage ledger, the source of truth for metered billing.
+
+**Purpose**: Capture the provider's authoritative `response.usage` (input,
+output, cached, reasoning tokens) on every LLM call, replacing the legacy
+`SUM(messages.token_count)` estimate that only counted visible message text and
+missed all input/context tokens and auxiliary calls. The platform polls
+`GET /managed/usage`, which sums this table by month.
+
+**Key Fields**:
+- `prompt_tokens` / `completion_tokens` / `total_tokens`: Real provider usage
+- `cached_tokens` / `reasoning_tokens`: Breakdown when the provider reports it
+  (`prompt_tokens_details.cached_tokens`, `completion_tokens_details.reasoning_tokens`)
+- `conversation_id`: Optional, for traceability
+- `metadata`: Flags such as `missing_usage` (provider returned no usage),
+  `openrouter_cost`, `baseline` (the deploy-time seed bridging the platform's
+  lifetime watermark), and `compacted` (summary rows produced by the nightly job)
+
+**Relationships**:
+- Optional many-to-one with `conversations` (nullable)
+
+**Compaction**: A nightly system job collapses rows older than the
+`application.message_retention_days` setting (default 90) into one summary row
+per `(year, month)`, preserving all token totals. The deploy-time baseline row
+(current-month-dated) bridges the platform's lifetime watermark so new accurate
+usage is credited immediately instead of being held back by its `max()` guard.
+
+#### 4. Agent Definitions
 Stores CrewAI agent configurations.
 
 **Purpose**: Define agents with their roles, goals, and tool assignments
@@ -283,7 +332,7 @@ Stores CrewAI agent configurations.
 
 See [Agent Architecture](agents.md) for detailed agent definitions.
 
-#### 4. Agent Tasks
+#### 5. Agent Tasks
 Tracks tasks executed by specialized agents.
 
 **Purpose**: Monitor agent execution, results, and errors
@@ -299,7 +348,7 @@ Tracks tasks executed by specialized agents.
 
 ### Scheduling Tables
 
-#### 5. Cron Jobs
+#### 6. Cron Jobs
 Scheduled recurring tasks with Docker-isolated execution.
 
 **Purpose**: Define and manage scheduled tasks (tool calls or prompts)
@@ -315,7 +364,7 @@ Scheduled recurring tasks with Docker-isolated execution.
 **Relationships**:
 - One-to-many with `job_executions`
 
-#### 6. Future Tasks
+#### 7. Future Tasks
 One-time scheduled tasks.
 
 **Purpose**: Schedule tasks to execute once at a specific time
@@ -332,7 +381,7 @@ One-time scheduled tasks.
 - Many-to-one with `conversations` (nullable)
 - One-to-many with `job_executions`
 
-#### 7. Job Executions
+#### 8. Job Executions
 Unified execution history for both cron jobs and future tasks.
 
 **Purpose**: Track execution history for monitoring and debugging
@@ -349,7 +398,7 @@ Unified execution history for both cron jobs and future tasks.
 
 ### Service Integration Tables
 
-#### 8. Service Credentials
+#### 9. Service Credentials
 Encrypted storage for OAuth tokens and API keys.
 
 **Purpose**: Securely store authentication credentials
@@ -361,7 +410,7 @@ Encrypted storage for OAuth tokens and API keys.
 
 **Security**: All `credential_data` is encrypted using Fernet symmetric encryption
 
-#### 9. Service Connections
+#### 10. Service Connections
 Track connection status of integrated services.
 
 **Purpose**: Monitor service health and connectivity
@@ -374,7 +423,7 @@ Track connection status of integrated services.
 
 ### Personalization Tables
 
-#### 10. Prompts
+#### 11. Prompts
 Stores assistant personalization configuration: system prompt, memory, and soul.
 
 **Purpose**: Enable users to customize the assistant's behavior, knowledge, and personality
@@ -391,7 +440,7 @@ Stores assistant personalization configuration: system prompt, memory, and soul.
 
 ### System Tables
 
-#### 11. Settings
+#### 12. Settings
 Application-wide configuration and user preferences.
 
 **Purpose**: Store dynamic configuration values
@@ -407,7 +456,7 @@ Application-wide configuration and user preferences.
 - `options`: JSON array of valid values (for enum-like settings)
 - `display_order`: UI ordering hint
 
-#### 12. Audit Log
+#### 13. Audit Log
 Complete audit trail of system operations.
 
 **Purpose**: Security auditing and debugging
@@ -418,7 +467,7 @@ Complete audit trail of system operations.
 - `user_id`: Associated user identifier
 - `ip_address`: Client IP address
 
-#### 13. Conversation Memory
+#### 14. Conversation Memory
 
 Stores conversation context and memory for each conversation.
 
@@ -437,7 +486,7 @@ Stores conversation context and memory for each conversation.
 - `facts`: Extracted facts (names, preferences, dates)
 - `working`: Current task context
 
-#### 14. Artifacts
+#### 15. Artifacts
 
 Durable storage metadata for files persisted via the `store_artifact` tool.
 
@@ -455,7 +504,7 @@ Durable storage metadata for files persisted via the `store_artifact` tool.
 
 **Relationships**: None (standalone table; not tied to a specific conversation)
 
-#### 15. Search Index
+#### 16. Search Index
 
 Stores searchable content with embeddings for semantic search.
 
@@ -472,7 +521,7 @@ Stores searchable content with embeddings for semantic search.
 
 **Constraints**: Unique on (source, source_id)
 
-#### 16. Schema Migrations
+#### 17. Schema Migrations
 
 Tracks applied database migrations.
 
@@ -529,7 +578,8 @@ flowchart TD
 |-------|------------------|
 | artifacts | Indefinite (user-managed via Artifacts tab) |
 | conversations | Indefinite (user-managed) |
-| messages | Indefinite (user-managed) |
+| messages | Indefinite (user-managed); rows older than `application.message_retention_days` (default 90) are collapsed into one internal summary row per conversation by the nightly compaction job. Token totals are preserved. |
+| llm_consumption | Per-call rows older than `application.message_retention_days` (default 90) are collapsed into one summary row per `(year, month)` by the nightly compaction job. Monthly summaries are retained indefinitely (billing needs the trailing 12 months). Token totals are preserved. |
 | agent_tasks | Last 1000 per conversation |
 | cron_job_executions | Last 100 per job |
 | audit_log | 30 days |

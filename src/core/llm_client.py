@@ -178,6 +178,46 @@ class LLMClient:
                 f"Initialized OpenAI LLM client for provider: {config.provider}, model: {config.model}"
             )
 
+        # Capture the provider's real response.usage on every call by wrapping
+        # the SDK boundary once. Every call site (complete, complete_with_tools,
+        # the Groq tool_use_failed retry, and complete_text via complete) funnels
+        # through this method, so usage is recorded without touching any caller.
+        # This is the single source of truth for metered billing accuracy.
+        self._wrap_usage_recording()
+
+    def _wrap_usage_recording(self) -> None:
+        """Wrap ``chat.completions.create`` to record ``response.usage`` per call.
+
+        Records into the ``llm_consumption`` ledger via the process-level
+        :data:`usage_recorder` singleton. If no recorder is wired (tests /
+        standalone) or recording raises, the call still returns normally —
+        billing must never break chat. ``stream=True`` calls pass through
+        unchanged (usage arrives on the final stream chunk and is not captured
+        here; no current call path streams the LLM).
+        """
+        try:
+            from src.core.usage_recorder import usage_recorder
+
+            original_create = self._client.chat.completions.create
+            provider = self.config.provider
+            default_model = self.config.model
+
+            def _recording_create(*args, **kwargs):
+                response = original_create(*args, **kwargs)
+                try:
+                    usage_recorder.record(
+                        getattr(response, "usage", None),
+                        provider=provider,
+                        model=kwargs.get("model") or default_model,
+                    )
+                except Exception as e:  # noqa: BLE001 - never break the call
+                    logger.error(f"usage recording failed (non-fatal): {e}")
+                return response
+
+            self._client.chat.completions.create = _recording_create
+        except Exception as e:  # noqa: BLE001 - never block client init
+            logger.error(f"Failed to install usage recorder wrap (non-fatal): {e}")
+
     def _sanitize_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Sanitize messages for provider compatibility.
 

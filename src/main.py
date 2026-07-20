@@ -93,6 +93,20 @@ async def lifespan(app: FastAPI):
         # Store database manager in app state
         app.state.db_manager = db_manager
 
+        # Wire the per-call LLM usage recorder so every chat.completions.create
+        # call (captured at the SDK boundary in LLMClient) lands in the
+        # llm_consumption ledger used for metered billing.
+        from src.core.usage_recorder import usage_recorder
+
+        usage_recorder.set_db(db_manager)
+
+        # Wire the transparency logger so auxiliary LLM outputs (system prompt,
+        # planner, memory, document, python-agent, analysis) are persisted as
+        # internal message rows for visibility, without polluting LLM history.
+        from src.core.transparency_logger import transparency_logger
+
+        transparency_logger.set_db(db_manager)
+
         # Initialize APScheduler for cron jobs with service dependencies
         logger.info("Initializing cron job scheduler...")
 
@@ -313,6 +327,40 @@ async def lifespan(app: FastAPI):
             logger.info(f"Created system tmp cleanup job (daily at 03:00): {_TMP_CLEANUP_JOB_ID}")
         else:
             logger.info(f"System tmp cleanup job already exists: {_TMP_CLEANUP_JOB_ID}")
+
+        # Ensure the system message/consumption compaction job exists in the
+        # database. Runs nightly at 3:30 AM to collapse messages and
+        # llm_consumption rows older than application.message_retention_days
+        # (default 90) into summary rows, bounding database growth while
+        # preserving billing totals.
+        _COMPACTION_JOB_ID = "__system_message_compaction"
+        existing_compaction_job = cron_job_repo.get_job(_COMPACTION_JOB_ID)
+        if not existing_compaction_job:
+            cron_job_repo.create_job(
+                job_id=_COMPACTION_JOB_ID,
+                name="Message & Consumption Compaction",
+                cron_expression="30 3 * * *",
+                job_type="tool",
+                description=(
+                    "System job: nightly compaction of messages and llm_consumption "
+                    "rows older than the retention window into summary rows."
+                ),
+                tool_name="system_compact_messages",
+                tool_parameters={},
+                steps=[
+                    {
+                        "order": 1,
+                        "description": "Compact old messages and LLM consumption rows",
+                        "tool_name": "system_compact_messages",
+                        "tool_parameters": {},
+                    }
+                ],
+            )
+            logger.info(
+                f"Created system compaction job (daily at 03:30): {_COMPACTION_JOB_ID}"
+            )
+        else:
+            logger.info(f"System compaction job already exists: {_COMPACTION_JOB_ID}")
 
         # Start scheduler (loads all persisted jobs, including the system refresh job)
         cron_job_service.start_scheduler()

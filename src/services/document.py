@@ -6,6 +6,7 @@ import pathlib
 import re
 from typing import Any, Dict, Optional
 
+from src.core.transparency_logger import transparency_logger
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -39,6 +40,7 @@ async def compose_document(
     format: str = "markdown",
     length: str = "short",
     settings_service=None,
+    conversation_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Compose a long-form document using a multi-step LLM pipeline.
@@ -116,6 +118,14 @@ async def compose_document(
         model_override=writer_model,
     )
     logger.info("compose_document: outline complete")
+
+    # Persist the outline as an internal transparency row (visibility only;
+    # billing reads llm_consumption). Billing-neutral.
+    if conversation_id:
+        transparency_logger.log(
+            conversation_id, "document", outline, role="assistant",
+            extra_metadata={"stage": "outline"},
+        )
 
     if length == "short":
         # --- Step 2 (short): Write full document in a single pass ---
@@ -225,6 +235,13 @@ async def compose_document(
     section_count = len(
         [line for line in outline.split("\n") if re.match(r"^\s*\d+[\.\)]\s", line)]
     )
+
+    # Persist the final composed document as an internal transparency row.
+    if conversation_id:
+        transparency_logger.log(
+            conversation_id, "document", final_content, role="assistant",
+            extra_metadata={"stage": "final"},
+        )
 
     return {
         "content": final_content,

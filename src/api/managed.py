@@ -18,7 +18,7 @@ from src import __version__
 from src.core.database import DatabaseManager
 from src.core.encryption import get_encryption_service
 from src.core.repositories.credentials import CredentialsRepository
-from src.core.repositories.message import MessageRepository
+from src.core.repositories.llm_consumption import LlmConsumptionRepository
 from src.core.repositories.settings import SettingsRepository
 from src.models.settings import (
     BulkCredentialPushRequest,
@@ -76,17 +76,22 @@ async def managed_usage(
     The platform calls this endpoint hourly and uses the current month's
     tokens_total to set Stripe metered usage (action='set').
 
+    Sourced from the ``llm_consumption`` ledger (real provider ``response.usage``
+    per call), which replaces the legacy ``SUM(messages.token_count)`` estimate
+    that only counted visible message text and missed all input/context tokens
+    and auxiliary LLM calls. ``tokens_input``/``tokens_output`` are now reported
+    alongside ``tokens_total``.
+
     Response format:
         {
             "monthly_usage": [
-                {"year": 2026, "month": 1, "tokens_total": 12345},
-                {"year": 2026, "month": 2, "tokens_total": 8901},
+                {"year": 2026, "month": 1, "tokens_input": ..., "tokens_output": ..., "tokens_total": 12345},
                 ...
             ]
         }
     """
-    message_repo = MessageRepository(db)
-    raw = message_repo.get_monthly_token_totals(months=12)
+    consumption_repo = LlmConsumptionRepository(db)
+    raw = consumption_repo.get_monthly_totals(months=12)
 
     monthly_usage: List[Dict[str, Any]] = []
     for row in raw:
@@ -94,6 +99,8 @@ async def managed_usage(
             {
                 "year": row["year"],
                 "month": row["month"],
+                "tokens_input": row["tokens_input"] or 0,
+                "tokens_output": row["tokens_output"] or 0,
                 "tokens_total": row["tokens_total"] or 0,
             }
         )
@@ -102,7 +109,15 @@ async def managed_usage(
     now = datetime.now(timezone.utc)
     has_current = any(m["year"] == now.year and m["month"] == now.month for m in monthly_usage)
     if not has_current:
-        monthly_usage.append({"year": now.year, "month": now.month, "tokens_total": 0})
+        monthly_usage.append(
+            {
+                "year": now.year,
+                "month": now.month,
+                "tokens_input": 0,
+                "tokens_output": 0,
+                "tokens_total": 0,
+            }
+        )
 
     return {"monthly_usage": monthly_usage}
 

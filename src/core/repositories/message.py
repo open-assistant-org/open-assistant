@@ -22,6 +22,7 @@ class MessageRepository(BaseRepository):
         message_id: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
         token_count: int = 0,
+        is_internal: bool = False,
     ) -> Dict[str, Any]:
         """
         Create a new message.
@@ -33,6 +34,9 @@ class MessageRepository(BaseRepository):
             message_id: Unique message ID (auto-generated if not provided)
             metadata: Additional metadata
             token_count: Number of tokens in the message
+            is_internal: If True, this is a transparency row (system prompt /
+                auxiliary LLM output) excluded from history re-sent to the LLM.
+                Billing-neutral — billing reads llm_consumption, not messages.
 
         Returns:
             Created message dictionary
@@ -49,6 +53,7 @@ class MessageRepository(BaseRepository):
             "metadata": json.dumps(metadata) if metadata else None,
             "token_count": token_count,
             "is_summary": False,
+            "is_internal": 1 if is_internal else 0,
         }
 
         self.insert("messages", data)
@@ -96,14 +101,14 @@ class MessageRepository(BaseRepository):
         if include_summaries:
             query = """
                 SELECT * FROM messages
-                WHERE conversation_id = ?
+                WHERE conversation_id = ? AND is_internal = 0
                 ORDER BY timestamp ASC
             """
             params = [conversation_id]
         else:
             query = """
                 SELECT * FROM messages
-                WHERE conversation_id = ? AND is_summary = 0
+                WHERE conversation_id = ? AND is_summary = 0 AND is_internal = 0
                 ORDER BY timestamp ASC
             """
             params = [conversation_id]
@@ -133,7 +138,7 @@ class MessageRepository(BaseRepository):
         """
         query = """
             SELECT * FROM messages
-            WHERE conversation_id = ?
+            WHERE conversation_id = ? AND is_internal = 0
             ORDER BY timestamp DESC
             LIMIT ?
         """
@@ -206,7 +211,7 @@ class MessageRepository(BaseRepository):
         if limit:
             query = """
                 SELECT * FROM messages
-                WHERE conversation_id = ? AND timestamp < ?
+                WHERE conversation_id = ? AND timestamp < ? AND is_internal = 0
                 ORDER BY timestamp DESC
                 LIMIT ?
             """
@@ -214,7 +219,7 @@ class MessageRepository(BaseRepository):
         else:
             query = """
                 SELECT * FROM messages
-                WHERE conversation_id = ? AND timestamp < ?
+                WHERE conversation_id = ? AND timestamp < ? AND is_internal = 0
                 ORDER BY timestamp DESC
             """
             params = (conversation_id, before_timestamp)
@@ -293,28 +298,6 @@ class MessageRepository(BaseRepository):
             logger.info(f"Deleted {affected} old messages from conversation: {conversation_id}")
 
         return affected
-
-    def get_monthly_token_totals(self, months: int = 12) -> List[Dict[str, Any]]:
-        """Return token counts grouped by calendar month for the last N months.
-
-        Used by the managed usage API to report billing data to the platform.
-        Returns months in ascending order; current month is always included.
-
-        Returns:
-            List of dicts with keys: year, month, tokens_total
-        """
-        query = """
-            SELECT
-                CAST(strftime('%Y', timestamp) AS INTEGER) AS year,
-                CAST(strftime('%m', timestamp) AS INTEGER) AS month,
-                SUM(token_count) AS tokens_total
-            FROM messages
-            WHERE timestamp >= datetime('now', ? || ' months')
-            GROUP BY year, month
-            ORDER BY year ASC, month ASC
-        """
-        offset = f"-{months}"
-        return self.fetch_all(query, (offset,))
 
     def search_messages(self, query: str) -> List[str]:
         """

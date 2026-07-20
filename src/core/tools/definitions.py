@@ -77,6 +77,7 @@ from src.models.google import (
 )
 from src.models.monitoring import (
     CleanTmpDirRequest,
+    CompactMessagesRequest,
     FetchLogsRequest,
     GetConversationTextRequest,
     GetPromptRequest,
@@ -1843,6 +1844,27 @@ def define_system_tools():
                 name="system_clean_tmp_dir",
                 description="Remove old files from the application temporary directory. Used by the nightly cleanup cron job. Deletes files and directories older than max_age_hours (default 24). Returns count of deleted items and freed bytes.",
                 parameters_model=CleanTmpDirRequest,
+            ),
+            executor=None,
+            service_name="system",
+            requires_auth=False,
+        )
+    )
+
+    registry.register(
+        Tool(
+            schema=create_tool_schema(
+                name="system_compact_messages",
+                description=(
+                    "Compact old messages and LLM consumption rows to bound database "
+                    "growth. Used by the nightly compaction cron job. Collapses rows "
+                    "older than retention_days (default: the "
+                    "application.message_retention_days setting, 90) into per-conversation "
+                    "(messages) and per-month (llm_consumption) summary rows. Billing "
+                    "totals are preserved. Returns counts of compacted conversations/months "
+                    "and removed rows."
+                ),
+                parameters_model=CompactMessagesRequest,
             ),
             executor=None,
             service_name="system",
