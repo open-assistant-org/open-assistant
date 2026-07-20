@@ -10,9 +10,9 @@ Open Assistant integrates with Google's platform through the Google Cloud Consol
 - Gmail (email reading, draft creation, sending, label management)
 - Google Calendar (event management)
 - Google Drive (file listing, searching, reading, uploading, organizing)
-- Google Docs (create, read, append, update documents)
-- Google Sheets (create, read, write, append to spreadsheets)
-- Google Slides (create presentations, read slide content)
+- Google Docs (create, read, append, update, find-and-replace documents)
+- Google Sheets (create, read, write, append, clear spreadsheets)
+- Google Slides (create presentations, read content, add slides, find-and-replace, insert text)
 
 ## Prerequisites
 
@@ -404,7 +404,15 @@ google_docs_client.docs_append(
     content="\n\n## New Section\nContent to add at the end."
 )
 
-# Replace all content
+# Find and replace specific text (preferred for edits — keeps the rest of the doc intact)
+google_docs_client.docs_replace_text(
+    document_id="<document_id>",
+    find="Q3",
+    replace="Q4",
+)
+# Returns: {"document_id": "...", "status": "replaced", "occurrences_changed": N, "url": "..."}
+
+# Replace ALL content (destructive — only for a deliberate full rewrite)
 google_docs_client.docs_update(
     document_id="<document_id>",
     content="Completely new document content."
@@ -461,6 +469,12 @@ google_sheets_client.sheets_append(
     range_notation="Sheet1!A1",
     values=[["Charlie", 35, "Berlin"]]
 )
+
+# Clear a range's values (formatting is kept)
+google_sheets_client.sheets_clear(
+    spreadsheet_id="<id>",
+    range_notation="Sheet1!A2:C100"
+)
 ```
 
 ## Google Slides Operations
@@ -476,7 +490,36 @@ pres = google_slides_client.slides_create(title="Q4 Review")
 
 ```python
 pres = google_slides_client.slides_get(presentation_id="<id>")
-# Returns: {"title": "...", "slides_count": N, "slides": [{"slide_number": 1, "text": "..."}, ...]}
+# Returns: {"title": "...", "slides_count": N,
+#           "slides": [{"slide_number": 1, "slide_id": "...", "text": "...", "speaker_notes": "..."}, ...]}
+```
+
+### Edit a Presentation
+
+```python
+# Add a new slide with title and body text
+google_slides_client.slides_add_slide(
+    presentation_id="<id>",
+    title="Revenue",
+    body="Up 12% quarter-over-quarter.",
+    layout="TITLE_AND_BODY",  # or TITLE_ONLY, SECTION_HEADER, BLANK
+)
+# Returns: {"presentation_id": "...", "slide_id": "...", "status": "created", "url": "..."}
+
+# Find and replace text across all slides (preferred for wording updates)
+google_slides_client.slides_replace_text(
+    presentation_id="<id>",
+    find="DRAFT",
+    replace="FINAL",
+)
+# Returns: {"presentation_id": "...", "status": "replaced", "occurrences_changed": N, "url": "..."}
+
+# Insert a text box onto a specific slide (slide_id comes from slides_get)
+google_slides_client.slides_insert_text(
+    presentation_id="<id>",
+    slide_id="<slide_id>",
+    text="Footnote: figures are unaudited.",
+)
 ```
 
 ## Token Management

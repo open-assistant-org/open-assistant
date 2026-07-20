@@ -163,6 +163,12 @@ TOOL_METADATA: Dict[str, ToolMetadata] = {
         description="Replace all content in a Google Docs document with new text",
         category="documents",
     ),
+    "google_docs_replace_text": ToolMetadata(
+        name="google_docs_replace_text",
+        display_name="Replace Text in Google Doc",
+        description="Find and replace text in a Google Docs document, keeping other content intact",
+        category="documents",
+    ),
     # Google Sheets Tools
     "google_sheets_create": ToolMetadata(
         name="google_sheets_create",
@@ -194,6 +200,12 @@ TOOL_METADATA: Dict[str, ToolMetadata] = {
         description="Append rows to a Google Sheet after the last row with data",
         category="documents",
     ),
+    "google_sheets_clear": ToolMetadata(
+        name="google_sheets_clear",
+        display_name="Clear Google Sheet Range",
+        description="Clear cell values in a Google Sheets range, keeping formatting",
+        category="documents",
+    ),
     # Google Slides Tools
     "google_slides_create": ToolMetadata(
         name="google_slides_create",
@@ -204,7 +216,25 @@ TOOL_METADATA: Dict[str, ToolMetadata] = {
     "google_slides_get": ToolMetadata(
         name="google_slides_get",
         display_name="Read Google Slides",
-        description="Read text content from each slide in a Google Slides presentation",
+        description="Read text and speaker notes from each slide in a Google Slides presentation",
+        category="documents",
+    ),
+    "google_slides_add_slide": ToolMetadata(
+        name="google_slides_add_slide",
+        display_name="Add Google Slide",
+        description="Add a new slide with optional title and body text to a presentation",
+        category="documents",
+    ),
+    "google_slides_replace_text": ToolMetadata(
+        name="google_slides_replace_text",
+        display_name="Replace Text in Google Slides",
+        description="Find and replace text across all slides of a presentation",
+        category="documents",
+    ),
+    "google_slides_insert_text": ToolMetadata(
+        name="google_slides_insert_text",
+        display_name="Insert Text in Google Slides",
+        description="Insert a text box with the given text onto a specific slide",
         category="documents",
     ),
     # Google Places & Routes Tools
