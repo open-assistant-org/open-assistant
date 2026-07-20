@@ -5,9 +5,10 @@ import json
 import os
 import subprocess
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from uuid import uuid4
 
 from src.core.llm_client import LLMClient, LLMConfig
 from src.services.embedding import EmbeddingService
@@ -191,6 +192,221 @@ class SystemService:
         except Exception as e:
             logger.error(f"Error cleaning tmp directory: {e}", exc_info=True)
             return {"success": False, "error": str(e), "deleted": 0, "errors": 1}
+
+    # ---- Compaction (bounds messages + llm_consumption growth) ----
+
+    def _get_retention_days(self) -> int:
+        """Read the message-retention setting, falling back to 90."""
+        try:
+            if self._settings_service:
+                val = self._settings_service.get_config_with_fallback(
+                    "application.message_retention_days", 90
+                )
+                if val is not None:
+                    return max(1, int(val))
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"Could not read message_retention_days: {e}; using 90")
+        return 90
+
+    def compact_messages(self, retention_days: Optional[int] = None) -> Dict[str, Any]:
+        """Collapse old rows in ``messages`` and ``llm_consumption`` to bound growth.
+
+        Runs as a nightly system cron job. Rows older than ``retention_days``
+        (read from the ``application.message_retention_days`` setting, default 90)
+        are collapsed:
+
+        * ``messages``: per conversation_id, all old rows (including any prior
+          compacted row for that conversation) are merged into ONE internal row
+          carrying the summed ``token_count`` and the earliest timestamp (so
+          monthly grouping stays correct). Billing-neutral — billing reads
+          ``llm_consumption``.
+        * ``llm_consumption``: per (year, month), old rows are merged into ONE
+          summary row (summed prompt/completion/total/cached/reasoning) dated at
+          the first second of that month, so ``/managed/usage`` totals are
+          preserved. Monthly summaries are retained indefinitely (one row/month).
+
+        Both steps are idempotent: rows tagged ``metadata.compacted`` are skipped
+        on subsequent runs. Each conversation/month is compacted in its own
+        transaction. Never raises — returns a result dict.
+        """
+        if not self._db_manager:
+            return {"success": False, "error": "database not available"}
+
+        try:
+            n = retention_days if retention_days is not None else self._get_retention_days()
+            n = max(1, min(int(n), 3650))
+            cutoff = (datetime.utcnow() - timedelta(days=n)).isoformat(
+                sep=" ", timespec="seconds"
+            )
+
+            conn = self._db_manager.get_connection()
+            try:
+                msg_compacted, msg_removed, msg_errors = self._compact_messages(conn, cutoff)
+                cons_months, cons_removed, cons_errors = self._compact_consumption(conn, cutoff)
+            finally:
+                conn.close()
+
+            errors = msg_errors + cons_errors
+            logger.info(
+                "Compaction complete: messages(%d convs, %d rows removed), "
+                "llm_consumption(%d months, %d rows removed), %d errors",
+                msg_compacted, msg_removed, cons_months, cons_removed, errors,
+            )
+            return {
+                "success": True,
+                "retention_days": n,
+                "messages_compacted": msg_compacted,
+                "messages_rows_removed": msg_removed,
+                "consumption_months_compacted": cons_months,
+                "consumption_rows_removed": cons_removed,
+                "errors": errors,
+            }
+        except Exception as e:
+            logger.error(f"Compaction failed: {e}", exc_info=True)
+            return {"success": False, "error": str(e), "errors": 1}
+
+    def _compact_messages(self, conn, cutoff: str) -> tuple:
+        """Collapse old ``messages`` rows into one internal row per conversation.
+
+        Returns (conversations_compacted, rows_removed, errors). Each conversation
+        is committed independently; a failure rolls back only that conversation.
+        """
+        compacted = removed = errors = 0
+        conv_rows = conn.execute(
+            """
+            SELECT DISTINCT conversation_id FROM messages
+             WHERE timestamp < ?
+               AND json_extract(metadata, '$.compacted') IS NULL
+            """,
+            (cutoff,),
+        ).fetchall()
+        for (conversation_id,) in conv_rows:
+            try:
+                # Select ALL rows older than cutoff for this conversation,
+                # INCLUDING any prior compacted row, so they merge into a
+                # single compacted row (≤ one per conversation over time).
+                old = conn.execute(
+                    """
+                    SELECT message_id, role, content, token_count, timestamp,
+                           metadata
+                      FROM messages
+                     WHERE conversation_id = ? AND timestamp < ?
+                    """,
+                    (conversation_id, cutoff),
+                ).fetchall()
+                if not old:
+                    continue
+                old_ids = [r[0] for r in old]
+                total_tokens = sum((r[3] or 0) for r in old)
+                earliest_ts = min(r[4] for r in old)
+                latest_ts = max(r[4] for r in old)
+                n_msgs = len(old)
+
+                conn.execute(
+                    """
+                    INSERT INTO messages
+                        (message_id, conversation_id, role, content, timestamp,
+                         metadata, token_count, is_summary, is_internal)
+                    VALUES (?, ?, 'system', ?, ?, ?, ?, 0, 1)
+                    """,
+                    (
+                        str(uuid4()),
+                        conversation_id,
+                        f"[compacted: {n_msgs} messages, {total_tokens} tokens]",
+                        earliest_ts,
+                        json.dumps(
+                            {
+                                "compacted": True,
+                                "original_count": n_msgs,
+                                "token_sum": total_tokens,
+                                "earliest_ts": earliest_ts,
+                                "latest_ts": latest_ts,
+                            }
+                        ),
+                        total_tokens,
+                    ),
+                )
+                # Delete only the original old rows by id (not the just-inserted
+                # compacted row, whose earliest_ts is old).
+                placeholders = ",".join("?" for _ in old_ids)
+                conn.execute(
+                    f"DELETE FROM messages WHERE message_id IN ({placeholders})",
+                    tuple(old_ids),
+                )
+                conn.commit()
+                compacted += 1
+                removed += n_msgs
+            except Exception as e:  # noqa: BLE001
+                conn.rollback()
+                errors += 1
+                logger.warning(f"messages compaction failed for {conversation_id}: {e}")
+        return compacted, removed, errors
+
+    def _compact_consumption(self, conn, cutoff: str) -> tuple:
+        """Collapse old ``llm_consumption`` rows into one summary per (year, month).
+
+        Aggregates are computed in the initial grouped query (no per-month
+        re-scan). Returns (months_compacted, rows_removed, errors). Each month is
+        committed independently; a failure rolls back only that month.
+        """
+        compacted = removed = errors = 0
+        # One grouped read: aggregates + row count per (year, month) in one pass.
+        month_rows = conn.execute(
+            """
+            SELECT CAST(strftime('%Y', timestamp) AS INTEGER) AS y,
+                   CAST(strftime('%m', timestamp) AS INTEGER) AS m,
+                   COALESCE(SUM(prompt_tokens), 0),
+                   COALESCE(SUM(completion_tokens), 0),
+                   COALESCE(SUM(total_tokens), 0),
+                   COALESCE(SUM(cached_tokens), 0),
+                   COALESCE(SUM(reasoning_tokens), 0),
+                   COUNT(*)
+              FROM llm_consumption
+             WHERE timestamp < ?
+               AND json_extract(metadata, '$.compacted') IS NULL
+             GROUP BY y, m
+            """,
+            (cutoff,),
+        ).fetchall()
+        for y, m, p, c, t, cached, reasoning, call_count in month_rows:
+            try:
+                month_start = f"{y:04d}-{m:02d}-01 00:00:00"
+                conn.execute(
+                    """
+                    INSERT INTO llm_consumption
+                        (timestamp, provider, model, prompt_tokens,
+                         completion_tokens, total_tokens, cached_tokens,
+                         reasoning_tokens, conversation_id, metadata)
+                    VALUES (?, 'compacted', 'summary', ?, ?, ?, ?, ?, NULL, ?)
+                    """,
+                    (
+                        month_start,
+                        p,
+                        c,
+                        t,
+                        cached,
+                        reasoning,
+                        json.dumps({"compacted": True, "call_count": int(call_count)}),
+                    ),
+                )
+                conn.execute(
+                    """
+                    DELETE FROM llm_consumption
+                     WHERE timestamp < ?
+                       AND CAST(strftime('%Y', timestamp) AS INTEGER) = ?
+                       AND CAST(strftime('%m', timestamp) AS INTEGER) = ?
+                       AND json_extract(metadata, '$.compacted') IS NULL
+                    """,
+                    (cutoff, y, m),
+                )
+                conn.commit()
+                compacted += 1
+                removed += int(call_count)
+            except Exception as e:  # noqa: BLE001
+                conn.rollback()
+                errors += 1
+                logger.warning(f"llm_consumption compaction failed for {y}-{m}: {e}")
+        return compacted, removed, errors
 
     # ---- Artifact store ----
 

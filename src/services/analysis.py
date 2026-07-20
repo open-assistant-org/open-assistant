@@ -2,6 +2,7 @@
 
 from typing import Any, Dict, Optional
 
+from src.core.transparency_logger import transparency_logger
 from src.utils.logger import get_logger
 from src.core.llm_client import LLMClient, LLMConfig
 
@@ -13,6 +14,7 @@ async def analyze_content(
     question: str,
     format: Optional[str] = "brief summary",
     settings_service=None,
+    conversation_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Analyze provided content using an LLM.
@@ -22,6 +24,7 @@ async def analyze_content(
         question: The question to answer or goal for the analysis.
         format: Desired output format.
         settings_service: SettingsService instance for LLM configuration.
+        conversation_id: Optional conversation id for transparency logging.
 
     Returns:
         Dict with keys: analysis_result (str), format (str).
@@ -55,5 +58,12 @@ async def analyze_content(
         max_tokens=4096,
     )
     logger.info("analyze_content: analysis complete")
+
+    # Persist the analysis as an internal transparency row (visibility only;
+    # billing reads llm_consumption). Billing-neutral.
+    if conversation_id:
+        transparency_logger.log(
+            conversation_id, "analysis", analysis_result, role="assistant"
+        )
 
     return {"analysis_result": analysis_result, "format": format}

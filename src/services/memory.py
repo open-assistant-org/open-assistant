@@ -11,6 +11,7 @@ from src.core.repositories.memory import MemoryRepository
 from src.core.repositories.message import MessageRepository
 from src.core.repositories.prompts import PromptsRepository
 from src.core.repositories.settings import SettingsRepository
+from src.core.transparency_logger import transparency_logger
 from src.utils.logger import get_logger
 from src.utils.token_counter import count_message_tokens, count_tokens
 
@@ -454,6 +455,12 @@ Write an updated coherent summary in 2-4 paragraphs that merges the prior contex
 
             summary = llm.complete_text(summary_prompt)
 
+            # Persist the summary as an internal transparency row (visibility
+            # only; billing reads llm_consumption). Billing-neutral.
+            transparency_logger.log(
+                conversation_id, "memory_summary", summary, role="assistant"
+            )
+
             # Store as long-term memory
             self.memory_repo.store_memory(
                 conversation_id,
@@ -523,6 +530,12 @@ Conversation:
 List each fact as a single concise sentence, one per line."""
 
             facts_text = llm.complete_text(extract_prompt)
+
+            # Persist the extracted facts as an internal transparency row
+            # (visibility only; billing-neutral).
+            transparency_logger.log(
+                conversation_id, "memory_facts", facts_text, role="assistant"
+            )
 
             # Parse facts (one per line)
             facts = [

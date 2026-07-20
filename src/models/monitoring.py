@@ -124,6 +124,20 @@ class CleanTmpDirRequest(BaseModel):
     )
 
 
+class CompactMessagesRequest(BaseModel):
+    """Request model for the nightly message/consumption compaction job."""
+
+    retention_days: Optional[int] = Field(
+        default=None,
+        ge=1,
+        le=3650,
+        description=(
+            "Collapse rows older than this many days. If omitted, the "
+            "application.message_retention_days setting is used (default 90)."
+        ),
+    )
+
+
 class HealthCheckResult(BaseModel):
     """Health check result model."""
 

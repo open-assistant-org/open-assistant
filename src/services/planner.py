@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from src.core.llm_client import LLMClient
+from src.core.transparency_logger import transparency_logger
 from src.models.skill import Skill
 from src.utils.logger import get_logger
 
@@ -427,6 +428,7 @@ class Planner:
         user_message: str,
         tools: List[Dict[str, Any]],
         skills: Optional[List[Skill]] = None,
+        conversation_id: Optional[str] = None,
     ) -> PlanTracker:
         """
         Ask the LLM to produce a numbered step plan before executing tools.
@@ -479,5 +481,12 @@ class Planner:
 
         plan_text = response.choices[0].message.content or ""
         logger.info(f"Generated plan:\n{plan_text}")
+
+        # Persist the plan as an internal transparency row (visibility only;
+        # billing reads llm_consumption). Billing-neutral.
+        if conversation_id:
+            transparency_logger.log(
+                conversation_id, "planner", plan_text, role="assistant"
+            )
 
         return PlanTracker.from_llm_output(plan_text)

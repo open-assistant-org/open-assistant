@@ -21,6 +21,7 @@ from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from src.core.tools.schema import pydantic_to_json_schema
+from src.core.transparency_logger import transparency_logger
 from src.models.python_exec import PythonExecuteRequest
 from src.services.python_exec import python_execute
 from src.utils.json_utils import try_repair_json
@@ -427,6 +428,7 @@ async def python_agent(
     context: Optional[str] = None,
     max_iterations: int = 8,
     settings_service=None,
+    conversation_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Run an autonomous Python sub-agent until the goal is met.
 
@@ -512,6 +514,22 @@ async def python_agent(
         response_message = response.choices[0].message if response.choices else None
         tool_calls = getattr(response_message, "tool_calls", None) if response_message else None
 
+        # Persist this iteration's output as an internal transparency row
+        # (visibility only; billing reads llm_consumption). Billing-neutral.
+        if conversation_id:
+            _iter_content = (
+                response_message.content if response_message and response_message.content else ""
+            )
+            if tool_calls:
+                _tool_names = ", ".join(
+                    getattr(tc.function, "name", "?") for tc in tool_calls
+                )
+                _iter_content = _iter_content or f"[tool calls: {_tool_names}]"
+            if _iter_content:
+                transparency_logger.log(
+                    conversation_id, "python_agent", _iter_content, role="assistant",
+                    extra_metadata={"iteration": iterations},
+                )
         if not tool_calls:
             # The sub-agent emitted a plain message instead of calling a tool.
             # Treat it as an implicit finish so the loop can't hang.

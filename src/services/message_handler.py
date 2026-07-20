@@ -15,6 +15,7 @@ from src.core.llm_client import LLMClient, LLMConfig
 from src.core.repositories.skill import SkillRepository
 from src.core.tools.executor import ToolExecutor
 from src.core.tools.registry import get_tool_registry
+from src.core.transparency_logger import transparency_logger
 from src.models.skill import Skill
 from src.services.conversation import ConversationService
 from src.services.memory import MemoryService
@@ -213,6 +214,13 @@ class MessageHandler:
             system_prompt = self._build_system_prompt(selected_skills, context)
             logger.debug(f"System prompt: {len(system_prompt)} chars")
 
+            # Persist the system prompt once per conversation as an internal
+            # transparency row (visibility only; billing-neutral). Excluded from
+            # history re-sent to the LLM via the is_internal filter.
+            transparency_logger.log(
+                conv_id, "system_prompt", system_prompt, role="system", once=True
+            )
+
             # Step 6: Get tools from selected skills
             logger.debug("Step 6: Getting tools...")
             tools = self._get_tools_from_skills(selected_skills)
@@ -250,6 +258,7 @@ class MessageHandler:
                     message,
                     planner_tools,
                     skills=all_enabled_skills,
+                    conversation_id=conv_id,
                 )
                 logger.info(f"Plan generated with {plan.total} steps")
 
