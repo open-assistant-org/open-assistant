@@ -385,6 +385,8 @@ class ToolExecutor:
             return service.docs_append(**arguments)
         elif tool_name == "google_docs_update":
             return service.docs_update(**arguments)
+        elif tool_name == "google_docs_replace_text":
+            return service.docs_replace_text(**arguments)
 
         # Google Sheets tools
         elif tool_name == "google_sheets_create":
@@ -397,12 +399,20 @@ class ToolExecutor:
             return service.sheets_write(**arguments)
         elif tool_name == "google_sheets_append":
             return service.sheets_append(**arguments)
+        elif tool_name == "google_sheets_clear":
+            return service.sheets_clear(**arguments)
 
         # Google Slides tools
         elif tool_name == "google_slides_create":
             return service.slides_create(**arguments)
         elif tool_name == "google_slides_get":
             return service.slides_get(**arguments)
+        elif tool_name == "google_slides_add_slide":
+            return service.slides_add_slide(**arguments)
+        elif tool_name == "google_slides_replace_text":
+            return service.slides_replace_text(**arguments)
+        elif tool_name == "google_slides_insert_text":
+            return service.slides_insert_text(**arguments)
 
         # Google Places & Routes tools
         elif tool_name == "google_search_places":

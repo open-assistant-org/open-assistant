@@ -43,6 +43,7 @@ from src.models.google import (
     DocsAppendRequest,
     DocsCreateRequest,
     DocsGetRequest,
+    DocsReplaceTextRequest,
     DocsUpdateRequest,
     DriveGetFileRequest,
     DriveListFilesRequest,
@@ -66,12 +67,16 @@ from src.models.google import (
     SearchPlacesRequest,
     SendEmailRequest,
     SheetsAppendRequest,
+    SheetsClearRequest,
     SheetsCreateRequest,
     SheetsGetRequest,
     SheetsReadRequest,
     SheetsWriteRequest,
+    SlidesAddSlideRequest,
     SlidesCreateRequest,
     SlidesGetRequest,
+    SlidesInsertTextRequest,
+    SlidesReplaceTextRequest,
     TrashEmailRequest,
     UpdateCalendarEventRequest,
 )
@@ -586,7 +591,7 @@ def define_google_drive_tools():
         Tool(
             schema=create_tool_schema(
                 name="google_docs_append",
-                description="Append text to the end of an existing Google Docs document. Use to add new sections, paragraphs, or updates to an existing document without overwriting existing content.",
+                description="Append text to the END of an existing Google Docs document. Use to add new sections, paragraphs, or updates without overwriting existing content. To change or fix text that is already in the document, use google_docs_replace_text instead.",
                 parameters_model=DocsAppendRequest,
             ),
             executor=None,
@@ -598,8 +603,20 @@ def define_google_drive_tools():
         Tool(
             schema=create_tool_schema(
                 name="google_docs_update",
-                description="Replace the entire content of a Google Docs document with new text. Use when you need to completely rewrite a document. WARNING: This replaces ALL existing content. Use google_docs_append to add content instead of replacing.",
+                description="Replace the ENTIRE content of a Google Docs document with new text. WARNING: This deletes ALL existing content (and formatting) and is rarely what you want. To edit specific text, prefer google_docs_replace_text; to add content, prefer google_docs_append. Only use this to deliberately rewrite a document from scratch.",
                 parameters_model=DocsUpdateRequest,
+            ),
+            executor=None,
+            service_name="google",
+        )
+    )
+
+    registry.register(
+        Tool(
+            schema=create_tool_schema(
+                name="google_docs_replace_text",
+                description="Find and replace text in an existing Google Docs document, leaving all other content and formatting intact. This is the preferred way to edit or update a document: read it with google_docs_get, then replace the specific text you want to change. Replaces every occurrence of 'find' with 'replace' (set replace to an empty string to delete the text).",
+                parameters_model=DocsReplaceTextRequest,
             ),
             executor=None,
             service_name="google",
@@ -668,6 +685,18 @@ def define_google_drive_tools():
         )
     )
 
+    registry.register(
+        Tool(
+            schema=create_tool_schema(
+                name="google_sheets_clear",
+                description="Clear the cell values in a Google Sheets range (A1 notation), leaving formatting intact. Use to empty a range before writing fresh data, or to remove outdated rows.",
+                parameters_model=SheetsClearRequest,
+            ),
+            executor=None,
+            service_name="google",
+        )
+    )
+
     # ----------------------------------------------------------------- Slides
 
     registry.register(
@@ -686,8 +715,44 @@ def define_google_drive_tools():
         Tool(
             schema=create_tool_schema(
                 name="google_slides_get",
-                description="Read the text content of a Google Slides presentation. Returns the title and text extracted from each slide (slide titles, body text, speaker notes text). Use to understand what a presentation contains.",
+                description="Read the content of a Google Slides presentation. Returns the title and, for each slide, its objectId (slide_id), the extracted text, and any speaker notes. Use to understand what a presentation contains and to obtain slide_id values needed by google_slides_insert_text.",
                 parameters_model=SlidesGetRequest,
+            ),
+            executor=None,
+            service_name="google",
+        )
+    )
+
+    registry.register(
+        Tool(
+            schema=create_tool_schema(
+                name="google_slides_add_slide",
+                description="Add a new slide to an existing Google Slides presentation, optionally filling in title and body text. Use to build out or extend a presentation. Choose a layout such as 'TITLE_AND_BODY', 'TITLE_ONLY', 'SECTION_HEADER', or 'BLANK'. Returns the new slide's ID.",
+                parameters_model=SlidesAddSlideRequest,
+            ),
+            executor=None,
+            service_name="google",
+        )
+    )
+
+    registry.register(
+        Tool(
+            schema=create_tool_schema(
+                name="google_slides_replace_text",
+                description="Find and replace text across ALL slides of a Google Slides presentation, leaving everything else intact. This is the preferred way to update or correct wording in an existing presentation. Replaces every occurrence of 'find' with 'replace' (set replace to an empty string to delete the text).",
+                parameters_model=SlidesReplaceTextRequest,
+            ),
+            executor=None,
+            service_name="google",
+        )
+    )
+
+    registry.register(
+        Tool(
+            schema=create_tool_schema(
+                name="google_slides_insert_text",
+                description="Insert a new text box containing the given text onto a specific slide of a Google Slides presentation. Obtain the slide_id from google_slides_get. Use to add new content to a slide when there is no existing text to replace.",
+                parameters_model=SlidesInsertTextRequest,
             ),
             executor=None,
             service_name="google",

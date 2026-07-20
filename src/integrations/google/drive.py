@@ -1,6 +1,7 @@
 """Google Drive, Docs, Sheets, and Slides API client."""
 
 import io
+import uuid
 from typing import Any, Dict, List, Optional
 
 from google.oauth2.credentials import Credentials
@@ -376,6 +377,57 @@ class GoogleDriveClient:
             logger.error(f"Failed to update Google Doc {document_id}: {e}")
             raise
 
+    def docs_replace_text(
+        self,
+        document_id: str,
+        find: str,
+        replace: str,
+        match_case: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Find and replace text in a Google Doc without touching the rest of the content.
+
+        Args:
+            document_id: Google Doc document ID
+            find: Text to search for
+            replace: Replacement text (empty string deletes the matched text)
+            match_case: Whether the search is case-sensitive
+
+        Returns:
+            Dict with the number of occurrences changed
+        """
+        try:
+            requests = [
+                {
+                    "replaceAllText": {
+                        "containsText": {"text": find, "matchCase": match_case},
+                        "replaceText": replace,
+                    }
+                }
+            ]
+            result = self.docs.documents().batchUpdate(
+                documentId=document_id, body={"requests": requests}
+            ).execute()
+
+            replies = result.get("replies", [])
+            occurrences = 0
+            if replies:
+                occurrences = replies[0].get("replaceAllText", {}).get("occurrencesChanged", 0)
+
+            logger.info(
+                f"Replaced text in Google Doc {document_id}: {occurrences} occurrence(s)"
+            )
+            return {
+                "document_id": document_id,
+                "status": "replaced",
+                "occurrences_changed": occurrences,
+                "url": f"https://docs.google.com/document/d/{document_id}/edit",
+            }
+
+        except HttpError as e:
+            logger.error(f"Failed to replace text in Google Doc {document_id}: {e}")
+            raise
+
     # ========================================================================
     # GOOGLE SHEETS OPERATIONS
     # ========================================================================
@@ -579,6 +631,39 @@ class GoogleDriveClient:
             logger.error(f"Failed to append to Google Sheet {spreadsheet_id}: {e}")
             raise
 
+    def sheets_clear(
+        self,
+        spreadsheet_id: str,
+        range_notation: str,
+    ) -> Dict[str, Any]:
+        """
+        Clear values from a Google Sheet range (formatting is preserved).
+
+        Args:
+            spreadsheet_id: Spreadsheet ID
+            range_notation: A1 notation range to clear (e.g. 'Sheet1!A1:D10')
+
+        Returns:
+            Clear result metadata
+        """
+        try:
+            result = (
+                self.sheets.spreadsheets()
+                .values()
+                .clear(spreadsheetId=spreadsheet_id, range=range_notation, body={})
+                .execute()
+            )
+
+            logger.info(f"Cleared range {range_notation} in Sheet {spreadsheet_id}")
+            return {
+                "spreadsheet_id": spreadsheet_id,
+                "cleared_range": result.get("clearedRange"),
+            }
+
+        except HttpError as e:
+            logger.error(f"Failed to clear Google Sheet {spreadsheet_id}: {e}")
+            raise
+
     # ========================================================================
     # GOOGLE SLIDES OPERATIONS
     # ========================================================================
@@ -628,21 +713,18 @@ class GoogleDriveClient:
             slides_data = []
 
             for i, slide in enumerate(presentation.get("slides", []), 1):
-                slide_texts = []
-                for element in slide.get("pageElements", []):
-                    shape = element.get("shape", {})
-                    text_content = shape.get("text", {})
-                    for text_element in text_content.get("textElements", []):
-                        text_run = text_element.get("textRun", {})
-                        text = text_run.get("content", "").strip()
-                        if text:
-                            slide_texts.append(text)
+                slide_texts = self._extract_page_text(slide.get("pageElements", []))
+
+                # Speaker notes live on the slide's notes page.
+                notes_page = slide.get("slideProperties", {}).get("notesPage", {})
+                notes_texts = self._extract_page_text(notes_page.get("pageElements", []))
 
                 slides_data.append(
                     {
                         "slide_number": i,
                         "slide_id": slide.get("objectId"),
                         "text": " | ".join(slide_texts) if slide_texts else "(empty slide)",
+                        "speaker_notes": " ".join(notes_texts) if notes_texts else "",
                     }
                 )
 
@@ -661,9 +743,214 @@ class GoogleDriveClient:
             logger.error(f"Failed to get Slides presentation {presentation_id}: {e}")
             raise
 
+    def slides_add_slide(
+        self,
+        presentation_id: str,
+        title: Optional[str] = None,
+        body: Optional[str] = None,
+        layout: str = "TITLE_AND_BODY",
+    ) -> Dict[str, Any]:
+        """
+        Add a new slide (with optional title/body text) to a presentation.
+
+        Args:
+            presentation_id: Presentation ID
+            title: Optional title text
+            body: Optional body text
+            layout: Predefined layout name (e.g. 'TITLE_AND_BODY', 'TITLE_ONLY', 'BLANK')
+
+        Returns:
+            Dict with the new slide's objectId
+        """
+        try:
+            slide_id = f"slide_{uuid.uuid4().hex[:12]}"
+
+            # Ask Slides to report the created placeholder object IDs so we can
+            # target them with insertText in a follow-up request.
+            placeholder_mappings = []
+            if title is not None:
+                placeholder_mappings.append(
+                    {
+                        "layoutPlaceholder": {"type": "TITLE"},
+                        "objectId": f"{slide_id}_title",
+                    }
+                )
+            if body is not None:
+                placeholder_mappings.append(
+                    {
+                        "layoutPlaceholder": {"type": "BODY"},
+                        "objectId": f"{slide_id}_body",
+                    }
+                )
+
+            create_request: Dict[str, Any] = {
+                "createSlide": {
+                    "objectId": slide_id,
+                    "slideLayoutReference": {"predefinedLayout": layout},
+                }
+            }
+            if placeholder_mappings:
+                create_request["createSlide"]["placeholderIdMappings"] = placeholder_mappings
+
+            self.slides.presentations().batchUpdate(
+                presentationId=presentation_id, body={"requests": [create_request]}
+            ).execute()
+
+            # Second pass: fill the placeholders with text.
+            text_requests = []
+            if title:
+                text_requests.append(
+                    {"insertText": {"objectId": f"{slide_id}_title", "text": title}}
+                )
+            if body:
+                text_requests.append(
+                    {"insertText": {"objectId": f"{slide_id}_body", "text": body}}
+                )
+            if text_requests:
+                self.slides.presentations().batchUpdate(
+                    presentationId=presentation_id, body={"requests": text_requests}
+                ).execute()
+
+            logger.info(f"Added slide {slide_id} to presentation {presentation_id}")
+            return {
+                "presentation_id": presentation_id,
+                "slide_id": slide_id,
+                "status": "created",
+                "url": f"https://docs.google.com/presentation/d/{presentation_id}/edit",
+            }
+
+        except HttpError as e:
+            logger.error(f"Failed to add slide to presentation {presentation_id}: {e}")
+            raise
+
+    def slides_replace_text(
+        self,
+        presentation_id: str,
+        find: str,
+        replace: str,
+        match_case: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Find and replace text across all slides of a presentation.
+
+        Args:
+            presentation_id: Presentation ID
+            find: Text to search for
+            replace: Replacement text (empty string deletes the matched text)
+            match_case: Whether the search is case-sensitive
+
+        Returns:
+            Dict with the number of occurrences changed
+        """
+        try:
+            requests = [
+                {
+                    "replaceAllText": {
+                        "containsText": {"text": find, "matchCase": match_case},
+                        "replaceText": replace,
+                    }
+                }
+            ]
+            result = self.slides.presentations().batchUpdate(
+                presentationId=presentation_id, body={"requests": requests}
+            ).execute()
+
+            replies = result.get("replies", [])
+            occurrences = 0
+            if replies:
+                occurrences = replies[0].get("replaceAllText", {}).get("occurrencesChanged", 0)
+
+            logger.info(
+                f"Replaced text in presentation {presentation_id}: {occurrences} occurrence(s)"
+            )
+            return {
+                "presentation_id": presentation_id,
+                "status": "replaced",
+                "occurrences_changed": occurrences,
+                "url": f"https://docs.google.com/presentation/d/{presentation_id}/edit",
+            }
+
+        except HttpError as e:
+            logger.error(f"Failed to replace text in presentation {presentation_id}: {e}")
+            raise
+
+    def slides_insert_text(
+        self,
+        presentation_id: str,
+        slide_id: str,
+        text: str,
+    ) -> Dict[str, Any]:
+        """
+        Insert a text box containing the given text onto a slide.
+
+        Args:
+            presentation_id: Presentation ID
+            slide_id: objectId of the target slide (from slides_get)
+            text: Text content for the new text box
+
+        Returns:
+            Dict with the new text box objectId
+        """
+        try:
+            box_id = f"textbox_{uuid.uuid4().hex[:12]}"
+
+            # EMU units: default presentation page is 10" x 5.63" (914400 EMU per inch).
+            requests = [
+                {
+                    "createShape": {
+                        "objectId": box_id,
+                        "shapeType": "TEXT_BOX",
+                        "elementProperties": {
+                            "pageObjectId": slide_id,
+                            "size": {
+                                "width": {"magnitude": 3000000, "unit": "EMU"},
+                                "height": {"magnitude": 1000000, "unit": "EMU"},
+                            },
+                            "transform": {
+                                "scaleX": 1,
+                                "scaleY": 1,
+                                "translateX": 1000000,
+                                "translateY": 1000000,
+                                "unit": "EMU",
+                            },
+                        },
+                    }
+                },
+                {"insertText": {"objectId": box_id, "text": text}},
+            ]
+            self.slides.presentations().batchUpdate(
+                presentationId=presentation_id, body={"requests": requests}
+            ).execute()
+
+            logger.info(f"Inserted text box {box_id} on slide {slide_id} ({presentation_id})")
+            return {
+                "presentation_id": presentation_id,
+                "slide_id": slide_id,
+                "text_box_id": box_id,
+                "status": "inserted",
+                "url": f"https://docs.google.com/presentation/d/{presentation_id}/edit",
+            }
+
+        except HttpError as e:
+            logger.error(f"Failed to insert text on presentation {presentation_id}: {e}")
+            raise
+
     # ========================================================================
     # INTERNAL HELPERS
     # ========================================================================
+
+    def _extract_page_text(self, page_elements: List[Dict]) -> List[str]:
+        """Extract non-empty text runs from a list of Slides page elements."""
+        texts = []
+        for element in page_elements:
+            shape = element.get("shape", {})
+            text_content = shape.get("text", {})
+            for text_element in text_content.get("textElements", []):
+                text_run = text_element.get("textRun", {})
+                text = text_run.get("content", "").strip()
+                if text:
+                    texts.append(text)
+        return texts
 
     def _format_files(self, files: List[Dict]) -> List[Dict[str, Any]]:
         return [self._format_file(f) for f in files]
