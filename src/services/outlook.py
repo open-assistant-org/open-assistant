@@ -116,7 +116,9 @@ class _HTMLTextExtractor(HTMLParser):
     """Extracts plain text from HTML, skipping style/script blocks."""
 
     _SKIP_TAGS = frozenset({"style", "script", "head"})
-    _BLOCK_TAGS = frozenset({"p", "div", "br", "tr", "li", "td", "th", "h1", "h2", "h3", "h4", "h5", "h6"})
+    _BLOCK_TAGS = frozenset(
+        {"p", "div", "br", "tr", "li", "td", "th", "h1", "h2", "h3", "h4", "h5", "h6"}
+    )
 
     def __init__(self):
         super().__init__()
@@ -150,6 +152,7 @@ def _html_to_text(html_content: str) -> str:
     try:
         extractor.feed(html_content)
     except Exception:
+        # HTMLParser.feed may raise on severely malformed HTML; return partial extraction
         pass
     return extractor.get_text()
 
