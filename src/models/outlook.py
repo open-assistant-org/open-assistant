@@ -11,6 +11,15 @@ class ReadEmailsRequest(BaseModel):
         None,
         description="OData filter query to narrow results (e.g. \"from/emailAddress/address eq 'user@example.com'\")",
     )
+    summary_mode: bool = Field(
+        True,
+        description=(
+            "When true (default), returns a compact representation per email: plain-text body "
+            "(truncated to 1000 chars), essential fields only (id, subject, receivedDateTime, "
+            "from, bodyPreview, body_text, hasAttachments, toRecipients, ccRecipients). "
+            "Set to false only when you need the raw HTML body or full Graph API metadata."
+        ),
+    )
 
 
 class SendEmailRequest(BaseModel):
@@ -79,6 +88,15 @@ class SearchEmailsRequest(BaseModel):
         "inbox", description="Mail folder to search in (inbox, sentitems, drafts, etc.)"
     )
     limit: int = Field(20, description="Maximum results", ge=1, le=100)
+    summary_mode: bool = Field(
+        True,
+        description=(
+            "When true (default), returns a compact representation per email: plain-text body "
+            "(truncated to 1000 chars), essential fields only (id, subject, receivedDateTime, "
+            "from, bodyPreview, body_text, hasAttachments, toRecipients, ccRecipients). "
+            "Set to false only when you need the raw HTML body or full Graph API metadata."
+        ),
+    )
 
 
 class CreateDraftRequest(BaseModel):
