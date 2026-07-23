@@ -297,6 +297,4 @@ class AsyncTaskDispatcher:
                         error_message=db_error,
                     )
                 except Exception as exc:
-                    logger.debug(
-                        f"Sub-task {task_id}: failed to persist final state to DB: {exc}"
-                    )
+                    logger.debug(f"Sub-task {task_id}: failed to persist final state to DB: {exc}")
