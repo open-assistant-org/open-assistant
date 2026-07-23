@@ -27,7 +27,8 @@ const settingsState = {
     toolsAgentList: [],
     pendingToolAssignments: {},
     managedStatus: null,
-    pluginsLoaded: false
+    pluginsLoaded: false,
+    mcpLoaded: false
 };
 
 // ============================================================================
@@ -197,6 +198,16 @@ async function switchTab(tabName) {
         } catch (error) {
             console.error('Failed to load plugins:', error);
             toast.error('Failed to load plugins');
+        }
+    }
+
+    if (tabName === 'mcp' && !settingsState.mcpLoaded) {
+        try {
+            await loadMcpServers();
+            settingsState.mcpLoaded = true;
+        } catch (error) {
+            console.error('Failed to load MCP servers:', error);
+            toast.error('Failed to load MCP servers');
         }
     }
 }
@@ -2408,3 +2419,174 @@ async function _updatePlugin(pluginId) {
 
 // Keep backward-compat alias used by the HTML onclick in older cached pages.
 async function installPlugin() { await savePluginJson(); }
+
+// ============================================================================
+// MCP SERVERS
+// ============================================================================
+
+async function loadMcpServers() {
+    const servers = await api.get('/api/mcp');
+    const container = document.getElementById('mcp-list');
+    container.innerHTML = '';
+
+    if (!servers || servers.length === 0) {
+        container.innerHTML = '<p class="text-muted">No MCP servers configured yet.</p>';
+        return;
+    }
+    for (const server of servers) {
+        container.appendChild(createMcpCard(server));
+    }
+}
+
+function createMcpCard(server) {
+    const card = document.createElement('div');
+    card.className = 'integration-card';
+    card.id = `mcp-card-${server.id}`;
+
+    const headers = (server.header_names || []).map(escapeHtmlText).join(', ') || 'none';
+    const keywords = (server.intent_keywords || []).map(escapeHtmlText).join(', ') || 'none';
+    const tools = (server.tool_names || []).map(escapeHtmlText).join(', ') || 'none';
+
+    card.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div>
+                <strong>${server.icon || '🔌'} ${escapeHtmlText(server.display_name)}</strong>
+                <span class="text-muted"> (${escapeHtmlText(server.id)})</span>
+            </div>
+            <label class="switch">
+                <input type="checkbox" ${server.enabled ? 'checked' : ''}
+                    onchange="toggleMcpServer('${server.id}', this.checked)">
+                <span class="slider"></span>
+            </label>
+        </div>
+        <p class="text-muted" style="margin:6px 0;">${escapeHtmlText(server.description || '')}</p>
+        <div class="form-hint">URL: ${escapeHtmlText(server.url)}</div>
+        <div class="form-hint">Auth headers: ${headers}${server.has_credentials ? ' ✓ stored' : ''}</div>
+        <div class="form-hint">Intent keywords: ${keywords}</div>
+        <div class="form-hint">Tools (${server.tool_count}): ${tools}</div>
+        <div style="margin-top:8px; display:flex; gap:8px;">
+            <button class="btn btn-secondary" onclick="testMcpServer('${server.id}')">Test</button>
+            <button class="btn btn-secondary" onclick="refreshMcpServer('${server.id}')">Refresh Tools</button>
+            <button class="btn btn-danger" onclick="deleteMcpServer('${server.id}')">Remove</button>
+        </div>`;
+    return card;
+}
+
+function showAddMcpModal() {
+    document.getElementById('new-mcp-id').value = '';
+    document.getElementById('new-mcp-display-name').value = '';
+    document.getElementById('new-mcp-description').value = '';
+    document.getElementById('new-mcp-url').value = '';
+    document.getElementById('new-mcp-keywords').value = '';
+    document.getElementById('mcp-headers-list').innerHTML = '';
+    addMcpHeaderRow();
+    document.getElementById('addMcpModal').style.display = 'flex';
+}
+
+function closeAddMcpModal() {
+    document.getElementById('addMcpModal').style.display = 'none';
+}
+
+function addMcpHeaderRow(name = '', value = '') {
+    const list = document.getElementById('mcp-headers-list');
+    const row = document.createElement('div');
+    row.className = 'mcp-header-row';
+    row.style = 'display:flex; gap:6px; margin-bottom:6px;';
+    row.innerHTML = `
+        <input type="text" class="form-input mcp-header-name" placeholder="Header name (e.g. Authorization)"
+            value="${escapeAttr(name)}" style="flex:1;">
+        <input type="password" class="form-input mcp-header-value" placeholder="Value"
+            value="${escapeAttr(value)}" style="flex:1;">
+        <button type="button" class="btn-icon" onclick="this.parentElement.remove()">🗑️</button>`;
+    list.appendChild(row);
+}
+
+function collectMcpHeaders() {
+    const headers = [];
+    document.querySelectorAll('#mcp-headers-list .mcp-header-row').forEach(row => {
+        const name = row.querySelector('.mcp-header-name').value.trim();
+        const value = row.querySelector('.mcp-header-value').value;
+        if (name && value) headers.push({ name, value });
+    });
+    return headers;
+}
+
+async function createMcpServer() {
+    const id = document.getElementById('new-mcp-id').value.trim();
+    const displayName = document.getElementById('new-mcp-display-name').value.trim();
+    const url = document.getElementById('new-mcp-url').value.trim();
+
+    if (!/^[a-z][a-z0-9_]*$/.test(id)) {
+        toast.error('Server ID must be lowercase letters, digits, and underscores, starting with a letter');
+        return;
+    }
+    if (!displayName) { toast.error('Display Name is required'); return; }
+    if (!/^https?:\/\//.test(url)) { toast.error('URL must start with http:// or https://'); return; }
+
+    const keywords = document.getElementById('new-mcp-keywords').value
+        .split(',').map(k => k.trim()).filter(Boolean);
+
+    const body = {
+        id,
+        display_name: displayName,
+        description: document.getElementById('new-mcp-description').value.trim(),
+        url,
+        auth_headers: collectMcpHeaders(),
+        intent_keywords: keywords,
+    };
+
+    const btn = document.getElementById('mcp-create-btn');
+    btn.disabled = true;
+    btn.textContent = 'Connecting…';
+    try {
+        const server = await api.post('/api/mcp', body);
+        toast.success(`Added '${server.display_name}' with ${server.tool_count} tool(s)`);
+        closeAddMcpModal();
+        await loadMcpServers();
+    } catch (error) {
+        toast.error(`Failed to add server: ${error.message}`);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Connect & Add';
+    }
+}
+
+async function toggleMcpServer(id, enabled) {
+    try {
+        await api.put(`/api/mcp/${id}/enable`, { enabled });
+        toast.success(`Server ${enabled ? 'enabled' : 'disabled'}`);
+    } catch (error) {
+        toast.error(`Failed to update server: ${error.message}`);
+        await loadMcpServers();
+    }
+}
+
+async function testMcpServer(id) {
+    try {
+        const result = await api.get(`/api/mcp/${id}/test`);
+        result.success ? toast.success(result.message) : toast.error(result.message);
+    } catch (error) {
+        toast.error(`Test failed: ${error.message}`);
+    }
+}
+
+async function refreshMcpServer(id) {
+    try {
+        const server = await api.post(`/api/mcp/${id}/refresh`, {});
+        toast.success(`Refreshed — ${server.tool_count} tool(s)`);
+        await loadMcpServers();
+    } catch (error) {
+        toast.error(`Refresh failed: ${error.message}`);
+    }
+}
+
+async function deleteMcpServer(id) {
+    if (!confirm(`Remove MCP server '${id}'? This also removes its tools and agent.`)) return;
+    try {
+        await api.delete(`/api/mcp/${id}`);
+        toast.success('Server removed');
+        await loadMcpServers();
+    } catch (error) {
+        toast.error(`Failed to remove server: ${error.message}`);
+    }
+}

@@ -74,6 +74,7 @@
                 <button class="tab" data-tab="prompts">System Prompts</button>
                 <button class="tab" data-tab="llm">LLM</button>
                 <button class="tab" data-tab="plugins">Plugins</button>
+                <button class="tab" data-tab="mcp">MCP Servers</button>
                 <button class="tab" data-tab="application">Application</button>
                 <button class="tab" data-tab="advanced">Advanced</button>
             </div>
@@ -247,6 +248,23 @@
                         <a href="https://github.com/open-assistant-org/open-assistant/blob/main/docs/plugin-schema.md" target="_blank" class="help-link">📚 How to write a plugin?</a>
                     </p>
                     <div id="plugins-list"></div>
+                </div>
+            </div>
+
+            <!-- MCP Servers Tab -->
+            <div id="mcp-tab" class="tab-content">
+                <div class="settings-section">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <h3 class="section-title" style="margin-bottom:0;">MCP Servers</h3>
+                        <button onclick="showAddMcpModal()" class="btn btn-secondary">+ Add MCP Server</button>
+                    </div>
+                    <p class="text-muted">
+                        Connect remote Model Context Protocol servers over HTTP. Each server's tools are
+                        registered as LLM tools, and an agent is created so a matching intent keyword
+                        activates them. Auth uses static headers (no OAuth in this version); header
+                        values are stored encrypted.
+                    </p>
+                    <div id="mcp-list"></div>
                 </div>
             </div>
 
@@ -454,6 +472,48 @@
             <div class="modal-footer">
                 <button onclick="closeAddAgentModal()" class="btn btn-secondary">Cancel</button>
                 <button onclick="createNewAgent()" class="btn btn-primary">Create Agent</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add MCP Server Modal -->
+    <div id="addMcpModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add MCP Server</h2>
+                <button class="modal-close" onclick="closeAddMcpModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="new-mcp-id">Server ID (lowercase, digits, underscores)</label>
+                    <input type="text" id="new-mcp-id" class="form-input" placeholder="e.g., cloudflare_gateway" pattern="[a-z][a-z0-9_]*">
+                </div>
+                <div class="form-group">
+                    <label for="new-mcp-display-name">Display Name</label>
+                    <input type="text" id="new-mcp-display-name" class="form-input" placeholder="Cloudflare Gateway">
+                </div>
+                <div class="form-group">
+                    <label for="new-mcp-description">Description</label>
+                    <input type="text" id="new-mcp-description" class="form-input" placeholder="What this server does">
+                </div>
+                <div class="form-group">
+                    <label for="new-mcp-url">Server URL (Streamable HTTP endpoint)</label>
+                    <input type="text" id="new-mcp-url" class="form-input" placeholder="https://example.com/mcp">
+                </div>
+                <div class="form-group">
+                    <label for="new-mcp-keywords">Intent Keywords (comma-separated)</label>
+                    <input type="text" id="new-mcp-keywords" class="form-input" placeholder="cloudflare, gateway, cdn">
+                    <div class="form-hint">A message containing any of these words activates this server's tools.</div>
+                </div>
+                <div class="form-group">
+                    <label>Auth Headers <span class="text-muted">(values stored encrypted)</span></label>
+                    <div id="mcp-headers-list"></div>
+                    <button type="button" onclick="addMcpHeaderRow()" class="btn btn-secondary" style="margin-top:6px;">+ Add Header</button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="closeAddMcpModal()" class="btn btn-secondary">Cancel</button>
+                <button onclick="createMcpServer()" class="btn btn-primary" id="mcp-create-btn">Connect &amp; Add</button>
             </div>
         </div>
     </div>
