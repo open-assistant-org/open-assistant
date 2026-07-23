@@ -20,6 +20,7 @@ Design notes
   and ``src/models/skill.py`` for why agents == skills.
 """
 
+import asyncio
 import json
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, List, Optional
@@ -203,10 +204,18 @@ class McpService(BaseService):
             ) from e
 
         headers = self._build_request_headers(cfg)
-        async with streamablehttp_client(cfg.url, headers=headers or None) as (read, write, _):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                return await fn(session)
+
+        async def _do() -> Any:
+            async with streamablehttp_client(cfg.url, headers=headers or None) as (
+                read,
+                write,
+                _,
+            ):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    return await fn(session)
+
+        return await asyncio.wait_for(_do(), timeout=_MCP_TIMEOUT_SECONDS)
 
     async def _discover(self, cfg: McpServerConfig) -> List[McpDiscoveredTool]:
         """Connect and list the server's tools."""
