@@ -27,8 +27,7 @@ const settingsState = {
     toolsAgentList: [],
     pendingToolAssignments: {},
     managedStatus: null,
-    pluginsLoaded: false,
-    mcpLoaded: false
+    pluginsLoaded: false
 };
 
 // ============================================================================
@@ -201,15 +200,6 @@ async function switchTab(tabName) {
         }
     }
 
-    if (tabName === 'mcp' && !settingsState.mcpLoaded) {
-        try {
-            await loadMcpServers();
-            settingsState.mcpLoaded = true;
-        } catch (error) {
-            console.error('Failed to load MCP servers:', error);
-            toast.error('Failed to load MCP servers');
-        }
-    }
 }
 
 // ============================================================================
@@ -1677,7 +1667,14 @@ async function deleteAgent(agentName) {
     }
 
     try {
-        await api.delete(`/api/agents/${agentName}`);
+        // MCP-backed agents (name "mcp_{id}") are deleted through the MCP
+        // endpoint so their tools, config, and stored credentials are cleaned
+        // up too — deleting only the agent row would orphan them.
+        if (agentName.startsWith('mcp_')) {
+            await api.delete(`/api/mcp/${agentName.slice('mcp_'.length)}`);
+        } else {
+            await api.delete(`/api/agents/${agentName}`);
+        }
         settingsState.agents = settingsState.agents.filter(a => a.name !== agentName);
         renderAgentsList();
         toast.success(`Agent "${agentName}" removed`);
@@ -2421,56 +2418,8 @@ async function _updatePlugin(pluginId) {
 async function installPlugin() { await savePluginJson(); }
 
 // ============================================================================
-// MCP SERVERS
+// MCP SERVERS  (added via the "+ Add MCP" button in the Agents tab)
 // ============================================================================
-
-async function loadMcpServers() {
-    const servers = await api.get('/api/mcp');
-    const container = document.getElementById('mcp-list');
-    container.innerHTML = '';
-
-    if (!servers || servers.length === 0) {
-        container.innerHTML = '<p class="text-muted">No MCP servers configured yet.</p>';
-        return;
-    }
-    for (const server of servers) {
-        container.appendChild(createMcpCard(server));
-    }
-}
-
-function createMcpCard(server) {
-    const card = document.createElement('div');
-    card.className = 'integration-card';
-    card.id = `mcp-card-${server.id}`;
-
-    const headers = (server.header_names || []).map(escapeHtmlText).join(', ') || 'none';
-    const keywords = (server.intent_keywords || []).map(escapeHtmlText).join(', ') || 'none';
-    const tools = (server.tool_names || []).map(escapeHtmlText).join(', ') || 'none';
-
-    card.innerHTML = `
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-            <div>
-                <strong>${server.icon || '🔌'} ${escapeHtmlText(server.display_name)}</strong>
-                <span class="text-muted"> (${escapeHtmlText(server.id)})</span>
-            </div>
-            <label class="switch">
-                <input type="checkbox" ${server.enabled ? 'checked' : ''}
-                    onchange="toggleMcpServer('${server.id}', this.checked)">
-                <span class="slider"></span>
-            </label>
-        </div>
-        <p class="text-muted" style="margin:6px 0;">${escapeHtmlText(server.description || '')}</p>
-        <div class="form-hint">URL: ${escapeHtmlText(server.url)}</div>
-        <div class="form-hint">Auth headers: ${headers}${server.has_credentials ? ' ✓ stored' : ''}</div>
-        <div class="form-hint">Intent keywords: ${keywords}</div>
-        <div class="form-hint">Tools (${server.tool_count}): ${tools}</div>
-        <div style="margin-top:8px; display:flex; gap:8px;">
-            <button class="btn btn-secondary" onclick="testMcpServer('${server.id}')">Test</button>
-            <button class="btn btn-secondary" onclick="refreshMcpServer('${server.id}')">Refresh Tools</button>
-            <button class="btn btn-danger" onclick="deleteMcpServer('${server.id}')">Remove</button>
-        </div>`;
-    return card;
-}
 
 function showAddMcpModal() {
     document.getElementById('new-mcp-id').value = '';
@@ -2542,51 +2491,14 @@ async function createMcpServer() {
         const server = await api.post('/api/mcp', body);
         toast.success(`Added '${server.display_name}' with ${server.tool_count} tool(s)`);
         closeAddMcpModal();
-        await loadMcpServers();
+        // The MCP server is created as an agent row, so refresh the Agents list.
+        settingsState.agentsLoaded = false;
+        await loadAgents();
+        settingsState.agentsLoaded = true;
     } catch (error) {
         toast.error(`Failed to add server: ${error.message}`);
     } finally {
         btn.disabled = false;
         btn.textContent = 'Connect & Add';
-    }
-}
-
-async function toggleMcpServer(id, enabled) {
-    try {
-        await api.put(`/api/mcp/${id}/enable`, { enabled });
-        toast.success(`Server ${enabled ? 'enabled' : 'disabled'}`);
-    } catch (error) {
-        toast.error(`Failed to update server: ${error.message}`);
-        await loadMcpServers();
-    }
-}
-
-async function testMcpServer(id) {
-    try {
-        const result = await api.get(`/api/mcp/${id}/test`);
-        result.success ? toast.success(result.message) : toast.error(result.message);
-    } catch (error) {
-        toast.error(`Test failed: ${error.message}`);
-    }
-}
-
-async function refreshMcpServer(id) {
-    try {
-        const server = await api.post(`/api/mcp/${id}/refresh`, {});
-        toast.success(`Refreshed — ${server.tool_count} tool(s)`);
-        await loadMcpServers();
-    } catch (error) {
-        toast.error(`Refresh failed: ${error.message}`);
-    }
-}
-
-async function deleteMcpServer(id) {
-    if (!confirm(`Remove MCP server '${id}'? This also removes its tools and agent.`)) return;
-    try {
-        await api.delete(`/api/mcp/${id}`);
-        toast.success('Server removed');
-        await loadMcpServers();
-    } catch (error) {
-        toast.error(`Failed to remove server: ${error.message}`);
     }
 }

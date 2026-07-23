@@ -53,6 +53,32 @@ class McpSdkNotInstalled(RuntimeError):
     """Raised when an operation needs the ``mcp`` SDK but it is not installed."""
 
 
+def _describe_exception(exc: BaseException) -> str:
+    """Flatten an exception (incl. anyio/TaskGroup ExceptionGroups) to a message.
+
+    The MCP client runs its transport inside a task group, so a genuine failure
+    surfaces wrapped in an ``ExceptionGroup`` whose ``str`` is the unhelpful
+    "unhandled errors in a TaskGroup (N sub-exceptions)". Recurse into the group
+    and report the underlying leaf causes instead.
+    """
+    leaves: List[str] = []
+
+    def _collect(e: BaseException) -> None:
+        sub_exceptions = getattr(e, "exceptions", None)
+        if sub_exceptions:
+            for child in sub_exceptions:
+                _collect(child)
+        else:
+            text = str(e).strip()
+            leaves.append(f"{type(e).__name__}: {text}" if text else type(e).__name__)
+
+    _collect(exc)
+    # De-duplicate while preserving order.
+    seen: set = set()
+    unique = [x for x in leaves if not (x in seen or seen.add(x))]
+    return "; ".join(unique) or str(exc) or type(exc).__name__
+
+
 class McpService(BaseService):
     """Manages MCP server definitions and executes their tools."""
 
@@ -215,7 +241,18 @@ class McpService(BaseService):
                     await session.initialize()
                     return await fn(session)
 
-        return await asyncio.wait_for(_do(), timeout=_MCP_TIMEOUT_SECONDS)
+        try:
+            return await asyncio.wait_for(_do(), timeout=_MCP_TIMEOUT_SECONDS)
+        except asyncio.TimeoutError as e:
+            raise RuntimeError(
+                f"Timed out after {int(_MCP_TIMEOUT_SECONDS)}s connecting to {cfg.url}"
+            ) from e
+        except Exception as e:
+            # The MCP client runs its transport inside an anyio task group, so a
+            # real failure (connection refused, HTTP 401, DNS, OAuth challenge…)
+            # arrives wrapped in an ExceptionGroup whose default message is the
+            # unhelpful "unhandled errors in a TaskGroup". Surface the leaf cause.
+            raise RuntimeError(_describe_exception(e)) from e
 
     async def _discover(self, cfg: McpServerConfig) -> List[McpDiscoveredTool]:
         """Connect and list the server's tools."""

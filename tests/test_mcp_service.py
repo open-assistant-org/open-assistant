@@ -156,6 +156,22 @@ def test_serialize_result_text_and_error():
     assert out["structured"] == {"k": "v"}
 
 
+def test_describe_exception_unwraps_task_group():
+    from src.services.mcp_service import _describe_exception
+
+    # The MCP client wraps real failures (e.g. HTTP 401) in an ExceptionGroup
+    # whose str is the unhelpful "unhandled errors in a TaskGroup".
+    leaf = ValueError("Client error '401 Unauthorized' for url 'https://x/mcp'")
+    grp = ExceptionGroup("unhandled errors in a TaskGroup", [leaf])
+    msg = _describe_exception(grp)
+    assert "401 Unauthorized" in msg
+    assert "TaskGroup" not in msg
+
+    # Nested groups are flattened to the leaf cause.
+    nested = ExceptionGroup("outer", [ExceptionGroup("inner", [RuntimeError("boom")])])
+    assert _describe_exception(nested) == "RuntimeError: boom"
+
+
 @pytest.mark.asyncio
 async def test_execute_tool_routes_to_session(tmp_path):
     svc = _make_service(tmp_path)
