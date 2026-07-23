@@ -2598,7 +2598,7 @@ def define_async_task_tools():
     """
     registry = get_tool_registry()
 
-    # dispatch_task — spawn a background sub-task
+    # dispatch_task — spawn a background sub-task, optionally as a named specialist
     registry.register(
         Tool(
             schema=create_tool_schema(
@@ -2609,6 +2609,11 @@ def define_async_task_tools():
                     "access — identical to a top-level user request. Use this when a plan step "
                     "involves substantial independent work (research, multi-step writing, "
                     "analysis) that can run in parallel with other steps. "
+                    "Set the optional 'skill' parameter to delegate to a named specialist "
+                    "(e.g. skill='research' to pin to the Research Agent's context and tools, "
+                    "skill='writer' for the Content Writer, skill='communication' for email/chat). "
+                    "When 'skill' is omitted the sub-task performs its own automatic skill "
+                    "selection based on its description. "
                     "Returns a task_id immediately. Use get_task_result to poll for completion "
                     "and retrieve the result. Multiple tasks can run simultaneously."
                 ),
