@@ -115,9 +115,7 @@ class McpService(BaseService):
         for tool in cfg.discovered_tools:
             registry.register(self._create_tool(cfg.id, cfg, tool))
 
-    def _create_tool(
-        self, server_id: str, cfg: McpServerConfig, tool: McpDiscoveredTool
-    ) -> Tool:
+    def _create_tool(self, server_id: str, cfg: McpServerConfig, tool: McpDiscoveredTool) -> Tool:
         """Build a Tool object for a single discovered MCP tool."""
         tool_name = f"mcp_{server_id}_{tool.name}"
         schema = ToolSchema(
@@ -360,9 +358,7 @@ class McpService(BaseService):
 
         # Store secret header values BEFORE discovery so authenticated servers
         # can be reached during the initial tools/list call.
-        self._store_header_values(
-            request.id, {h.name: h.value for h in request.auth_headers}
-        )
+        self._store_header_values(request.id, {h.name: h.value for h in request.auth_headers})
 
         # Connect and discover tools (raises on failure — nothing is persisted).
         try:
@@ -380,9 +376,7 @@ class McpService(BaseService):
         self._sync_agent_row(cfg)
         self.settings_repo.set(f"mcp.{cfg.id}.enabled", True, value_type="bool")
 
-        logger.info(
-            f"Added MCP server '{cfg.id}' with {len(cfg.discovered_tools)} tool(s)"
-        )
+        logger.info(f"Added MCP server '{cfg.id}' with {len(cfg.discovered_tools)} tool(s)")
         return cfg
 
     async def refresh_tools(self, server_id: str) -> McpServerConfig:
@@ -408,16 +402,12 @@ class McpService(BaseService):
             # Rebuild the config through the model so the new header names are
             # validated, rather than mutating the typed list in place.
             data = cfg.model_dump()
-            data["auth_headers"] = list(data["auth_headers"]) + [
-                {"name": n} for n in new_names
-            ]
+            data["auth_headers"] = list(data["auth_headers"]) + [{"name": n} for n in new_names]
             cfg = McpServerConfig.model_validate(data)
             self._configs[server_id] = cfg
             self._save_config(cfg)
 
-        self._store_header_values(
-            server_id, {h.name: h.value for h in request.headers}
-        )
+        self._store_header_values(server_id, {h.name: h.value for h in request.headers})
 
     async def test_server(self, server_id: str) -> McpTestResult:
         """Connect to a server and report reachability + tool count."""
