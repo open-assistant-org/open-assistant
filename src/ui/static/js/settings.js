@@ -71,6 +71,9 @@ async function initializeSettings() {
         // Load audit log
         await loadAuditLog();
 
+        // Handle post-OAuth redirect params (?mcp_connected / ?mcp_error).
+        handleMcpOAuthRedirect();
+
     } catch (error) {
         console.error('Failed to initialize settings:', error);
         toast.error('Failed to load settings');
@@ -199,6 +202,7 @@ async function switchTab(tabName) {
             toast.error('Failed to load plugins');
         }
     }
+
 }
 
 // ============================================================================
@@ -1520,8 +1524,17 @@ async function testConnection(service) {
 
 async function loadAgents() {
     try {
-        const agentsResponse = await api.get('/api/agents');
+        const [agentsResponse, mcpResponse] = await Promise.all([
+            api.get('/api/agents'),
+            api.get('/api/mcp').catch(() => []),
+        ]);
         settingsState.agents = agentsResponse.agents;
+        // Index MCP server details by their generated agent name so createAgentCard
+        // can look them up when rendering mcp_* rows.
+        settingsState.mcpServers = {};
+        (Array.isArray(mcpResponse) ? mcpResponse : []).forEach(srv => {
+            settingsState.mcpServers[`mcp_${srv.id}`] = srv;
+        });
         renderAgentsList();
     } catch (error) {
         console.error('Failed to load agents:', error);
@@ -1544,6 +1557,10 @@ function renderAgentsList() {
 }
 
 function createAgentCard(agent, index, total) {
+    if (agent.name.startsWith('mcp_')) {
+        return createMcpAgentCard(agent, index, total);
+    }
+
     const toolsCount = agent.tools ? agent.tools.length : 0;
     const statusClass = agent.enabled ? 'status-success' : 'status-warning';
     const statusText = agent.enabled ? 'Enabled' : 'Disabled';
@@ -1598,6 +1615,86 @@ function createAgentCard(agent, index, total) {
     `;
 }
 
+function createMcpAgentCard(agent, index, total) {
+    const srv = (settingsState.mcpServers || {})[agent.name] || {};
+    const statusClass = agent.enabled ? 'status-success' : 'status-warning';
+    const statusText = agent.enabled ? 'Enabled' : 'Disabled';
+    const serverId = agent.name.slice('mcp_'.length);
+    const authType = srv.auth_type || 'header';
+    const url = srv.url || '';
+    const keywords = (srv.intent_keywords || []).join(', ');
+    const toolNames = srv.tool_names || [];
+    const toolsHtml = toolNames.length
+        ? `<div style="margin-top:4px; font-size:0.82rem; color:var(--text-muted);">${toolNames.map(t => `<code>${escapeHtml(t)}</code>`).join(' ')}</div>`
+        : '';
+
+    const authBadge = authType === 'oauth2'
+        ? '<span class="meta-item" style="background:var(--accent-dim,#1a2a1a);color:var(--accent,#0f0);">OAuth 2.1</span>'
+        : authType === 'none'
+            ? '<span class="meta-item">No auth</span>'
+            : '<span class="meta-item">Static headers</span>';
+
+    // For OAuth servers: show authorization status and connect button.
+    const oauthAuthorized = srv.oauth_authorized === true;
+    const oauthStatusHtml = authType === 'oauth2'
+        ? (oauthAuthorized
+            ? '<span class="meta-item" style="color:#4caf50;">✓ Authorized</span>'
+            : '<span class="meta-item" style="color:#ff9800;">⚠ Not authorized</span>')
+        : '';
+
+    const footerButtons = authType === 'oauth2'
+        ? `<button onclick="connectMcpOAuth('${serverId}')" class="btn btn-secondary btn-sm">Connect via OAuth</button>
+           <button onclick="refreshMcpServer('${serverId}')" class="btn btn-secondary btn-sm">Refresh Tools</button>`
+        : `<button onclick="openMcpCredentialsModal('${serverId}')" class="btn btn-secondary btn-sm">Credentials</button>
+           <button onclick="refreshMcpServer('${serverId}')" class="btn btn-secondary btn-sm">Refresh Tools</button>`;
+
+    const upDisabled = index === 0 ? 'disabled' : '';
+    const downDisabled = index === total - 1 ? 'disabled' : '';
+
+    return `
+        <div class="agent-card" id="agent-${agent.name}" style="border-left:3px solid var(--accent,#0f0);">
+            <div class="agent-header">
+                <div class="agent-title">
+                    <div class="agent-priority-controls">
+                        <button class="btn-priority" onclick="moveAgent('${agent.name}', 'up')" ${upDisabled} title="Move up">&#9650;</button>
+                        <button class="btn-priority" onclick="moveAgent('${agent.name}', 'down')" ${downDisabled} title="Move down">&#9660;</button>
+                    </div>
+                    <span class="agent-icon">${escapeHtml(srv.icon || '🔌')}</span>
+                    <div class="agent-info">
+                        <h4>${escapeHtml(agent.display_name)} <span style="font-size:0.75rem;font-weight:normal;color:var(--text-muted);">MCP</span></h4>
+                        <small class="text-muted" title="${escapeAttr(url)}">${escapeHtml(url.length > 60 ? url.slice(0,57)+'…' : url)}</small>
+                    </div>
+                </div>
+                <div class="agent-actions">
+                    <span class="status-badge ${statusClass}">${statusText}</span>
+                    <label class="toggle-label">
+                        <input
+                            type="checkbox"
+                            class="toggle-input"
+                            ${agent.enabled ? 'checked' : ''}
+                            onchange="toggleMcpServer('${escapeAttr(serverId)}', this.checked)"
+                        >
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+            <div class="agent-body">
+                <div class="agent-meta">
+                    ${authBadge}
+                    ${oauthStatusHtml}
+                    <span class="meta-item">${toolNames.length} tool${toolNames.length !== 1 ? 's' : ''}</span>
+                    ${keywords ? `<span class="meta-item" title="Intent keywords">🔑 ${escapeHtml(keywords)}</span>` : ''}
+                </div>
+                ${toolsHtml}
+            </div>
+            <div class="agent-footer">
+                ${footerButtons}
+                <button onclick="deleteAgent('${escapeAttr(agent.name)}')" class="btn btn-danger btn-sm">Remove</button>
+            </div>
+        </div>
+    `;
+}
+
 function getAgentIcon(agentName) {
     const icons = {
         coordinator: '🎯',
@@ -1611,6 +1708,15 @@ function getAgentIcon(agentName) {
         navigator: '🗺️'
     };
     return icons[agentName] || '🤖';
+}
+
+function escapeHtml(str) {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 async function moveAgent(agentName, direction) {
@@ -1660,13 +1766,56 @@ async function toggleAgent(agentName, enabled) {
     }
 }
 
+async function toggleMcpServer(serverId, enabled) {
+    // MCP enable/disable goes through the MCP endpoint so the settings gate
+    // (mcp.{id}.enabled) and agent row are kept in lockstep.
+    try {
+        await api.put(`/api/mcp/${serverId}/enable`, { enabled });
+        const agentName = `mcp_${serverId}`;
+        const agent = settingsState.agents.find(a => a.name === agentName);
+        if (agent) agent.enabled = enabled;
+        renderAgentsList();
+        toast.success(`MCP server '${serverId}' ${enabled ? 'enabled' : 'disabled'}`);
+    } catch (error) {
+        console.error('Failed to toggle MCP server:', error);
+        toast.error('Failed to update MCP server: ' + (error.message || 'Unknown error'));
+        const checkbox = document.querySelector(`#agent-mcp_${serverId} .toggle-input`);
+        if (checkbox) checkbox.checked = !enabled;
+    }
+}
+
+async function refreshMcpServer(serverId) {
+    const btn = document.querySelector(`#agent-mcp_${serverId} .btn-secondary`);
+    try {
+        if (btn) { btn.disabled = true; btn.textContent = 'Refreshing…'; }
+        const srv = await api.post(`/api/mcp/${serverId}/refresh`);
+        // Update cached MCP server details.
+        if (settingsState.mcpServers) {
+            settingsState.mcpServers[`mcp_${serverId}`] = srv;
+        }
+        renderAgentsList();
+        toast.success(`Refreshed — ${srv.tool_count} tool(s) discovered`);
+    } catch (error) {
+        toast.error('Refresh failed: ' + (error.message || 'Unknown error'));
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Refresh Tools'; }
+    }
+}
+
 async function deleteAgent(agentName) {
     if (!confirm(`Are you sure you want to remove the "${agentName}" agent? This cannot be undone.`)) {
         return;
     }
 
     try {
-        await api.delete(`/api/agents/${agentName}`);
+        // MCP-backed agents (name "mcp_{id}") are deleted through the MCP
+        // endpoint so their tools, config, and stored credentials are cleaned
+        // up too — deleting only the agent row would orphan them.
+        if (agentName.startsWith('mcp_')) {
+            await api.delete(`/api/mcp/${agentName.slice('mcp_'.length)}`);
+        } else {
+            await api.delete(`/api/agents/${agentName}`);
+        }
         settingsState.agents = settingsState.agents.filter(a => a.name !== agentName);
         renderAgentsList();
         toast.success(`Agent "${agentName}" removed`);
@@ -2408,3 +2557,215 @@ async function _updatePlugin(pluginId) {
 
 // Keep backward-compat alias used by the HTML onclick in older cached pages.
 async function installPlugin() { await savePluginJson(); }
+
+// ============================================================================
+// MCP SERVERS  (added via the "+ Add MCP" button in the Agents tab)
+// ============================================================================
+
+function showAddMcpModal() {
+    document.getElementById('new-mcp-id').value = '';
+    document.getElementById('new-mcp-display-name').value = '';
+    document.getElementById('new-mcp-description').value = '';
+    document.getElementById('new-mcp-url').value = '';
+    document.getElementById('new-mcp-keywords').value = '';
+    document.getElementById('new-mcp-scopes').value = '';
+    document.getElementById('mcp-headers-list').innerHTML = '';
+    // Default to static-header auth.
+    document.querySelector('input[name="mcp-auth-type"][value="header"]').checked = true;
+    onMcpAuthTypeChange('header');
+    addMcpHeaderRow();
+    document.getElementById('addMcpModal').style.display = 'flex';
+}
+
+function closeAddMcpModal() {
+    document.getElementById('addMcpModal').style.display = 'none';
+}
+
+function onMcpAuthTypeChange(authType) {
+    document.getElementById('mcp-header-fields').style.display = authType === 'header' ? '' : 'none';
+    document.getElementById('mcp-oauth-fields').style.display = authType === 'oauth2' ? '' : 'none';
+}
+
+function addMcpHeaderRow(name = '', value = '') {
+    const list = document.getElementById('mcp-headers-list');
+    const row = document.createElement('div');
+    row.className = 'mcp-header-row';
+    row.style = 'display:flex; gap:6px; margin-bottom:6px;';
+    row.innerHTML = `
+        <input type="text" class="form-input mcp-header-name" placeholder="Header name (e.g. Authorization)"
+            value="${escapeAttr(name)}" style="flex:1;">
+        <input type="password" class="form-input mcp-header-value" placeholder="Value"
+            value="${escapeAttr(value)}" style="flex:1;">
+        <button type="button" class="btn-icon" onclick="this.parentElement.remove()">🗑️</button>`;
+    list.appendChild(row);
+}
+
+function collectMcpHeaders() {
+    const headers = [];
+    document.querySelectorAll('#mcp-headers-list .mcp-header-row').forEach(row => {
+        const name = row.querySelector('.mcp-header-name').value.trim();
+        const value = row.querySelector('.mcp-header-value').value;
+        if (name && value) headers.push({ name, value });
+    });
+    return headers;
+}
+
+async function createMcpServer() {
+    const id = document.getElementById('new-mcp-id').value.trim();
+    const displayName = document.getElementById('new-mcp-display-name').value.trim();
+    const authType = document.querySelector('input[name="mcp-auth-type"]:checked').value;
+    const url = document.getElementById('new-mcp-url').value.trim();
+
+    if (!/^[a-z][a-z0-9_]*$/.test(id)) {
+        toast.error('Server ID must be lowercase letters, digits, and underscores, starting with a letter');
+        return;
+    }
+    if (!displayName) { toast.error('Display Name is required'); return; }
+    if (!/^https?:\/\//.test(url)) { toast.error('URL must start with http:// or https://'); return; }
+
+    const keywords = document.getElementById('new-mcp-keywords').value
+        .split(',').map(k => k.trim()).filter(Boolean);
+
+    const body = {
+        id,
+        display_name: displayName,
+        description: document.getElementById('new-mcp-description').value.trim(),
+        url,
+        auth_type: authType,
+        intent_keywords: keywords,
+    };
+
+    if (authType === 'header') {
+        body.auth_headers = collectMcpHeaders();
+    } else if (authType === 'oauth2') {
+        const scopesRaw = document.getElementById('new-mcp-scopes').value.trim();
+        body.oauth_scopes = scopesRaw ? scopesRaw.split(/\s+/).filter(Boolean) : [];
+    }
+
+    const btn = document.getElementById('mcp-create-btn');
+    btn.disabled = true;
+    btn.textContent = authType === 'oauth2' ? 'Registering…' : 'Connecting…';
+    try {
+        const server = await api.post('/api/mcp', body);
+        const toolMsg = server.tool_count > 0
+            ? ` with ${server.tool_count} tool(s)`
+            : authType === 'oauth2' ? ' — authorize via OAuth to discover tools' : '';
+        toast.success(`Added '${server.display_name}'${toolMsg}`);
+        closeAddMcpModal();
+        // The MCP server is created as an agent row, so refresh the Agents list.
+        settingsState.agentsLoaded = false;
+        await loadAgents();
+        settingsState.agentsLoaded = true;
+        // For OAuth servers, prompt the user to connect immediately.
+        if (authType === 'oauth2') {
+            if (confirm(`'${server.display_name}' was added. Connect via OAuth now to authorize access?`)) {
+                connectMcpOAuth(server.id);
+            }
+        }
+    } catch (error) {
+        toast.error(`Failed to add server: ${error.message}`);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Connect & Add';
+    }
+}
+
+// ============================================================================
+// MCP OAUTH FLOW
+// ============================================================================
+
+async function connectMcpOAuth(serverId) {
+    const redirectUri = `${window.location.origin}/api/mcp/oauth/callback`;
+    try {
+        const resp = await api.post(`/api/mcp/${serverId}/oauth/start`, { redirect_uri: redirectUri });
+        // Redirect the browser to the authorization endpoint.
+        window.location.href = resp.auth_url;
+    } catch (error) {
+        toast.error(`Failed to start OAuth flow: ${error.message || 'Unknown error'}`);
+    }
+}
+
+// Handle ?mcp_connected=... and ?mcp_error=... query params after OAuth redirect.
+function handleMcpOAuthRedirect() {
+    const params = new URLSearchParams(window.location.search);
+    const connectedId = params.get('mcp_connected');
+    const errorMsg = params.get('mcp_error');
+
+    if (connectedId) {
+        // Remove the param from the URL without a page reload.
+        const url = new URL(window.location.href);
+        url.searchParams.delete('mcp_connected');
+        window.history.replaceState({}, '', url.toString());
+
+        toast.success(`OAuth authorization successful for '${connectedId}'. Refreshing tools…`);
+        // Auto-refresh tools for the newly-authorized server.
+        setTimeout(() => refreshMcpServer(connectedId), 800);
+    } else if (errorMsg) {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('mcp_error');
+        window.history.replaceState({}, '', url.toString());
+        toast.error(`OAuth authorization failed: ${decodeURIComponent(errorMsg)}`);
+    }
+}
+
+// ============================================================================
+// MCP CREDENTIALS MODAL (static-header servers only)
+// ============================================================================
+
+function openMcpCredentialsModal(serverId) {
+    const srv = (settingsState.mcpServers || {})[`mcp_${serverId}`] || {};
+    document.getElementById('mcp-creds-server-id').value = serverId;
+    document.getElementById('mcp-creds-title').textContent = `Update Credentials — ${srv.display_name || serverId}`;
+
+    const headersSection = document.getElementById('mcp-creds-headers-section');
+    const headersList = document.getElementById('mcp-creds-headers-list');
+    headersList.innerHTML = '';
+
+    const headerNames = srv.header_names || [];
+    if (headerNames.length > 0) {
+        headersSection.style.display = '';
+        headerNames.forEach(name => {
+            const row = document.createElement('div');
+            row.style = 'display:flex; gap:6px; margin-bottom:6px; align-items:center;';
+            row.innerHTML = `
+                <span style="flex:1; font-size:0.9rem;">${escapeHtml(name)}</span>
+                <input type="password" class="form-input mcp-cred-header-value" data-name="${escapeAttr(name)}"
+                    placeholder="New value (blank = keep existing)" style="flex:1.5;">`;
+            headersList.appendChild(row);
+        });
+    } else {
+        headersSection.style.display = 'none';
+    }
+
+    document.getElementById('mcpCredentialsModal').style.display = 'flex';
+}
+
+function closeMcpCredentialsModal() {
+    document.getElementById('mcpCredentialsModal').style.display = 'none';
+}
+
+async function saveMcpCredentials() {
+    const serverId = document.getElementById('mcp-creds-server-id').value;
+    const headers = [];
+
+    document.querySelectorAll('#mcp-creds-headers-list .mcp-cred-header-value').forEach(input => {
+        if (input.value) headers.push({ name: input.dataset.name, value: input.value });
+    });
+
+    if (!headers.length) {
+        toast.error('No values entered — nothing to update');
+        return;
+    }
+
+    const btn = document.getElementById('mcp-creds-save-btn');
+    btn.disabled = true;
+    try {
+        await api.put(`/api/mcp/${serverId}/credentials`, { headers });
+        toast.success('Credentials updated');
+        closeMcpCredentialsModal();
+    } catch (error) {
+        toast.error('Failed to save credentials: ' + (error.message || 'Unknown error'));
+    } finally {
+        btn.disabled = false;
+    }
+}

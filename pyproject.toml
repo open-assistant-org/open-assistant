@@ -73,6 +73,7 @@ dependencies = [
     "scipy>=1.12.0",
     "kaleido>=0.2.1",
     "jinja2>=3.1.0",
+    "mcp>=1.2.0",
 ]
 
 [project.optional-dependencies]
