@@ -11,6 +11,7 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
+from src.core.concurrency import run_llm_blocking
 from src.core.llm_client import LLMClient, LLMConfig
 from src.core.repositories.skill import SkillRepository
 from src.core.tools.executor import ToolExecutor
@@ -30,6 +31,12 @@ from src.utils.json_utils import try_repair_json
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+# Extra iterations granted to the coordinator purely for sub-task coordination
+# (dispatch_task / wait_for_tasks).  These tools shouldn't consume the same
+# budget as real work — otherwise the coordinator exhausts its iterations while
+# waiting on slow sub-tasks and returns before their results are collected.
+MAX_COORDINATION_ITERATIONS = 20
 
 
 class MessageHandler:
@@ -906,6 +913,37 @@ class MessageHandler:
                     )
                 messages.append({"role": "user", "content": plan_guidance})
 
+            # Re-attach any sub-tasks that finished in the background after a
+            # previous turn already returned (e.g. they outran the wait window
+            # or the coordinator hit its iteration budget). Surfacing them here
+            # means their results are never silently lost. Skipped for sub-task
+            # channels to avoid re-injecting into nested loops.
+            if channel != "subtask":
+                unreported = self.async_task_dispatcher.collect_unreported(conversation_id)
+                if unreported:
+                    lines = []
+                    for t in unreported:
+                        if t.get("status") == "completed":
+                            lines.append(
+                                f"- Sub-task {t['task_id']} ({t.get('description', '')[:80]}) "
+                                f"completed:\n{t.get('result', '')}"
+                            )
+                        else:
+                            lines.append(
+                                f"- Sub-task {t['task_id']} ({t.get('description', '')[:80]}) "
+                                f"failed: {t.get('error', '')}"
+                            )
+                    reattach_msg = (
+                        "[Background sub-tasks from an earlier turn have since finished. "
+                        "Incorporate these results if they are relevant to the user's current "
+                        "message:]\n" + "\n\n".join(lines)
+                    )
+                    messages.append({"role": "user", "content": reattach_msg})
+                    logger.info(
+                        f"Re-attached {len(unreported)} finished sub-task(s) "
+                        f"to conversation {conversation_id}"
+                    )
+
             # Log message summary for debugging
             logger.debug(
                 f"Final message list: {len(messages)} messages. "
@@ -975,14 +1013,14 @@ class MessageHandler:
             # Call LLM (with tools if available, without if none)
             logger.debug(f"Calling LLM with {len(messages)} messages and {len(tools)} tools")
             if tools:
-                response = await asyncio.to_thread(
+                response = await run_llm_blocking(
                     llm_client.complete_with_tools,
                     messages=messages,
                     tools=tools,
                     model_override=media_override,
                 )
             else:
-                response = await asyncio.to_thread(
+                response = await run_llm_blocking(
                     llm_client.complete, messages=messages, model_override=media_override
                 )
 
@@ -1034,7 +1072,7 @@ class MessageHandler:
                                 ),
                             }
                         )
-                        summary_resp = await asyncio.to_thread(
+                        summary_resp = await run_llm_blocking(
                             llm_client.complete,
                             messages=messages,
                             model_override=llm_client.config.get_worker_model(),
@@ -1149,7 +1187,7 @@ class MessageHandler:
                             ),
                         }
                     )
-                    fallback_resp = await asyncio.to_thread(
+                    fallback_resp = await run_llm_blocking(
                         llm_client.complete,
                         messages=messages,
                         model_override=llm_client.config.get_worker_model(),
@@ -1266,6 +1304,12 @@ class MessageHandler:
                     description = arguments.get("description", "")
                     context = arguments.get("context", "")
                     skill_name = arguments.get("skill") or None
+                    # Coordination shouldn't eat into the work budget (see
+                    # MAX_COORDINATION_ITERATIONS).
+                    effective_max_iterations = min(
+                        effective_max_iterations + 1,
+                        self.max_iterations + MAX_COORDINATION_ITERATIONS,
+                    )
                     logger.info(
                         f"dispatch_task called: {description[:100]}"
                         + (f" [skill={skill_name}]" if skill_name else "")
@@ -1329,10 +1373,18 @@ class MessageHandler:
                 # ----------------------------------------------------------
                 if tool_name == "wait_for_tasks":
                     requested_ids = arguments.get("task_ids") or []
-                    timeout = float(arguments.get("timeout_seconds", 300))
+                    timeout = float(arguments.get("timeout_seconds", 900))
                     progress_message = arguments.get(
                         "progress_message",
                         "Working on background tasks, please wait…",
+                    )
+
+                    # Coordinating sub-tasks shouldn't burn the main iteration
+                    # budget — otherwise the coordinator runs out of iterations
+                    # while waiting and returns before slow tasks are collected.
+                    effective_max_iterations = min(
+                        effective_max_iterations + 1,
+                        self.max_iterations + MAX_COORDINATION_ITERATIONS,
                     )
 
                     # Determine which tasks we're waiting for
@@ -1343,7 +1395,7 @@ class MessageHandler:
 
                     logger.info(
                         f"wait_for_tasks: waiting for {len(requested_ids)} task(s): "
-                        f"{requested_ids}"
+                        f"{requested_ids} (timeout={timeout}s)"
                     )
 
                     # Notify the originating channel that work is in progress.
@@ -1355,10 +1407,36 @@ class MessageHandler:
                             message=f"⏳ {progress_message}",
                         )
 
-                    # Block until all requested tasks finish (or timeout)
+                    # Emit periodic progress while long-running tasks work, so
+                    # the wait doesn't go silent for minutes at a time.
+                    async def _wait_progress(counts: Dict[str, int]) -> None:
+                        done = counts["completed"] + counts["failed"]
+                        total = done + counts["running"]
+                        await self._emit(
+                            event_callback,
+                            {
+                                "type": "subtask_progress",
+                                "completed": counts["completed"],
+                                "failed": counts["failed"],
+                                "running": counts["running"],
+                            },
+                        )
+                        if done:
+                            await self._send_progress_notification(
+                                channel=channel,
+                                contact_identifier=contact_identifier,
+                                message=f"⏳ Sub-tasks: {done}/{total} finished, "
+                                f"{counts['running']} still working…",
+                            )
+
+                    # Block until all requested tasks finish (or timeout). Tasks
+                    # still running at timeout are NOT cancelled — they keep
+                    # going and are collected later via get_task_result or
+                    # re-attached automatically on the next turn.
                     results = await self.async_task_dispatcher.wait_for(
                         task_ids=requested_ids,
                         timeout=timeout,
+                        progress_callback=_wait_progress if requested_ids else None,
                     )
 
                     # Build completion summary and notify channel
@@ -1369,8 +1447,10 @@ class MessageHandler:
                     if failed:
                         parts.append(f"{failed} failed")
                     if still_running:
-                        parts.append(f"{still_running} timed out")
-                    summary = "✅ Sub-tasks done: " + ", ".join(parts)
+                        # These are NOT dead — they exceeded the wait window and
+                        # keep running in the background.
+                        parts.append(f"{still_running} still running in background")
+                    summary = "✅ Sub-tasks: " + ", ".join(parts)
 
                     if requested_ids:
                         await self._send_progress_notification(
@@ -1379,11 +1459,23 @@ class MessageHandler:
                             message=summary,
                         )
 
+                    guidance = ""
+                    if still_running:
+                        guidance = (
+                            " Sub-tasks still running are NOT failed — they are continuing in "
+                            "the background. Either call wait_for_tasks again (optionally with a "
+                            "larger timeout_seconds) to keep waiting, or proceed with the results "
+                            "you have; the remaining results will be surfaced automatically once "
+                            "they finish."
+                        )
+
                     tool_results.append(
                         {
                             "role": "tool",
                             "tool_call_id": tool_call_id,
-                            "content": json.dumps({"tasks": results, "summary": summary}),
+                            "content": json.dumps(
+                                {"tasks": results, "summary": summary + guidance}
+                            ),
                         }
                     )
                     tools_executed.append(tool_name)
@@ -1570,7 +1662,7 @@ class MessageHandler:
                 )
 
                 # Get final response without tools
-                final_response_obj = await asyncio.to_thread(
+                final_response_obj = await run_llm_blocking(
                     llm_client.complete,
                     messages=messages,
                     model_override=llm_client.config.get_worker_model(),
@@ -1605,7 +1697,7 @@ class MessageHandler:
             }
         )
 
-        final_response_obj = await asyncio.to_thread(
+        final_response_obj = await run_llm_blocking(
             llm_client.complete,
             messages=messages,
             model_override=llm_client.config.get_worker_model(),
@@ -1692,7 +1784,7 @@ class MessageHandler:
         ]
 
         try:
-            resp = await asyncio.to_thread(
+            resp = await run_llm_blocking(
                 llm_client.complete,
                 messages=validation_messages,
                 model_override=llm_client.config.get_worker_model(),
