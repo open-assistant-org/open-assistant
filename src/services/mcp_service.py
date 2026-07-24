@@ -4,6 +4,10 @@ Phase 1: connect to remote MCP servers over Streamable HTTP, discover their
 tools, register each tool in the global ToolRegistry as ``mcp_{id}_{tool}``, and
 execute tool calls by opening a short-lived session per call.
 
+Phase 2: launch local MCP servers as stdio subprocesses (e.g. ``npx …`` or
+``uvx …``) and keep the subprocess alive across calls via a per-server
+``_StdioSessionManager``.
+
 Design notes
 ------------
 * This mirrors :class:`~src.services.plugin_service.PluginService`: dynamic tools
@@ -12,9 +16,10 @@ Design notes
 * The ``mcp`` SDK is imported lazily inside the methods that actually talk to a
   server, so the application still boots (and can register cached tools) even if
   the package is not installed yet.
-* Auth is static headers only (no OAuth). Header *values* are stored encrypted in
-  ``service_credentials`` under ``mcp_{id}``; the config JSON holds only names.
-  Several headers are supported per server (e.g. Cloudflare Access).
+* Auth/credentials: header *values* (HTTP) and env var *values* (stdio) are
+  stored encrypted in ``service_credentials`` under ``mcp_{id}`` as
+  ``{"headers": {...}, "env": {...}}``. Config JSON holds only names, never
+  secret values.
 * Adding a server also creates an agent/skill row so the server's tools are
   triggered by the user's chosen intent keywords — see ``docs/mcp-servers.md``
   and ``src/models/skill.py`` for why agents == skills.
@@ -22,6 +27,7 @@ Design notes
 
 import asyncio
 import json
+from contextlib import AsyncExitStack
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
@@ -79,6 +85,71 @@ def _describe_exception(exc: BaseException) -> str:
     return "; ".join(unique) or str(exc) or type(exc).__name__
 
 
+class _StdioSessionManager:
+    """Manages a persistent stdio subprocess connection to one MCP server.
+
+    The subprocess is started lazily on the first call and kept alive across
+    subsequent calls. If the process dies, the next call reconnects. Thread
+    safety is provided by an ``asyncio.Lock``.
+    """
+
+    def __init__(self, server_id: str, command: str, args: List[str], env: Dict[str, str]):
+        self._server_id = server_id
+        self._command = command
+        self._args = args
+        self._env = env
+        self._lock = asyncio.Lock()
+        self._session: Any = None
+        self._exit_stack: Optional[AsyncExitStack] = None
+
+    async def run(self, fn: Callable[[Any], Awaitable[Any]]) -> Any:
+        """Ensure the subprocess session is alive, then run ``fn(session)``."""
+        async with self._lock:
+            if self._session is None:
+                await self._connect()
+        try:
+            return await fn(self._session)
+        except Exception:
+            # Session may be dead (process exited, pipe broken…); invalidate
+            # it so the next call reconnects cleanly.
+            async with self._lock:
+                await self._close_nolock()
+            raise
+
+    async def _connect(self) -> None:
+        from mcp import ClientSession
+        from mcp.client.stdio import StdioServerParameters, stdio_client
+
+        params = StdioServerParameters(
+            command=self._command,
+            args=self._args,
+            env=self._env or None,
+        )
+        stack = AsyncExitStack()
+        try:
+            read, write = await stack.enter_async_context(stdio_client(params))
+            session = await stack.enter_async_context(ClientSession(read, write))
+            await asyncio.wait_for(session.initialize(), timeout=_MCP_TIMEOUT_SECONDS)
+        except Exception:
+            await stack.aclose()
+            raise
+        self._exit_stack = stack
+        self._session = session
+
+    async def close(self) -> None:
+        async with self._lock:
+            await self._close_nolock()
+
+    async def _close_nolock(self) -> None:
+        if self._exit_stack is not None:
+            try:
+                await self._exit_stack.aclose()
+            except Exception:
+                pass
+            self._exit_stack = None
+            self._session = None
+
+
 class McpService(BaseService):
     """Manages MCP server definitions and executes their tools."""
 
@@ -96,6 +167,8 @@ class McpService(BaseService):
         self.agent_registry = agent_registry
 
         self._configs: Dict[str, McpServerConfig] = {}
+        # Persistent stdio subprocess managers, keyed by server_id.
+        self._stdio_conns: Dict[str, _StdioSessionManager] = {}
         self._load_all_configs()
 
     # ------------------------------------------------------------------
@@ -179,14 +252,26 @@ class McpService(BaseService):
         }
 
     # ------------------------------------------------------------------
-    # Credentials (secure, multi-header)
+    # Credentials (secure, multi-header + env vars)
     # ------------------------------------------------------------------
+
+    def _load_credentials(self, server_id: str) -> Dict[str, Any]:
+        """Return the raw decrypted credential blob for a server."""
+        raw = self.credentials_repo.get(f"mcp_{server_id}") or {}
+        data = raw.get("credential_data", raw)
+        return data if isinstance(data, dict) else {}
+
+    def _save_credentials(self, server_id: str, data: Dict[str, Any]) -> None:
+        self.credentials_repo.store(
+            service_name=f"mcp_{server_id}",
+            credential_type="api_key",
+            credential_data=data,
+        )
 
     def _load_header_values(self, server_id: str) -> Dict[str, str]:
         """Return the decrypted {header_name: value} map for a server."""
-        raw = self.credentials_repo.get(f"mcp_{server_id}") or {}
-        data = raw.get("credential_data", raw)
-        headers = data.get("headers") if isinstance(data, dict) else None
+        creds = self._load_credentials(server_id)
+        headers = creds.get("headers")
         return {str(k): str(v) for k, v in headers.items()} if isinstance(headers, dict) else {}
 
     def _store_header_values(self, server_id: str, headers: Dict[str, str]) -> None:
@@ -195,13 +280,32 @@ class McpService(BaseService):
         clean = {k: v for k, v in headers.items() if v}
         if not clean:
             return
-        existing = self._load_header_values(server_id)
+        creds = self._load_credentials(server_id)
+        existing = creds.get("headers") or {}
+        if not isinstance(existing, dict):
+            existing = {}
         existing.update(clean)
-        self.credentials_repo.store(
-            service_name=f"mcp_{server_id}",
-            credential_type="api_key",
-            credential_data={"headers": existing},
-        )
+        creds["headers"] = existing
+        self._save_credentials(server_id, creds)
+
+    def _load_env_values(self, server_id: str) -> Dict[str, str]:
+        """Return the decrypted {env_var_name: value} map for a server."""
+        creds = self._load_credentials(server_id)
+        env = creds.get("env")
+        return {str(k): str(v) for k, v in env.items()} if isinstance(env, dict) else {}
+
+    def _store_env_values(self, server_id: str, env: Dict[str, str]) -> None:
+        """Encrypt and persist the {env_var_name: value} map for a server."""
+        clean = {k: v for k, v in env.items() if v}
+        if not clean:
+            return
+        creds = self._load_credentials(server_id)
+        existing = creds.get("env") or {}
+        if not isinstance(existing, dict):
+            existing = {}
+        existing.update(clean)
+        creds["env"] = existing
+        self._save_credentials(server_id, creds)
 
     def _build_request_headers(self, cfg: McpServerConfig) -> Dict[str, str]:
         """Assemble the auth headers to send, from stored secret values."""
@@ -212,11 +316,52 @@ class McpService(BaseService):
                 headers[h.name] = stored[h.name]
         return headers
 
+    def _build_stdio_env(self, cfg: McpServerConfig) -> Dict[str, str]:
+        """Assemble the env vars to pass to the subprocess, from stored values."""
+        stored = self._load_env_values(cfg.id)
+        env: Dict[str, str] = {}
+        for ev in cfg.env_vars:
+            if ev.name in stored:
+                env[ev.name] = stored[ev.name]
+        return env
+
     # ------------------------------------------------------------------
-    # MCP client (lazy import)
+    # MCP client (lazy import, transport-aware)
     # ------------------------------------------------------------------
 
+    def _get_stdio_conn(self, cfg: McpServerConfig) -> _StdioSessionManager:
+        """Return the persistent stdio session manager for a server, creating it
+        lazily. Call this each time (not once at startup) because credentials
+        may have changed after the manager was last created."""
+        existing = self._stdio_conns.get(cfg.id)
+        env = self._build_stdio_env(cfg)
+        if existing is None:
+            mgr = _StdioSessionManager(
+                cfg.id,
+                cfg.command,  # type: ignore[arg-type]
+                cfg.args,
+                env,
+            )
+            self._stdio_conns[cfg.id] = mgr
+            return mgr
+        # If env has changed (e.g. credentials were updated), rebuild the manager
+        # so the next call reconnects with the new values.
+        if existing._env != env:
+            self._stdio_conns.pop(cfg.id)
+            mgr = _StdioSessionManager(cfg.id, cfg.command, cfg.args, env)  # type: ignore[arg-type]
+            self._stdio_conns[cfg.id] = mgr
+            return mgr
+        return existing
+
     async def _run_with_session(
+        self, cfg: McpServerConfig, fn: Callable[[Any], Awaitable[Any]]
+    ) -> Any:
+        """Dispatch to the appropriate transport and run ``fn(session)``."""
+        if cfg.transport == "stdio":
+            return await self._run_with_stdio_session(cfg, fn)
+        return await self._run_with_http_session(cfg, fn)
+
+    async def _run_with_http_session(
         self, cfg: McpServerConfig, fn: Callable[[Any], Awaitable[Any]]
     ) -> Any:
         """Open a short-lived Streamable-HTTP session and run ``fn(session)``."""
@@ -243,15 +388,43 @@ class McpService(BaseService):
 
         try:
             return await asyncio.wait_for(_do(), timeout=_MCP_TIMEOUT_SECONDS)
-        except asyncio.TimeoutError as e:
+        except asyncio.TimeoutError:
             raise RuntimeError(
                 f"Timed out after {int(_MCP_TIMEOUT_SECONDS)}s connecting to {cfg.url}"
-            ) from e
+            )
         except Exception as e:
             # The MCP client runs its transport inside an anyio task group, so a
             # real failure (connection refused, HTTP 401, DNS, OAuth challenge…)
             # arrives wrapped in an ExceptionGroup whose default message is the
             # unhelpful "unhandled errors in a TaskGroup". Surface the leaf cause.
+            raise RuntimeError(_describe_exception(e)) from None
+
+    async def _run_with_stdio_session(
+        self, cfg: McpServerConfig, fn: Callable[[Any], Awaitable[Any]]
+    ) -> Any:
+        """Run ``fn(session)`` against a persistent stdio subprocess."""
+        try:
+            from mcp import ClientSession  # noqa: F401 – presence check
+            from mcp.client.stdio import stdio_client  # noqa: F401
+        except ImportError as e:  # pragma: no cover
+            raise McpSdkNotInstalled(
+                "The 'mcp' Python SDK is not installed. Install it (pip install mcp) "
+                "to connect to MCP servers."
+            ) from e
+
+        conn = self._get_stdio_conn(cfg)
+
+        try:
+            return await asyncio.wait_for(conn.run(fn), timeout=_MCP_TIMEOUT_SECONDS)
+        except asyncio.TimeoutError:
+            # Invalidate the session: the subprocess may be hanging.
+            await conn.close()
+            self._stdio_conns.pop(cfg.id, None)
+            raise RuntimeError(
+                f"Timed out after {int(_MCP_TIMEOUT_SECONDS)}s communicating with "
+                f"stdio server '{cfg.id}' (command: {cfg.command})"
+            )
+        except Exception as e:
             raise RuntimeError(_describe_exception(e)) from None
 
     async def _discover(self, cfg: McpServerConfig) -> List[McpDiscoveredTool]:
@@ -295,7 +468,7 @@ class McpService(BaseService):
         self._log_web_request(
             service_name=f"mcp_{server_id}",
             action=mcp_tool_name,
-            endpoint=cfg.url,
+            endpoint=cfg.url or f"stdio:{cfg.command}",
             method="POST",
         )
 
@@ -345,7 +518,7 @@ class McpService(BaseService):
     def _is_enabled(self, server_id: str) -> bool:
         return settings_truthy(self.settings_repo.get(f"mcp.{server_id}.enabled"))
 
-    def set_enabled(self, server_id: str, enabled: bool) -> None:
+    async def set_enabled(self, server_id: str, enabled: bool) -> None:
         if server_id not in self._configs:
             raise KeyError(f"MCP server '{server_id}' not found")
         self.settings_repo.set(f"mcp.{server_id}.enabled", enabled, value_type="bool")
@@ -355,6 +528,14 @@ class McpService(BaseService):
             agent = self.agent_registry.get_agent_by_name(f"mcp_{server_id}")
             if agent:
                 self.agent_registry.toggle_agent(agent.id, enabled)
+        # Close the stdio subprocess when a server is disabled so it doesn't
+        # linger in the background.
+        if not enabled and server_id in self._stdio_conns:
+            conn = self._stdio_conns.pop(server_id)
+            try:
+                await conn.close()
+            except Exception as e:
+                logger.warning(f"Error closing stdio conn for '{server_id}': {e}")
 
     # ------------------------------------------------------------------
     # CRUD
@@ -371,9 +552,12 @@ class McpService(BaseService):
                     icon=cfg.icon,
                     transport=cfg.transport,
                     url=cfg.url,
+                    header_names=[h.name for h in cfg.auth_headers],
+                    command=cfg.command,
+                    args=cfg.args,
+                    env_var_names=[ev.name for ev in cfg.env_vars],
                     enabled=self._is_enabled(server_id),
                     has_credentials=bool(self.credentials_repo.get(f"mcp_{server_id}")),
-                    header_names=[h.name for h in cfg.auth_headers],
                     intent_keywords=cfg.intent_keywords,
                     tool_count=len(cfg.discovered_tools),
                     tool_names=[t.name for t in cfg.discovered_tools],
@@ -396,15 +580,21 @@ class McpService(BaseService):
             display_name=request.display_name,
             description=request.description,
             icon=request.icon or "🔌",
-            transport="http",
+            transport=request.transport,
             url=request.url,
             auth_headers=[{"name": h.name} for h in request.auth_headers],
+            command=request.command,
+            args=request.args,
+            env_vars=[{"name": ev.name} for ev in request.env_vars],
             intent_keywords=[k.strip() for k in request.intent_keywords if k.strip()],
         )
 
-        # Store secret header values BEFORE discovery so authenticated servers
-        # can be reached during the initial tools/list call.
-        self._store_header_values(request.id, {h.name: h.value for h in request.auth_headers})
+        # Store secret values BEFORE discovery so authenticated servers can be
+        # reached during the initial tools/list call.
+        if request.auth_headers:
+            self._store_header_values(request.id, {h.name: h.value for h in request.auth_headers})
+        if request.env_vars:
+            self._store_env_values(request.id, {ev.name: ev.value for ev in request.env_vars})
 
         # Connect and discover tools (raises on failure — nothing is persisted).
         try:
@@ -437,23 +627,39 @@ class McpService(BaseService):
         return cfg
 
     def save_credentials(self, server_id: str, request: McpCredentialsRequest) -> None:
-        """Update stored header values (and add any new header names)."""
+        """Update stored header values and/or env var values."""
         cfg = self._configs.get(server_id)
         if not cfg:
             raise KeyError(f"MCP server '{server_id}' not found")
 
-        known = {h.name for h in cfg.auth_headers}
-        new_names = [h.name for h in request.headers if h.name not in known]
-        if new_names:
-            # Rebuild the config through the model so the new header names are
-            # validated, rather than mutating the typed list in place.
-            data = cfg.model_dump()
-            data["auth_headers"] = list(data["auth_headers"]) + [{"name": n} for n in new_names]
-            cfg = McpServerConfig.model_validate(data)
-            self._configs[server_id] = cfg
-            self._save_config(cfg)
+        if request.headers:
+            # Add any new header names to the config.
+            known_headers = {h.name for h in cfg.auth_headers}
+            new_header_names = [h.name for h in request.headers if h.name not in known_headers]
+            if new_header_names:
+                data = cfg.model_dump()
+                data["auth_headers"] = list(data["auth_headers"]) + [
+                    {"name": n} for n in new_header_names
+                ]
+                cfg = McpServerConfig.model_validate(data)
+                self._configs[server_id] = cfg
+                self._save_config(cfg)
+            self._store_header_values(server_id, {h.name: h.value for h in request.headers})
 
-        self._store_header_values(server_id, {h.name: h.value for h in request.headers})
+        if request.env_vars:
+            # Add any new env var names to the config.
+            known_env = {ev.name for ev in cfg.env_vars}
+            new_env_names = [ev.name for ev in request.env_vars if ev.name not in known_env]
+            if new_env_names:
+                data = cfg.model_dump()
+                data["env_vars"] = list(data["env_vars"]) + [{"name": n} for n in new_env_names]
+                cfg = McpServerConfig.model_validate(data)
+                self._configs[server_id] = cfg
+                self._save_config(cfg)
+            self._store_env_values(server_id, {ev.name: ev.value for ev in request.env_vars})
+            # Invalidate the stdio session so the next call picks up new env values.
+            if server_id in self._stdio_conns:
+                self._stdio_conns.pop(server_id)
 
     async def test_server(self, server_id: str) -> McpTestResult:
         """Connect to a server and report reachability + tool count."""
@@ -473,7 +679,7 @@ class McpService(BaseService):
         except Exception as e:  # pragma: no cover - network dependent
             return McpTestResult(success=False, message=f"Connection failed: {e}")
 
-    def delete_server(self, server_id: str) -> None:
+    async def delete_server(self, server_id: str) -> None:
         """Remove a server: unregister tools, drop the agent row, creds, config."""
         if server_id not in self._configs:
             raise KeyError(f"MCP server '{server_id}' not found")
@@ -483,6 +689,14 @@ class McpService(BaseService):
             self.agent_registry.delete_agent(f"mcp_{server_id}")
         self.credentials_repo.delete(f"mcp_{server_id}")
         self.settings_repo.set(f"mcp.{server_id}.enabled", False, value_type="bool")
+
+        # Close any lingering stdio subprocess.
+        if server_id in self._stdio_conns:
+            conn = self._stdio_conns.pop(server_id)
+            try:
+                await conn.close()
+            except Exception as e:
+                logger.warning(f"Error closing stdio conn for '{server_id}': {e}")
 
         path = self._config_path(server_id)
         if path.exists():

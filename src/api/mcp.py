@@ -56,7 +56,7 @@ async def toggle_server(server_id: str, body: McpEnableRequest, request: Request
     """Enable or disable an MCP server (and its generated agent row)."""
     mcp_service = _get_mcp_service(request)
     try:
-        mcp_service.set_enabled(server_id, body.enabled)
+        await mcp_service.set_enabled(server_id, body.enabled)
         return {"success": True, "server_id": server_id, "enabled": body.enabled}
     except KeyError:
         raise HTTPException(status_code=404, detail=f"MCP server '{server_id}' not found")
@@ -111,7 +111,7 @@ async def delete_server(server_id: str, request: Request) -> dict:
     """Delete an MCP server, its tools, credentials, and agent row."""
     mcp_service = _get_mcp_service(request)
     try:
-        mcp_service.delete_server(server_id)
+        await mcp_service.delete_server(server_id)
         return {"success": True, "server_id": server_id}
     except KeyError:
         raise HTTPException(status_code=404, detail=f"MCP server '{server_id}' not found")

@@ -463,7 +463,7 @@
 
     <!-- Add MCP Server Modal -->
     <div id="addMcpModal" class="modal" style="display: none;">
-        <div class="modal-content">
+        <div class="modal-content" style="max-width:600px;">
             <div class="modal-header">
                 <h2>Add MCP Server</h2>
                 <button class="modal-close" onclick="closeAddMcpModal()">&times;</button>
@@ -482,23 +482,93 @@
                     <input type="text" id="new-mcp-description" class="form-input" placeholder="What this server does">
                 </div>
                 <div class="form-group">
-                    <label for="new-mcp-url">Server URL (Streamable HTTP endpoint)</label>
-                    <input type="text" id="new-mcp-url" class="form-input" placeholder="https://example.com/mcp">
-                </div>
-                <div class="form-group">
                     <label for="new-mcp-keywords">Intent Keywords (comma-separated)</label>
                     <input type="text" id="new-mcp-keywords" class="form-input" placeholder="cloudflare, gateway, cdn">
                     <div class="form-hint">A message containing any of these words activates this server's tools.</div>
                 </div>
+
+                <!-- Transport selector -->
                 <div class="form-group">
-                    <label>Auth Headers <span class="text-muted">(values stored encrypted)</span></label>
-                    <div id="mcp-headers-list"></div>
-                    <button type="button" onclick="addMcpHeaderRow()" class="btn btn-secondary" style="margin-top:6px;">+ Add Header</button>
+                    <label>Transport</label>
+                    <div style="display:flex; gap:16px; margin-top:4px;">
+                        <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                            <input type="radio" name="mcp-transport" value="http" checked onchange="onMcpTransportChange(this.value)">
+                            Remote HTTP
+                        </label>
+                        <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                            <input type="radio" name="mcp-transport" value="stdio" onchange="onMcpTransportChange(this.value)">
+                            Local Command (stdio)
+                        </label>
+                    </div>
+                </div>
+
+                <!-- HTTP fields -->
+                <div id="mcp-http-fields">
+                    <div class="form-group">
+                        <label for="new-mcp-url">Server URL (Streamable HTTP endpoint)</label>
+                        <input type="text" id="new-mcp-url" class="form-input" placeholder="https://example.com/mcp">
+                    </div>
+                    <div class="form-group">
+                        <label>Auth Headers <span class="text-muted">(values stored encrypted)</span></label>
+                        <div id="mcp-headers-list"></div>
+                        <button type="button" onclick="addMcpHeaderRow()" class="btn btn-secondary btn-sm" style="margin-top:6px;">+ Add Header</button>
+                    </div>
+                </div>
+
+                <!-- stdio fields -->
+                <div id="mcp-stdio-fields" style="display:none;">
+                    <div class="form-group">
+                        <label for="new-mcp-command">Command</label>
+                        <input type="text" id="new-mcp-command" class="form-input" placeholder="e.g., npx or uvx">
+                        <div class="form-hint">The executable to run. Must be available on the server's PATH.</div>
+                    </div>
+                    <div class="form-group">
+                        <label for="new-mcp-args">Arguments (one per line)</label>
+                        <textarea id="new-mcp-args" class="form-textarea" rows="3"
+                            placeholder="-y&#10;@modelcontextprotocol/server-github"></textarea>
+                        <div class="form-hint">Each line is a separate argument passed to the command.</div>
+                    </div>
+                    <div class="form-group">
+                        <label>Environment Variables <span class="text-muted">(values stored encrypted)</span></label>
+                        <div id="mcp-env-list"></div>
+                        <button type="button" onclick="addMcpEnvRow()" class="btn btn-secondary btn-sm" style="margin-top:6px;">+ Add Env Var</button>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
                 <button onclick="closeAddMcpModal()" class="btn btn-secondary">Cancel</button>
                 <button onclick="createMcpServer()" class="btn btn-primary" id="mcp-create-btn">Connect &amp; Add</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Update MCP Credentials Modal -->
+    <div id="mcpCredentialsModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width:540px;">
+            <div class="modal-header">
+                <h2 id="mcp-creds-title">Update Credentials</h2>
+                <button class="modal-close" onclick="closeMcpCredentialsModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted" style="margin-bottom:12px;">
+                    Enter new values to update stored secrets. Leave a field blank to keep the existing value.
+                </p>
+                <input type="hidden" id="mcp-creds-server-id">
+                <input type="hidden" id="mcp-creds-transport">
+                <!-- HTTP headers -->
+                <div id="mcp-creds-http-section" style="display:none;">
+                    <label style="font-weight:600;">Auth Headers</label>
+                    <div id="mcp-creds-headers-list" style="margin-top:8px;"></div>
+                </div>
+                <!-- stdio env vars -->
+                <div id="mcp-creds-stdio-section" style="display:none; margin-top:12px;">
+                    <label style="font-weight:600;">Environment Variables</label>
+                    <div id="mcp-creds-env-list" style="margin-top:8px;"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="closeMcpCredentialsModal()" class="btn btn-secondary">Cancel</button>
+                <button onclick="saveMcpCredentials()" class="btn btn-primary" id="mcp-creds-save-btn">Save</button>
             </div>
         </div>
     </div>

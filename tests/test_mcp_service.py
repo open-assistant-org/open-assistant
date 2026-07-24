@@ -1,16 +1,18 @@
 """Tests for the MCP server integration (McpService)."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from src.models.mcp import (
     McpAuthHeaderInput,
+    McpCredentialsRequest,
     McpDiscoveredTool,
+    McpEnvVarInput,
     McpServerConfig,
     McpServerCreateRequest,
 )
-from src.services.mcp_service import McpService
+from src.services.mcp_service import McpService, _StdioSessionManager
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -51,10 +53,11 @@ def _make_service(tmp_path, agent_registry=None) -> McpService:
     return svc
 
 
-def _config(server_id="cf_gateway", tools=None) -> McpServerConfig:
+def _http_config(server_id="cf_gateway", tools=None) -> McpServerConfig:
     return McpServerConfig(
         id=server_id,
         display_name="CF Gateway",
+        transport="http",
         url="https://example.com/mcp",
         auth_headers=[{"name": "CF-Access-Client-Id"}, {"name": "CF-Access-Client-Secret"}],
         intent_keywords=["cloudflare"],
@@ -63,14 +66,32 @@ def _config(server_id="cf_gateway", tools=None) -> McpServerConfig:
     )
 
 
+# Alias used by tests that don't care about transport.
+_config = _http_config
+
+
+def _stdio_config(server_id="gh_server", tools=None) -> McpServerConfig:
+    return McpServerConfig(
+        id=server_id,
+        display_name="GitHub MCP",
+        transport="stdio",
+        command="npx",
+        args=["-y", "@modelcontextprotocol/server-github"],
+        env_vars=[{"name": "GITHUB_TOKEN"}],
+        intent_keywords=["github"],
+        discovered_tools=tools
+        or [McpDiscoveredTool(name="list_repos", description="list", input_schema={})],
+    )
+
+
 # ---------------------------------------------------------------------------
-# Secure multi-header storage (the key requirement)
+# Secure multi-header storage (HTTP)
 # ---------------------------------------------------------------------------
 
 
 def test_multiple_headers_stored_and_rebuilt(tmp_path):
     svc = _make_service(tmp_path)
-    cfg = _config()
+    cfg = _http_config()
     svc._store_header_values(
         cfg.id,
         {"CF-Access-Client-Id": "id-123", "CF-Access-Client-Secret": "secret-456"},
@@ -84,7 +105,7 @@ def test_multiple_headers_stored_and_rebuilt(tmp_path):
 
 def test_header_values_never_in_config_json(tmp_path):
     svc = _make_service(tmp_path)
-    cfg = _config()
+    cfg = _http_config()
     svc._configs[cfg.id] = cfg
     svc._store_header_values(cfg.id, {"CF-Access-Client-Id": "id-123"})
     svc._save_config(cfg)
@@ -95,10 +116,45 @@ def test_header_values_never_in_config_json(tmp_path):
 
 def test_blank_value_does_not_overwrite_existing_secret(tmp_path):
     svc = _make_service(tmp_path)
-    cfg = _config()
+    cfg = _http_config()
     svc._store_header_values(cfg.id, {"CF-Access-Client-Id": "id-123"})
     svc._store_header_values(cfg.id, {"CF-Access-Client-Id": ""})  # blank on re-save
     assert svc._build_request_headers(cfg)["CF-Access-Client-Id"] == "id-123"
+
+
+# ---------------------------------------------------------------------------
+# Secure env-var storage (stdio)
+# ---------------------------------------------------------------------------
+
+
+def test_env_var_values_stored_and_rebuilt(tmp_path):
+    svc = _make_service(tmp_path)
+    cfg = _stdio_config()
+    svc._store_env_values(cfg.id, {"GITHUB_TOKEN": "ghp_secret"})
+    env = svc._build_stdio_env(cfg)
+    assert env == {"GITHUB_TOKEN": "ghp_secret"}
+
+
+def test_env_var_values_never_in_config_json(tmp_path):
+    svc = _make_service(tmp_path)
+    cfg = _stdio_config()
+    svc._configs[cfg.id] = cfg
+    svc._store_env_values(cfg.id, {"GITHUB_TOKEN": "ghp_secret"})
+    svc._save_config(cfg)
+    saved = (tmp_path / "mcp_servers" / f"{cfg.id}.json").read_text()
+    assert "ghp_secret" not in saved
+    assert "GITHUB_TOKEN" in saved
+
+
+def test_headers_and_env_stored_in_same_blob(tmp_path):
+    """Both HTTP headers and stdio env vars coexist in one credential blob."""
+    svc = _make_service(tmp_path)
+    server_id = "mixed"
+    svc._store_header_values(server_id, {"Authorization": "Bearer tok"})
+    svc._store_env_values(server_id, {"SECRET": "val"})
+    creds = svc._load_credentials(server_id)
+    assert creds["headers"]["Authorization"] == "Bearer tok"
+    assert creds["env"]["SECRET"] == "val"
 
 
 # ---------------------------------------------------------------------------
@@ -108,7 +164,7 @@ def test_blank_value_does_not_overwrite_existing_secret(tmp_path):
 
 def test_create_tool_name_and_schema(tmp_path):
     svc = _make_service(tmp_path)
-    cfg = _config()
+    cfg = _http_config()
     tool = McpDiscoveredTool(
         name="do_thing",
         description="Does a thing",
@@ -134,7 +190,7 @@ def test_create_tool_name_and_schema(tmp_path):
 
 def test_resolve_tool(tmp_path):
     svc = _make_service(tmp_path)
-    cfg = _config()
+    cfg = _http_config()
     svc._configs[cfg.id] = cfg
     assert svc._resolve_tool("mcp_cf_gateway_do_thing") == ("cf_gateway", "do_thing")
     assert svc._resolve_tool("mcp_cf_gateway_unknown") == (None, None)
@@ -175,7 +231,7 @@ def test_describe_exception_unwraps_task_group():
 @pytest.mark.asyncio
 async def test_execute_tool_routes_to_session(tmp_path):
     svc = _make_service(tmp_path)
-    cfg = _config()
+    cfg = _http_config()
     svc._configs[cfg.id] = cfg
 
     class _Block:
@@ -206,14 +262,64 @@ async def test_execute_tool_routes_to_session(tmp_path):
 async def test_execute_tool_disabled_raises(tmp_path):
     svc = _make_service(tmp_path)
     svc.settings_repo.get.return_value = "false"  # disabled
-    cfg = _config()
+    cfg = _http_config()
     svc._configs[cfg.id] = cfg
     with pytest.raises(ValueError, match="disabled"):
         await svc.execute_tool("mcp_cf_gateway_do_thing", {})
 
 
 # ---------------------------------------------------------------------------
-# add_server wires up the agent/skill row
+# stdio transport — StdioSessionManager
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_stdio_session_manager_reconnects_after_failure(tmp_path):
+    """If fn() raises, the session is invalidated so the next call reconnects."""
+    call_count = 0
+
+    class _FakeSession:
+        async def list_tools(self):
+            return MagicMock(tools=[])
+
+    async def _fake_connect(self):
+        nonlocal call_count
+        call_count += 1
+        self._session = _FakeSession()
+        self._exit_stack = MagicMock()
+        self._exit_stack.aclose = AsyncMock()
+
+    mgr = _StdioSessionManager("srv", "echo", [], {})
+    with patch.object(_StdioSessionManager, "_connect", _fake_connect):
+        # First call succeeds.
+        await mgr.run(lambda s: s.list_tools())
+        assert call_count == 1
+
+        # Simulate a broken session: invalidate manually.
+        mgr._session = None
+        await mgr.run(lambda s: s.list_tools())
+        assert call_count == 2  # reconnected
+
+
+@pytest.mark.asyncio
+async def test_stdio_conn_rebuilt_when_env_changes(tmp_path):
+    """_get_stdio_conn() creates a new manager when env vars change."""
+    svc = _make_service(tmp_path)
+    cfg = _stdio_config()
+    svc._configs[cfg.id] = cfg
+
+    svc._store_env_values(cfg.id, {"GITHUB_TOKEN": "v1"})
+    conn1 = svc._get_stdio_conn(cfg)
+
+    # Updating env should trigger rebuild on the next get.
+    svc._store_env_values(cfg.id, {"GITHUB_TOKEN": "v2"})
+    conn2 = svc._get_stdio_conn(cfg)
+    assert conn1 is not conn2
+    assert conn2._env == {"GITHUB_TOKEN": "v2"}
+
+
+# ---------------------------------------------------------------------------
+# add_server — HTTP and stdio variants
 # ---------------------------------------------------------------------------
 
 
@@ -229,6 +335,7 @@ async def test_add_server_creates_agent_row_with_keywords(tmp_path):
     request = McpServerCreateRequest(
         id="cf_gateway",
         display_name="CF Gateway",
+        transport="http",
         url="https://example.com/mcp",
         auth_headers=[
             McpAuthHeaderInput(name="CF-Access-Client-Id", value="id-1"),
@@ -257,6 +364,34 @@ async def test_add_server_creates_agent_row_with_keywords(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_add_stdio_server_stores_env_vars(tmp_path):
+    agent_registry = MagicMock()
+    agent_registry.get_agent_by_name.return_value = None
+    svc = _make_service(tmp_path, agent_registry=agent_registry)
+
+    async def _fake_discover(cfg):
+        return [McpDiscoveredTool(name="list_repos", description="list", input_schema={})]
+
+    request = McpServerCreateRequest(
+        id="gh_server",
+        display_name="GitHub MCP",
+        transport="stdio",
+        command="npx",
+        args=["-y", "@modelcontextprotocol/server-github"],
+        env_vars=[McpEnvVarInput(name="GITHUB_TOKEN", value="ghp_test")],
+        intent_keywords=["github"],
+    )
+
+    with patch.object(svc, "_discover", side_effect=_fake_discover):
+        with patch.object(svc, "_register_server_tools"):
+            cfg = await svc.add_server(request)
+
+    assert cfg.transport == "stdio"
+    assert cfg.command == "npx"
+    assert svc._build_stdio_env(cfg) == {"GITHUB_TOKEN": "ghp_test"}
+
+
+@pytest.mark.asyncio
 async def test_add_server_rolls_back_credentials_on_discovery_failure(tmp_path):
     svc = _make_service(tmp_path)
 
@@ -266,6 +401,7 @@ async def test_add_server_rolls_back_credentials_on_discovery_failure(tmp_path):
     request = McpServerCreateRequest(
         id="bad_server",
         display_name="Bad",
+        transport="http",
         url="https://example.com/mcp",
         auth_headers=[McpAuthHeaderInput(name="Authorization", value="Bearer x")],
         intent_keywords=[],
@@ -278,3 +414,39 @@ async def test_add_server_rolls_back_credentials_on_discovery_failure(tmp_path):
     # No orphaned secrets left behind.
     assert svc.credentials_repo.get("mcp_bad_server") is None
     assert "bad_server" not in svc._configs
+
+
+# ---------------------------------------------------------------------------
+# save_credentials — header and env-var updates
+# ---------------------------------------------------------------------------
+
+
+def test_save_credentials_updates_headers(tmp_path):
+    svc = _make_service(tmp_path)
+    cfg = _http_config()
+    svc._configs[cfg.id] = cfg
+    svc._store_header_values(cfg.id, {"CF-Access-Client-Id": "old"})
+
+    req = McpCredentialsRequest(
+        headers=[McpAuthHeaderInput(name="CF-Access-Client-Id", value="new")],
+    )
+    svc.save_credentials(cfg.id, req)
+    assert svc._build_request_headers(cfg)["CF-Access-Client-Id"] == "new"
+
+
+def test_save_credentials_updates_env_vars(tmp_path):
+    svc = _make_service(tmp_path)
+    cfg = _stdio_config()
+    svc._configs[cfg.id] = cfg
+    svc._store_env_values(cfg.id, {"GITHUB_TOKEN": "old"})
+
+    # Updating env should invalidate any cached stdio connection.
+    svc._stdio_conns[cfg.id] = MagicMock()
+
+    req = McpCredentialsRequest(
+        env_vars=[McpEnvVarInput(name="GITHUB_TOKEN", value="new")],
+    )
+    svc.save_credentials(cfg.id, req)
+    assert svc._build_stdio_env(cfg)["GITHUB_TOKEN"] == "new"
+    # Connection was invalidated so the next call reconnects with new env.
+    assert cfg.id not in svc._stdio_conns

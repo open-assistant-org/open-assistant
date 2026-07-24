@@ -1521,8 +1521,17 @@ async function testConnection(service) {
 
 async function loadAgents() {
     try {
-        const agentsResponse = await api.get('/api/agents');
+        const [agentsResponse, mcpResponse] = await Promise.all([
+            api.get('/api/agents'),
+            api.get('/api/mcp').catch(() => []),
+        ]);
         settingsState.agents = agentsResponse.agents;
+        // Index MCP server details by their generated agent name so createAgentCard
+        // can look them up when rendering mcp_* rows.
+        settingsState.mcpServers = {};
+        (Array.isArray(mcpResponse) ? mcpResponse : []).forEach(srv => {
+            settingsState.mcpServers[`mcp_${srv.id}`] = srv;
+        });
         renderAgentsList();
     } catch (error) {
         console.error('Failed to load agents:', error);
@@ -1545,6 +1554,10 @@ function renderAgentsList() {
 }
 
 function createAgentCard(agent, index, total) {
+    if (agent.name.startsWith('mcp_')) {
+        return createMcpAgentCard(agent, index, total);
+    }
+
     const toolsCount = agent.tools ? agent.tools.length : 0;
     const statusClass = agent.enabled ? 'status-success' : 'status-warning';
     const statusText = agent.enabled ? 'Enabled' : 'Disabled';
@@ -1599,6 +1612,71 @@ function createAgentCard(agent, index, total) {
     `;
 }
 
+function createMcpAgentCard(agent, index, total) {
+    const srv = (settingsState.mcpServers || {})[agent.name] || {};
+    const statusClass = agent.enabled ? 'status-success' : 'status-warning';
+    const statusText = agent.enabled ? 'Enabled' : 'Disabled';
+    const serverId = agent.name.slice('mcp_'.length);
+    const transport = srv.transport || 'http';
+    const transportBadge = transport === 'stdio'
+        ? '<span class="meta-item" style="background:var(--accent-dim,#1a2a1a);color:var(--accent,#0f0);">stdio</span>'
+        : '<span class="meta-item" style="background:var(--accent-dim,#1a2a1a);color:var(--accent,#0f0);">HTTP</span>';
+    const location = transport === 'stdio'
+        ? (srv.command ? `${srv.command} ${(srv.args || []).join(' ')}`.trim() : '')
+        : (srv.url || '');
+    const keywords = (srv.intent_keywords || []).join(', ');
+    const toolNames = srv.tool_names || [];
+    const toolsHtml = toolNames.length
+        ? `<div style="margin-top:4px; font-size:0.82rem; color:var(--text-muted);">${toolNames.map(t => `<code>${t}</code>`).join(' ')}</div>`
+        : '';
+
+    const upDisabled = index === 0 ? 'disabled' : '';
+    const downDisabled = index === total - 1 ? 'disabled' : '';
+
+    return `
+        <div class="agent-card" id="agent-${agent.name}" style="border-left:3px solid var(--accent,#0f0);">
+            <div class="agent-header">
+                <div class="agent-title">
+                    <div class="agent-priority-controls">
+                        <button class="btn-priority" onclick="moveAgent('${agent.name}', 'up')" ${upDisabled} title="Move up">&#9650;</button>
+                        <button class="btn-priority" onclick="moveAgent('${agent.name}', 'down')" ${downDisabled} title="Move down">&#9660;</button>
+                    </div>
+                    <span class="agent-icon">${srv.icon || '🔌'}</span>
+                    <div class="agent-info">
+                        <h4>${agent.display_name} <span style="font-size:0.75rem;font-weight:normal;color:var(--text-muted);">MCP</span></h4>
+                        <small class="text-muted" title="${escapeHtml(location)}">${escapeHtml(location.length > 60 ? location.slice(0,57)+'…' : location)}</small>
+                    </div>
+                </div>
+                <div class="agent-actions">
+                    <span class="status-badge ${statusClass}">${statusText}</span>
+                    <label class="toggle-label">
+                        <input
+                            type="checkbox"
+                            class="toggle-input"
+                            ${agent.enabled ? 'checked' : ''}
+                            onchange="toggleMcpServer('${serverId}', this.checked)"
+                        >
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+            <div class="agent-body">
+                <div class="agent-meta">
+                    ${transportBadge}
+                    <span class="meta-item">${toolNames.length} tool${toolNames.length !== 1 ? 's' : ''}</span>
+                    ${keywords ? `<span class="meta-item" title="Intent keywords">🔑 ${escapeHtml(keywords)}</span>` : ''}
+                </div>
+                ${toolsHtml}
+            </div>
+            <div class="agent-footer">
+                <button onclick="openMcpCredentialsModal('${serverId}')" class="btn btn-secondary btn-sm">Credentials</button>
+                <button onclick="refreshMcpServer('${serverId}')" class="btn btn-secondary btn-sm">Refresh Tools</button>
+                <button onclick="deleteAgent('${agent.name}')" class="btn btn-danger btn-sm">Remove</button>
+            </div>
+        </div>
+    `;
+}
+
 function getAgentIcon(agentName) {
     const icons = {
         coordinator: '🎯',
@@ -1612,6 +1690,15 @@ function getAgentIcon(agentName) {
         navigator: '🗺️'
     };
     return icons[agentName] || '🤖';
+}
+
+function escapeHtml(str) {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 async function moveAgent(agentName, direction) {
@@ -1658,6 +1745,42 @@ async function toggleAgent(agentName, enabled) {
         if (checkbox) {
             checkbox.checked = !enabled;
         }
+    }
+}
+
+async function toggleMcpServer(serverId, enabled) {
+    // MCP enable/disable goes through the MCP endpoint so the settings gate
+    // (mcp.{id}.enabled) and agent row are kept in lockstep.
+    try {
+        await api.put(`/api/mcp/${serverId}/enable`, { enabled });
+        const agentName = `mcp_${serverId}`;
+        const agent = settingsState.agents.find(a => a.name === agentName);
+        if (agent) agent.enabled = enabled;
+        renderAgentsList();
+        toast.success(`MCP server '${serverId}' ${enabled ? 'enabled' : 'disabled'}`);
+    } catch (error) {
+        console.error('Failed to toggle MCP server:', error);
+        toast.error('Failed to update MCP server: ' + (error.message || 'Unknown error'));
+        const checkbox = document.querySelector(`#agent-mcp_${serverId} .toggle-input`);
+        if (checkbox) checkbox.checked = !enabled;
+    }
+}
+
+async function refreshMcpServer(serverId) {
+    const btn = document.querySelector(`#agent-mcp_${serverId} .btn-secondary`);
+    try {
+        if (btn) { btn.disabled = true; btn.textContent = 'Refreshing…'; }
+        const srv = await api.post(`/api/mcp/${serverId}/refresh`);
+        // Update cached MCP server details.
+        if (settingsState.mcpServers) {
+            settingsState.mcpServers[`mcp_${serverId}`] = srv;
+        }
+        renderAgentsList();
+        toast.success(`Refreshed — ${srv.tool_count} tool(s) discovered`);
+    } catch (error) {
+        toast.error('Refresh failed: ' + (error.message || 'Unknown error'));
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Refresh Tools'; }
     }
 }
 
@@ -2427,13 +2550,24 @@ function showAddMcpModal() {
     document.getElementById('new-mcp-description').value = '';
     document.getElementById('new-mcp-url').value = '';
     document.getElementById('new-mcp-keywords').value = '';
+    document.getElementById('new-mcp-command').value = '';
+    document.getElementById('new-mcp-args').value = '';
     document.getElementById('mcp-headers-list').innerHTML = '';
+    document.getElementById('mcp-env-list').innerHTML = '';
+    // Default to HTTP transport.
+    document.querySelector('input[name="mcp-transport"][value="http"]').checked = true;
+    onMcpTransportChange('http');
     addMcpHeaderRow();
     document.getElementById('addMcpModal').style.display = 'flex';
 }
 
 function closeAddMcpModal() {
     document.getElementById('addMcpModal').style.display = 'none';
+}
+
+function onMcpTransportChange(transport) {
+    document.getElementById('mcp-http-fields').style.display = transport === 'http' ? '' : 'none';
+    document.getElementById('mcp-stdio-fields').style.display = transport === 'stdio' ? '' : 'none';
 }
 
 function addMcpHeaderRow(name = '', value = '') {
@@ -2450,6 +2584,20 @@ function addMcpHeaderRow(name = '', value = '') {
     list.appendChild(row);
 }
 
+function addMcpEnvRow(name = '', value = '') {
+    const list = document.getElementById('mcp-env-list');
+    const row = document.createElement('div');
+    row.className = 'mcp-env-row';
+    row.style = 'display:flex; gap:6px; margin-bottom:6px;';
+    row.innerHTML = `
+        <input type="text" class="form-input mcp-env-name" placeholder="VAR_NAME"
+            value="${escapeAttr(name)}" style="flex:1;">
+        <input type="password" class="form-input mcp-env-value" placeholder="Value"
+            value="${escapeAttr(value)}" style="flex:1;">
+        <button type="button" class="btn-icon" onclick="this.parentElement.remove()">🗑️</button>`;
+    list.appendChild(row);
+}
+
 function collectMcpHeaders() {
     const headers = [];
     document.querySelectorAll('#mcp-headers-list .mcp-header-row').forEach(row => {
@@ -2460,17 +2608,26 @@ function collectMcpHeaders() {
     return headers;
 }
 
+function collectMcpEnvVars() {
+    const envVars = [];
+    document.querySelectorAll('#mcp-env-list .mcp-env-row').forEach(row => {
+        const name = row.querySelector('.mcp-env-name').value.trim();
+        const value = row.querySelector('.mcp-env-value').value;
+        if (name && value) envVars.push({ name, value });
+    });
+    return envVars;
+}
+
 async function createMcpServer() {
     const id = document.getElementById('new-mcp-id').value.trim();
     const displayName = document.getElementById('new-mcp-display-name').value.trim();
-    const url = document.getElementById('new-mcp-url').value.trim();
+    const transport = document.querySelector('input[name="mcp-transport"]:checked').value;
 
     if (!/^[a-z][a-z0-9_]*$/.test(id)) {
         toast.error('Server ID must be lowercase letters, digits, and underscores, starting with a letter');
         return;
     }
     if (!displayName) { toast.error('Display Name is required'); return; }
-    if (!/^https?:\/\//.test(url)) { toast.error('URL must start with http:// or https://'); return; }
 
     const keywords = document.getElementById('new-mcp-keywords').value
         .split(',').map(k => k.trim()).filter(Boolean);
@@ -2479,10 +2636,23 @@ async function createMcpServer() {
         id,
         display_name: displayName,
         description: document.getElementById('new-mcp-description').value.trim(),
-        url,
-        auth_headers: collectMcpHeaders(),
+        transport,
         intent_keywords: keywords,
     };
+
+    if (transport === 'http') {
+        const url = document.getElementById('new-mcp-url').value.trim();
+        if (!/^https?:\/\//.test(url)) { toast.error('URL must start with http:// or https://'); return; }
+        body.url = url;
+        body.auth_headers = collectMcpHeaders();
+    } else {
+        const command = document.getElementById('new-mcp-command').value.trim();
+        if (!command) { toast.error('Command is required for stdio transport'); return; }
+        const argsText = document.getElementById('new-mcp-args').value;
+        body.command = command;
+        body.args = argsText.split('\n').map(a => a.trim()).filter(Boolean);
+        body.env_vars = collectMcpEnvVars();
+    }
 
     const btn = document.getElementById('mcp-create-btn');
     btn.disabled = true;
@@ -2500,5 +2670,90 @@ async function createMcpServer() {
     } finally {
         btn.disabled = false;
         btn.textContent = 'Connect & Add';
+    }
+}
+
+// ============================================================================
+// MCP CREDENTIALS MODAL
+// ============================================================================
+
+function openMcpCredentialsModal(serverId) {
+    const srv = (settingsState.mcpServers || {})[`mcp_${serverId}`] || {};
+    document.getElementById('mcp-creds-server-id').value = serverId;
+    document.getElementById('mcp-creds-transport').value = srv.transport || 'http';
+    document.getElementById('mcp-creds-title').textContent = `Update Credentials — ${srv.display_name || serverId}`;
+
+    const httpSection = document.getElementById('mcp-creds-http-section');
+    const stdioSection = document.getElementById('mcp-creds-stdio-section');
+    const headersList = document.getElementById('mcp-creds-headers-list');
+    const envList = document.getElementById('mcp-creds-env-list');
+
+    headersList.innerHTML = '';
+    envList.innerHTML = '';
+
+    if (srv.transport === 'stdio' || (srv.header_names || []).length === 0) {
+        httpSection.style.display = 'none';
+    } else {
+        httpSection.style.display = '';
+        (srv.header_names || []).forEach(name => {
+            const row = document.createElement('div');
+            row.style = 'display:flex; gap:6px; margin-bottom:6px; align-items:center;';
+            row.innerHTML = `
+                <span style="flex:1; font-size:0.9rem;">${escapeHtml(name)}</span>
+                <input type="password" class="form-input mcp-cred-header-value" data-name="${escapeAttr(name)}"
+                    placeholder="New value (blank = keep existing)" style="flex:1.5;">`;
+            headersList.appendChild(row);
+        });
+    }
+
+    if ((srv.env_var_names || []).length > 0) {
+        stdioSection.style.display = '';
+        (srv.env_var_names || []).forEach(name => {
+            const row = document.createElement('div');
+            row.style = 'display:flex; gap:6px; margin-bottom:6px; align-items:center;';
+            row.innerHTML = `
+                <span style="flex:1; font-size:0.9rem; font-family:monospace;">${escapeHtml(name)}</span>
+                <input type="password" class="form-input mcp-cred-env-value" data-name="${escapeAttr(name)}"
+                    placeholder="New value (blank = keep existing)" style="flex:1.5;">`;
+            envList.appendChild(row);
+        });
+    } else {
+        stdioSection.style.display = 'none';
+    }
+
+    document.getElementById('mcpCredentialsModal').style.display = 'flex';
+}
+
+function closeMcpCredentialsModal() {
+    document.getElementById('mcpCredentialsModal').style.display = 'none';
+}
+
+async function saveMcpCredentials() {
+    const serverId = document.getElementById('mcp-creds-server-id').value;
+    const headers = [];
+    const envVars = [];
+
+    document.querySelectorAll('#mcp-creds-headers-list .mcp-cred-header-value').forEach(input => {
+        if (input.value) headers.push({ name: input.dataset.name, value: input.value });
+    });
+    document.querySelectorAll('#mcp-creds-env-list .mcp-cred-env-value').forEach(input => {
+        if (input.value) envVars.push({ name: input.dataset.name, value: input.value });
+    });
+
+    if (!headers.length && !envVars.length) {
+        toast.error('No values entered — nothing to update');
+        return;
+    }
+
+    const btn = document.getElementById('mcp-creds-save-btn');
+    btn.disabled = true;
+    try {
+        await api.put(`/api/mcp/${serverId}/credentials`, { headers, env_vars: envVars });
+        toast.success('Credentials updated');
+        closeMcpCredentialsModal();
+    } catch (error) {
+        toast.error('Failed to save credentials: ' + (error.message || 'Unknown error'));
+    } finally {
+        btn.disabled = false;
     }
 }
