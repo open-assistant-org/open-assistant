@@ -66,10 +66,6 @@ def _http_config(server_id="cf_gateway", tools=None) -> McpServerConfig:
     )
 
 
-# Alias used by tests that don't care about transport.
-_config = _http_config
-
-
 def _stdio_config(server_id="gh_server", tools=None) -> McpServerConfig:
     return McpServerConfig(
         id=server_id,

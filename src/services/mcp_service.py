@@ -145,7 +145,7 @@ class _StdioSessionManager:
             try:
                 await self._exit_stack.aclose()
             except Exception:
-                pass
+                pass  # best-effort teardown; process may already be dead
             self._exit_stack = None
             self._session = None
 
