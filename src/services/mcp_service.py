@@ -252,7 +252,7 @@ class McpService(BaseService):
             # real failure (connection refused, HTTP 401, DNS, OAuth challenge…)
             # arrives wrapped in an ExceptionGroup whose default message is the
             # unhelpful "unhandled errors in a TaskGroup". Surface the leaf cause.
-            raise RuntimeError(_describe_exception(e)) from e
+            raise RuntimeError(_describe_exception(e)) from None
 
     async def _discover(self, cfg: McpServerConfig) -> List[McpDiscoveredTool]:
         """Connect and list the server's tools."""
