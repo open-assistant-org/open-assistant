@@ -374,6 +374,18 @@ function escapeHtml(str) {
         .replace(/"/g, '&quot;');
 }
 
+// Configure marked once at module level
+if (typeof marked !== 'undefined') {
+    marked.use({ breaks: true, gfm: true });
+}
+
+function renderMarkdown(content) {
+    if (typeof marked === 'undefined' || typeof DOMPurify === 'undefined') {
+        return null;
+    }
+    return DOMPurify.sanitize(marked.parse(content));
+}
+
 // Add message to UI
 function addMessageToUI(content, role) {
     const messageDiv = document.createElement('div');
@@ -381,7 +393,17 @@ function addMessageToUI(content, role) {
 
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
-    contentDiv.textContent = content;
+
+    if (role === 'assistant') {
+        const html = renderMarkdown(content);
+        if (html !== null) {
+            contentDiv.innerHTML = html;
+        } else {
+            contentDiv.textContent = content;
+        }
+    } else {
+        contentDiv.textContent = content;
+    }
 
     messageDiv.appendChild(contentDiv);
     chatMessages.appendChild(messageDiv);

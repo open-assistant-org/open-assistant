@@ -840,6 +840,7 @@ def get_message_handler(
     memory_service=Depends(get_memory_service),
     settings_service=Depends(get_settings_service),
     tool_executor=Depends(get_tool_executor),
+    task_repo=Depends(get_agent_task_repo),
 ):
     """
     Get message handler instance.
@@ -850,6 +851,7 @@ def get_message_handler(
         memory_service: Memory service (injected)
         settings_service: Settings service (injected)
         tool_executor: Tool executor (injected)
+        task_repo: Agent task repository for persisting async sub-task state (injected)
 
     Returns:
         MessageHandler instance
@@ -864,4 +866,5 @@ def get_message_handler(
         tool_executor=tool_executor,
         max_iterations=15,
         max_skills_per_request=5,
+        task_repo=task_repo,
     )

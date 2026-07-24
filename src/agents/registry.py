@@ -1,6 +1,15 @@
 """
-Agent registry for managing agent definitions.
-Provides CRUD operations for agent definitions stored in the database.
+Agent registry for managing agent/skill definitions (admin API layer).
+
+The ``AgentRegistry`` provides CRUD operations for rows in the
+``agent_definitions`` table as seen through the ``AgentDefinition``
+admin model.  The same rows are consumed at runtime by the ``Skill``
+model and ``SkillRepository`` (``src/core/repositories/skill.py``).
+
+Use ``AgentRegistry`` when you need to create, update, reorder, or
+assign tools to specialists via the admin API.  Use ``SkillRepository``
+(or ``skill_repo`` from dependency injection) when you need to select
+skills at request time.
 """
 
 import json
@@ -16,10 +25,12 @@ logger = logging.getLogger(__name__)
 
 class AgentRegistry:
     """
-    Registry for managing agent definitions.
+    Registry for managing agent/skill definitions (admin API layer).
 
-    Handles database operations for agent configurations and provides
-    factory methods for creating CrewAI agents.
+    Handles database CRUD for ``agent_definitions`` rows via the
+    ``AgentDefinition`` admin model.  Does not interact with the
+    live request-handling path; that is the responsibility of
+    ``SkillRepository`` and ``MessageHandler``.
     """
 
     def __init__(self, db_manager: DatabaseManager):

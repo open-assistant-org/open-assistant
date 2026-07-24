@@ -4,6 +4,19 @@ from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
+# Names of built-in specialist skills that can be pinned via dispatch_task.
+# Keep this in sync with the agent_definitions table seed data.
+SPECIALIST_SKILL_NAMES = [
+    "research",
+    "communication",
+    "writer",
+    "file_handler",
+    "planner",
+    "navigator",
+    "browser",
+    "system",
+]
+
 
 class RevisePlanRequest(BaseModel):
     """Request to revise the remaining steps in the current execution plan.
@@ -70,6 +83,11 @@ class DispatchTaskRequest(BaseModel):
     The sub-task runs independently with its own planning loop and tool
     access.  The caller receives a task_id immediately and can poll with
     get_task_result to retrieve the outcome.
+
+    When ``skill`` is provided the sub-task is pinned to that specialist:
+    it receives only that skill's context prompt and tools, bypassing
+    keyword-based skill selection.  This is the recommended way to delegate
+    work to a named specialist (e.g. 'research', 'writer').
     """
 
     description: str = Field(
@@ -84,6 +102,16 @@ class DispatchTaskRequest(BaseModel):
         description=(
             "Optional context from the current conversation to pass to the sub-task "
             "(e.g. user preferences, intermediate results that inform this work)."
+        ),
+    )
+    skill: Optional[str] = Field(
+        default=None,
+        description=(
+            "Name of the specialist skill to run this sub-task as. "
+            "When set, the sub-task uses only that skill's context prompt and tools, "
+            "bypassing keyword-based skill selection. "
+            f"Available specialists: {', '.join(SPECIALIST_SKILL_NAMES)}. "
+            "Omit to let the sub-task perform its own automatic skill selection."
         ),
     )
 
