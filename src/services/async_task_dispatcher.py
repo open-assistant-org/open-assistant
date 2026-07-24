@@ -323,8 +323,10 @@ class AsyncTaskDispatcher:
                 if counts["running"]:
                     try:
                         await progress_callback(counts)
-                    except Exception:
-                        pass
+                    except Exception as cb_exc:  # noqa: BLE001
+                        # Progress callbacks are best-effort; a failure must
+                        # not abort the wait or propagate to callers.
+                        logger.debug("wait_for progress_callback raised: %s", cb_exc)
 
         # Mark terminal tasks as reported — the caller is collecting them now.
         results: Dict[str, Any] = {}
