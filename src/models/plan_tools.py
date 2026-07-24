@@ -139,10 +139,14 @@ class WaitForTasksRequest(BaseModel):
         ),
     )
     timeout_seconds: int = Field(
-        default=300,
+        default=900,
         description=(
-            "Maximum seconds to wait before returning.  Tasks still running "
-            "at timeout will be reported with status 'running'."
+            "Maximum seconds to wait before returning.  A single sub-task is a "
+            "full agent loop and can take several minutes, so keep this "
+            "generous (the default is 900s / 15 min). Tasks still running at "
+            "timeout are NOT cancelled — they keep running in the background "
+            "and are reported with status 'running'; you can wait again or let "
+            "their results be surfaced automatically on a later turn."
         ),
     )
     progress_message: str = Field(
