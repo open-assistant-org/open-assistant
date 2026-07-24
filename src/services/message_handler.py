@@ -51,7 +51,6 @@ class MessageHandler:
         tool_executor: ToolExecutor,
         max_iterations: int = 15,
         max_skills_per_request: int = 5,
-        task_repo=None,
     ):
         self.skill_repo = skill_repo
         self.conversation_service = conversation_service
@@ -64,9 +63,7 @@ class MessageHandler:
 
         # Dispatcher for async sub-tasks — bound to this handler instance so
         # sub-tasks share the same services and configuration.
-        # task_repo (AgentTaskRepository) is optional; when present, every
-        # dispatched sub-task is persisted to the agent_tasks table.
-        self.async_task_dispatcher = AsyncTaskDispatcher(self.handle_message, task_repo=task_repo)
+        self.async_task_dispatcher = AsyncTaskDispatcher(self.handle_message)
 
         logger.info(
             f"MessageHandler initialized (max_iterations={max_iterations}, "
@@ -103,7 +100,6 @@ class MessageHandler:
         image_base64: Optional[str] = None,
         image_mimetype: Optional[str] = None,
         event_callback: Optional[Callable[[dict], Awaitable[None]]] = None,
-        pinned_skill: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Handle a user message through the skills-based LLM system.
@@ -202,35 +198,12 @@ class MessageHandler:
                 f"recent_messages={len(context.get('recent_messages', []))}"
             )
 
-            # Step 4: Select relevant skills.
-            # When this call comes from a dispatched sub-task with a pinned
-            # specialist skill, bypass keyword-based selection and use only
-            # that skill's context-prompt and tools.
+            # Step 4: Select relevant skills
             logger.debug("Step 4: Selecting skills...")
-            if pinned_skill:
-                pinned = self.skill_repo.get_skill_by_name(pinned_skill)
-                if pinned:
-                    selected_skills = [pinned]
-                    logger.info(
-                        f"Sub-task pinned to specialist skill '{pinned_skill}'; "
-                        "bypassing keyword selection"
-                    )
-                else:
-                    logger.warning(
-                        f"Pinned skill '{pinned_skill}' not found in DB; "
-                        "falling back to keyword selection"
-                    )
-                    selection_message = self._contextualize_message_for_skill_selection(
-                        message, context.get("recent_messages", [])
-                    )
-                    selected_skills = self._select_skills(
-                        selection_message, conversation_id=conv_id
-                    )
-            else:
-                selection_message = self._contextualize_message_for_skill_selection(
-                    message, context.get("recent_messages", [])
-                )
-                selected_skills = self._select_skills(selection_message, conversation_id=conv_id)
+            selection_message = self._contextualize_message_for_skill_selection(
+                message, context.get("recent_messages", [])
+            )
+            selected_skills = self._select_skills(selection_message, conversation_id=conv_id)
             logger.debug(
                 f"Selected {len(selected_skills)} skills: {[s.name for s in selected_skills]}"
             )
@@ -294,22 +267,9 @@ class MessageHandler:
             # Planning is best-effort; if it fails we proceed without a plan
             logger.warning(f"Plan generation failed, proceeding without plan: {e}")
 
-        # Inject adaptive planning + async-dispatch tools when:
-        # - a multi-step plan is active, OR
-        # - ≥2 skills were selected (multi-service request that may benefit
-        #   from parallel fan-out even without an explicit plan), OR
-        # - this is not a pinned sub-task (pinned sub-tasks are focused single
-        #   specialists that don't need to delegate further).
-        should_inject_dispatch = (plan and plan.total > 1) or (
-            not pinned_skill and len(selected_skills) >= 2
-        )
-        if should_inject_dispatch:
+        # When a plan is active, inject adaptive planning tools (revise_plan, ask_user)
+        if plan and plan.total > 1:
             tools = self._inject_plan_tools(tools)
-            logger.debug(
-                "Injected plan+dispatch tools "
-                f"(plan_steps={plan.total if plan else 0}, "
-                f"skills={len(selected_skills)}, pinned={pinned_skill})"
-            )
 
         # Step 9: Execute conversation loop
         try:
@@ -1265,20 +1225,8 @@ class MessageHandler:
                 if tool_name == "dispatch_task":
                     description = arguments.get("description", "")
                     context = arguments.get("context", "")
-                    skill_name = arguments.get("skill") or None
-                    logger.info(
-                        f"dispatch_task called: {description[:100]}"
-                        + (f" [skill={skill_name}]" if skill_name else "")
-                    )
-                    task_id = self.async_task_dispatcher.dispatch(
-                        description,
-                        context,
-                        skill=skill_name,
-                        conversation_id=conversation_id,
-                    )
-                    skill_note = (
-                        f" It will run as the '{skill_name}' specialist." if skill_name else ""
-                    )
+                    logger.info(f"dispatch_task called: {description[:100]}")
+                    task_id = self.async_task_dispatcher.dispatch(description, context)
                     tool_results.append(
                         {
                             "role": "tool",
@@ -1287,9 +1235,8 @@ class MessageHandler:
                                 {
                                     "task_id": task_id,
                                     "status": "running",
-                                    "skill": skill_name,
                                     "message": (
-                                        f"Sub-task dispatched with ID '{task_id}'.{skill_note} "
+                                        f"Sub-task dispatched with ID '{task_id}'. "
                                         f"Call get_task_result(task_id='{task_id}') "
                                         "to check progress and retrieve the result."
                                     ),

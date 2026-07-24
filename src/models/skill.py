@@ -1,23 +1,4 @@
-"""Skill model for the skills-based LLM system.
-
-A ``Skill`` is the *runtime* view of a row in the ``agent_definitions``
-table.  The same table also has an *admin* view (``AgentDefinition`` in
-``src/agents/base.py``) used by the REST API and admin UI.
-
-Field mapping (DB → Skill):
-  backstory       → context_prompt   (text injected into the LLM system prompt)
-  role            → category         (grouping label)
-  goal            → description      (brief capability summary)
-  intent_keywords → intent_keywords  (keywords for automatic skill selection)
-  tools           → tools            (tool names available to this skill)
-
-Skills replace the previous CrewAI agent delegation model.  Instead of
-routing between agents, the single LLM is given the context-prompts and
-tools of all skills that match the request's intent, then executes a
-tool-calling loop.  Parallel fan-out is achieved via the ``dispatch_task``
-tool (``src/services/async_task_dispatcher.py``), which can pin a sub-task
-to a specific skill via the ``pinned_skill`` param on ``handle_message``.
-"""
+"""Skill model for the skills-based LLM system."""
 
 import json
 from typing import Any, Dict, List, Optional

@@ -1,21 +1,4 @@
-"""Admin-facing model for agent/skill definitions.
-
-``AgentDefinition`` is the *admin API view* of a row in the
-``agent_definitions`` table.  The same table is read at runtime by the
-``Skill`` model (``src/models/skill.py``), which is the live orchestration
-view: it maps ``backstory`` → ``context_prompt``, ``role`` → ``category``,
-and ``goal`` → ``description``.
-
-In other words:
-- **Skill** (runtime) — what the LLM uses: context-prompt, tools, intent-keywords.
-- **AgentDefinition** (admin API) — what the admin UI reads/writes: role, goal,
-  backstory, allow_delegation, etc.
-
-Both point at the same rows.  There is no separate CrewAI crew or delegating
-agent runtime; the ``allow_delegation`` field and the coordinator's "delegate"
-goal are preserved for admin UI clarity, but delegation is now handled by the
-``dispatch_task`` LLM tool (``src/services/async_task_dispatcher.py``).
-"""
+"""Base classes and models for agent definitions."""
 
 import json
 from dataclasses import dataclass, field
@@ -26,17 +9,9 @@ from typing import Any, Dict, List, Optional
 @dataclass
 class AgentDefinition:
     """
-    Admin API view of a row in the ``agent_definitions`` table.
+    Database model for agent definitions.
 
-    This dataclass is used by the admin REST API (``src/api/agents.py``) and
-    the ``AgentRegistry`` to read, create, update, and reorder specialist
-    definitions.  It is *not* used at LLM request time — the runtime system
-    reads the same rows via ``Skill`` (``src/models/skill.py``).
-
-    Fields mirror the DB schema.  ``backstory`` holds the context-prompt text
-    that the LLM receives as a skill section; ``allow_delegation`` is an
-    admin toggle (delegation is carried out via ``dispatch_task``, not by a
-    separate agent runtime).
+    Represents a CrewAI agent configuration stored in the database.
     """
 
     id: Optional[int] = None
@@ -135,7 +110,7 @@ DEFAULT_AGENTS = {
         "name": "coordinator",
         "display_name": "Coordinator Agent",
         "role": "Task Coordinator",
-        "goal": "Understand user intent, create an actionable plan, and use dispatch_task to delegate independent sub-tasks to specialist skills (research, writer, communication, etc.) that run in parallel",
+        "goal": "Understand user intent, create an actionable plan, and delegate to specialist agents who MUST use their tools to fulfill the request",
         "backstory": "",
         "tools": [],
         "enabled": True,

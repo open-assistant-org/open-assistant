@@ -7,17 +7,12 @@ skill selection, planning, and tool execution.
 
 Typical flow
 ------------
-1. Main handler calls ``dispatch(description, context, skill)`` → returns *task_id*.
+1. Main handler calls ``dispatch(description, context)`` → returns *task_id*.
 2. A background asyncio.Task runs ``handle_message`` for the description.
-   If *skill* is provided, the sub-task is pinned to that specialist's
-   context-prompt and tool set, bypassing keyword-based skill selection.
 3. The caller uses ``wait_for_tasks`` (LLM tool) to block until all
    dispatched tasks finish, then retrieves their results.
 4. The main loop refuses to return a final response while any sub-tasks
    are still running, guaranteeing no tasks are left unmonitored.
-5. Each sub-task is persisted to the ``agent_tasks`` table via the
-   optional ``AgentTaskRepository`` so state survives restarts and is
-   visible in the admin UI.
 """
 
 import asyncio
@@ -37,7 +32,6 @@ class AsyncTask:
 
     task_id: str
     description: str
-    skill: Optional[str] = None  # pinned specialist skill name, if any
     status: str = "running"  # running | completed | failed
     result: str = ""
     error: str = ""
@@ -53,7 +47,6 @@ class AsyncTask:
             "task_id": self.task_id,
             "description": self.description,
             "status": self.status,
-            **({"skill": self.skill} if self.skill else {}),
             # Only include result / error when relevant to reduce token waste
             **({"result": self.result} if self.status == "completed" else {}),
             **({"error": self.error} if self.status == "failed" else {}),
@@ -69,55 +62,32 @@ class AsyncTaskDispatcher:
 
     Each sub-task is a full ``handle_message`` invocation — it gets its own
     skill selection, planning loop, and stuck detection, identical to a
-    top-level user request.  When *skill* is provided, the sub-task is
-    pinned to that specialist's context-prompt and tool set instead of
-    re-running keyword-based skill selection.
-
-    Sub-tasks can themselves dispatch further sub-tasks, enabling arbitrary
-    depth of parallel work.
+    top-level user request.  Sub-tasks can themselves dispatch further
+    sub-tasks, enabling arbitrary depth of parallel work.
 
     The ``wait_for`` coroutine is used by the ``wait_for_tasks`` inline tool
     handler to properly block until a set of tasks has finished (with an
     optional timeout), after which the main loop can collect results and
     respond to the user.
-
-    Task state is persisted to the ``agent_tasks`` table when a
-    ``task_repo`` is provided, making sub-task progress visible after
-    restarts.
     """
 
-    def __init__(self, handle_message_fn: Callable, task_repo=None) -> None:
+    def __init__(self, handle_message_fn: Callable) -> None:
         """
         Args:
             handle_message_fn: Async callable with the signature::
 
-                handle_message(
-                    message: str,
-                    channel: str = "subtask",
-                    pinned_skill: Optional[str] = None,
-                ) -> dict
+                handle_message(message: str, channel: str = "subtask") -> dict
 
             Typically ``MessageHandler.handle_message`` bound to an instance.
-
-            task_repo: Optional ``AgentTaskRepository`` instance.  When
-                provided, each dispatched task is persisted to the
-                ``agent_tasks`` database table.
         """
         self._handle_message = handle_message_fn
-        self._task_repo = task_repo
         self._tasks: Dict[str, AsyncTask] = {}
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
-    def dispatch(
-        self,
-        description: str,
-        context: str = "",
-        skill: Optional[str] = None,
-        conversation_id: Optional[str] = None,
-    ) -> str:
+    def dispatch(self, description: str, context: str = "") -> str:
         """
         Dispatch *description* as an async sub-task.
 
@@ -125,11 +95,6 @@ class AsyncTaskDispatcher:
             description: Self-contained instruction for the sub-task.
             context: Optional context from the parent conversation (e.g.
                 earlier results, user preferences).
-            skill: Optional specialist skill name to pin for this sub-task.
-                When set, the sub-task uses only that skill's context-prompt
-                and tools rather than running keyword-based skill selection.
-            conversation_id: Parent conversation ID, used when persisting the
-                task record to the ``agent_tasks`` table.
 
         Returns:
             A short *task_id* string (8 hex chars).  Pass this to
@@ -140,38 +105,13 @@ class AsyncTaskDispatcher:
         if context:
             message = f"Context from parent task:\n{context}\n\nTask: {description}"
 
-        task = AsyncTask(task_id=task_id, description=description, skill=skill)
+        task = AsyncTask(task_id=task_id, description=description)
         self._tasks[task_id] = task
 
-        # Persist the task record so state survives restarts and is visible
-        # in the admin UI.
-        if self._task_repo:
-            try:
-                self._task_repo.create_task(
-                    task_id=task_id,
-                    conversation_id=conversation_id or "",
-                    agent_name=skill or "auto",
-                    action="dispatch_task",
-                    parameters={
-                        "description": description,
-                        "context": context,
-                        "skill": skill,
-                    },
-                    status="running",
-                )
-            except Exception as exc:
-                logger.warning(f"Failed to persist sub-task {task_id} to DB: {exc}")
-
-        asyncio_task = asyncio.create_task(
-            self._run(task, message, task_id), name=f"subtask-{task_id}"
-        )
+        asyncio_task = asyncio.create_task(self._run(task, message), name=f"subtask-{task_id}")
         task._asyncio_task = asyncio_task
 
-        logger.info(
-            f"Dispatched sub-task {task_id}"
-            + (f" [skill={skill}]" if skill else "")
-            + f": {description[:100]}"
-        )
+        logger.info(f"Dispatched sub-task {task_id}: {description[:100]}")
         return task_id
 
     def get_status(self, task_id: str) -> Optional[Dict[str, Any]]:
@@ -236,38 +176,13 @@ class AsyncTaskDispatcher:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    async def _run(self, task: AsyncTask, message: str, task_id: str) -> None:
+    async def _run(self, task: AsyncTask, message: str) -> None:
         """Execute the task and record the outcome."""
-        started_at = datetime.now(timezone.utc)
-
-        # Mark as running in DB (already created as 'running', but update
-        # started_at so the timestamp is accurate after any queue delay).
-        if self._task_repo:
-            try:
-                self._task_repo.update_task_status(
-                    task_id=task_id, status="running", started_at=started_at
-                )
-            except Exception as exc:
-                logger.debug(f"Sub-task {task_id}: failed to update started_at in DB: {exc}")
-
-        # Initialise DB-write locals before the try/except so `finally`
-        # always has valid values even if an unexpected error escapes both branches.
-        db_result: Optional[Dict[str, Any]] = None
-        db_status: str = "failed"
-        db_error: Optional[str] = None
-
         try:
-            result = await self._handle_message(
-                message=message,
-                channel="subtask",
-                pinned_skill=task.skill,
-            )
+            result = await self._handle_message(message=message, channel="subtask")
             task.status = "completed"
             task.result = result.get("response", "")
             task.tools_executed = result.get("tools_executed", [])
-            db_result = {"response": task.result, "tools_executed": task.tools_executed}
-            db_status = "completed"
-            db_error = None
         except Exception as exc:
             logger.error(
                 f"Sub-task {task.task_id} failed: {exc}",
@@ -275,9 +190,6 @@ class AsyncTaskDispatcher:
             )
             task.status = "failed"
             task.error = str(exc)
-            db_result = None
-            db_status = "failed"
-            db_error = str(exc)
         finally:
             task.completed_at = datetime.now(timezone.utc)
             tool_count = len(task.tools_executed)
@@ -285,16 +197,3 @@ class AsyncTaskDispatcher:
                 f"Sub-task {task.task_id} {task.status}"
                 + (f" ({tool_count} tools executed)" if tool_count else "")
             )
-
-            # Persist final state to DB.
-            if self._task_repo:
-                try:
-                    self._task_repo.update_task_status(
-                        task_id=task_id,
-                        status=db_status,
-                        completed_at=task.completed_at,
-                        result=db_result,
-                        error_message=db_error,
-                    )
-                except Exception as exc:
-                    logger.debug(f"Sub-task {task_id}: failed to persist final state to DB: {exc}")
