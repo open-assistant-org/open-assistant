@@ -1,5 +1,6 @@
 """Tests for the MCP server integration (McpService)."""
 
+import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -8,11 +9,11 @@ from src.models.mcp import (
     McpAuthHeaderInput,
     McpCredentialsRequest,
     McpDiscoveredTool,
-    McpEnvVarInput,
+    McpOAuthMetadata,
     McpServerConfig,
     McpServerCreateRequest,
 )
-from src.services.mcp_service import McpService, _StdioSessionManager
+from src.services.mcp_service import McpService, _describe_exception, _pkce_challenge
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -53,35 +54,42 @@ def _make_service(tmp_path, agent_registry=None) -> McpService:
     return svc
 
 
-def _http_config(server_id="cf_gateway", tools=None) -> McpServerConfig:
+def _http_config(server_id="cf_gateway", auth_type="header", tools=None) -> McpServerConfig:
     return McpServerConfig(
         id=server_id,
         display_name="CF Gateway",
-        transport="http",
         url="https://example.com/mcp",
-        auth_headers=[{"name": "CF-Access-Client-Id"}, {"name": "CF-Access-Client-Secret"}],
+        auth_type=auth_type,
+        auth_headers=(
+            [{"name": "CF-Access-Client-Id"}, {"name": "CF-Access-Client-Secret"}]
+            if auth_type == "header"
+            else []
+        ),
         intent_keywords=["cloudflare"],
         discovered_tools=tools
         or [McpDiscoveredTool(name="do_thing", description="d", input_schema={})],
     )
 
 
-def _stdio_config(server_id="gh_server", tools=None) -> McpServerConfig:
+def _oauth_config(server_id="openseo", tools=None) -> McpServerConfig:
     return McpServerConfig(
         id=server_id,
-        display_name="GitHub MCP",
-        transport="stdio",
-        command="npx",
-        args=["-y", "@modelcontextprotocol/server-github"],
-        env_vars=[{"name": "GITHUB_TOKEN"}],
-        intent_keywords=["github"],
-        discovered_tools=tools
-        or [McpDiscoveredTool(name="list_repos", description="list", input_schema={})],
+        display_name="OpenSEO",
+        url="https://openseo.example.com/mcp",
+        auth_type="oauth2",
+        oauth_scopes=["read", "write"],
+        oauth_metadata=McpOAuthMetadata(
+            authorization_endpoint="https://auth.example.com/authorize",
+            token_endpoint="https://auth.example.com/token",
+            registration_endpoint="https://auth.example.com/register",
+            scopes_supported=["read", "write"],
+        ),
+        discovered_tools=tools or [],
     )
 
 
 # ---------------------------------------------------------------------------
-# Secure multi-header storage (HTTP)
+# Secure multi-header storage (header auth)
 # ---------------------------------------------------------------------------
 
 
@@ -118,39 +126,11 @@ def test_blank_value_does_not_overwrite_existing_secret(tmp_path):
     assert svc._build_request_headers(cfg)["CF-Access-Client-Id"] == "id-123"
 
 
-# ---------------------------------------------------------------------------
-# Secure env-var storage (stdio)
-# ---------------------------------------------------------------------------
-
-
-def test_env_var_values_stored_and_rebuilt(tmp_path):
+def test_no_auth_returns_empty_headers(tmp_path):
     svc = _make_service(tmp_path)
-    cfg = _stdio_config()
-    svc._store_env_values(cfg.id, {"GITHUB_TOKEN": "ghp_secret"})
-    env = svc._build_stdio_env(cfg)
-    assert env == {"GITHUB_TOKEN": "ghp_secret"}
-
-
-def test_env_var_values_never_in_config_json(tmp_path):
-    svc = _make_service(tmp_path)
-    cfg = _stdio_config()
-    svc._configs[cfg.id] = cfg
-    svc._store_env_values(cfg.id, {"GITHUB_TOKEN": "ghp_secret"})
-    svc._save_config(cfg)
-    saved = (tmp_path / "mcp_servers" / f"{cfg.id}.json").read_text()
-    assert "ghp_secret" not in saved
-    assert "GITHUB_TOKEN" in saved
-
-
-def test_headers_and_env_stored_in_same_blob(tmp_path):
-    """Both HTTP headers and stdio env vars coexist in one credential blob."""
-    svc = _make_service(tmp_path)
-    server_id = "mixed"
-    svc._store_header_values(server_id, {"Authorization": "Bearer tok"})
-    svc._store_env_values(server_id, {"SECRET": "val"})
-    creds = svc._load_credentials(server_id)
-    assert creds["headers"]["Authorization"] == "Bearer tok"
-    assert creds["env"]["SECRET"] == "val"
+    cfg = _http_config(auth_type="none")
+    headers = svc._build_request_headers(cfg)
+    assert headers == {}
 
 
 # ---------------------------------------------------------------------------
@@ -209,8 +189,6 @@ def test_serialize_result_text_and_error():
 
 
 def test_describe_exception_unwraps_task_group():
-    from src.services.mcp_service import _describe_exception
-
     # The MCP client wraps real failures (e.g. HTTP 401) in an ExceptionGroup
     # whose str is the unhelpful "unhandled errors in a TaskGroup".
     leaf = ValueError("Client error '401 Unauthorized' for url 'https://x/mcp'")
@@ -265,57 +243,7 @@ async def test_execute_tool_disabled_raises(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# stdio transport — StdioSessionManager
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_stdio_session_manager_reconnects_after_failure(tmp_path):
-    """If fn() raises, the session is invalidated so the next call reconnects."""
-    call_count = 0
-
-    class _FakeSession:
-        async def list_tools(self):
-            return MagicMock(tools=[])
-
-    async def _fake_connect(self):
-        nonlocal call_count
-        call_count += 1
-        self._session = _FakeSession()
-        self._exit_stack = MagicMock()
-        self._exit_stack.aclose = AsyncMock()
-
-    mgr = _StdioSessionManager("srv", "echo", [], {})
-    with patch.object(_StdioSessionManager, "_connect", _fake_connect):
-        # First call succeeds.
-        await mgr.run(lambda s: s.list_tools())
-        assert call_count == 1
-
-        # Simulate a broken session: invalidate manually.
-        mgr._session = None
-        await mgr.run(lambda s: s.list_tools())
-        assert call_count == 2  # reconnected
-
-
-@pytest.mark.asyncio
-async def test_stdio_conn_rebuilt_when_env_changes(tmp_path):
-    """_get_stdio_conn() creates a new manager when env vars change."""
-    svc = _make_service(tmp_path)
-    cfg = _stdio_config()
-    svc._configs[cfg.id] = cfg
-
-    svc._store_env_values(cfg.id, {"GITHUB_TOKEN": "v1"})
-    conn1 = svc._get_stdio_conn(cfg)
-
-    # Updating env should trigger rebuild on the next get.
-    svc._store_env_values(cfg.id, {"GITHUB_TOKEN": "v2"})
-    conn2 = svc._get_stdio_conn(cfg)
-    assert conn1 is not conn2
-    assert conn2._env == {"GITHUB_TOKEN": "v2"}
-
-
-# ---------------------------------------------------------------------------
-# add_server — HTTP and stdio variants
+# add_server — header variant
 # ---------------------------------------------------------------------------
 
 
@@ -331,8 +259,8 @@ async def test_add_server_creates_agent_row_with_keywords(tmp_path):
     request = McpServerCreateRequest(
         id="cf_gateway",
         display_name="CF Gateway",
-        transport="http",
         url="https://example.com/mcp",
+        auth_type="header",
         auth_headers=[
             McpAuthHeaderInput(name="CF-Access-Client-Id", value="id-1"),
             McpAuthHeaderInput(name="CF-Access-Client-Secret", value="sec-1"),
@@ -360,34 +288,6 @@ async def test_add_server_creates_agent_row_with_keywords(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_add_stdio_server_stores_env_vars(tmp_path):
-    agent_registry = MagicMock()
-    agent_registry.get_agent_by_name.return_value = None
-    svc = _make_service(tmp_path, agent_registry=agent_registry)
-
-    async def _fake_discover(cfg):
-        return [McpDiscoveredTool(name="list_repos", description="list", input_schema={})]
-
-    request = McpServerCreateRequest(
-        id="gh_server",
-        display_name="GitHub MCP",
-        transport="stdio",
-        command="npx",
-        args=["-y", "@modelcontextprotocol/server-github"],
-        env_vars=[McpEnvVarInput(name="GITHUB_TOKEN", value="ghp_test")],
-        intent_keywords=["github"],
-    )
-
-    with patch.object(svc, "_discover", side_effect=_fake_discover):
-        with patch.object(svc, "_register_server_tools"):
-            cfg = await svc.add_server(request)
-
-    assert cfg.transport == "stdio"
-    assert cfg.command == "npx"
-    assert svc._build_stdio_env(cfg) == {"GITHUB_TOKEN": "ghp_test"}
-
-
-@pytest.mark.asyncio
 async def test_add_server_rolls_back_credentials_on_discovery_failure(tmp_path):
     svc = _make_service(tmp_path)
 
@@ -397,8 +297,8 @@ async def test_add_server_rolls_back_credentials_on_discovery_failure(tmp_path):
     request = McpServerCreateRequest(
         id="bad_server",
         display_name="Bad",
-        transport="http",
         url="https://example.com/mcp",
+        auth_type="header",
         auth_headers=[McpAuthHeaderInput(name="Authorization", value="Bearer x")],
         intent_keywords=[],
     )
@@ -413,7 +313,7 @@ async def test_add_server_rolls_back_credentials_on_discovery_failure(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# save_credentials — header and env-var updates
+# save_credentials
 # ---------------------------------------------------------------------------
 
 
@@ -430,19 +330,219 @@ def test_save_credentials_updates_headers(tmp_path):
     assert svc._build_request_headers(cfg)["CF-Access-Client-Id"] == "new"
 
 
-def test_save_credentials_updates_env_vars(tmp_path):
-    svc = _make_service(tmp_path)
-    cfg = _stdio_config()
-    svc._configs[cfg.id] = cfg
-    svc._store_env_values(cfg.id, {"GITHUB_TOKEN": "old"})
+# ---------------------------------------------------------------------------
+# OAuth 2.1 helpers
+# ---------------------------------------------------------------------------
 
-    # Updating env should invalidate any cached stdio connection.
-    svc._stdio_conns[cfg.id] = MagicMock()
 
-    req = McpCredentialsRequest(
-        env_vars=[McpEnvVarInput(name="GITHUB_TOKEN", value="new")],
+def test_pkce_challenge_is_s256():
+    """_pkce_challenge must produce the S256 code_challenge from the verifier."""
+    import base64
+    import hashlib
+
+    verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+    expected = (
+        base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
     )
-    svc.save_credentials(cfg.id, req)
-    assert svc._build_stdio_env(cfg)["GITHUB_TOKEN"] == "new"
-    # Connection was invalidated so the next call reconnects with new env.
-    assert cfg.id not in svc._stdio_conns
+    assert _pkce_challenge(verifier) == expected
+
+
+def test_oauth_build_headers_uses_bearer_token(tmp_path):
+    svc = _make_service(tmp_path)
+    cfg = _oauth_config()
+    svc._configs[cfg.id] = cfg
+    svc._save_oauth_data(cfg.id, {"access_token": "tok123"})
+    headers = svc._build_request_headers(cfg)
+    assert headers == {"Authorization": "Bearer tok123"}
+
+
+def test_oauth_build_headers_empty_when_no_token(tmp_path):
+    svc = _make_service(tmp_path)
+    cfg = _oauth_config()
+    svc._configs[cfg.id] = cfg
+    headers = svc._build_request_headers(cfg)
+    assert headers == {}
+
+
+def test_is_oauth_authorized_true_when_token_present(tmp_path):
+    svc = _make_service(tmp_path)
+    cfg = _oauth_config()
+    svc._configs[cfg.id] = cfg
+    assert not svc._is_oauth_authorized(cfg.id)
+    svc._save_oauth_data(cfg.id, {"access_token": "tok"})
+    assert svc._is_oauth_authorized(cfg.id)
+
+
+@pytest.mark.asyncio
+async def test_ensure_oauth_token_raises_when_no_token(tmp_path):
+    svc = _make_service(tmp_path)
+    cfg = _oauth_config()
+    svc._configs[cfg.id] = cfg
+    with pytest.raises(RuntimeError, match="not yet authorized"):
+        await svc._ensure_oauth_token(cfg)
+
+
+@pytest.mark.asyncio
+async def test_ensure_oauth_token_no_refresh_needed_when_fresh(tmp_path):
+    svc = _make_service(tmp_path)
+    cfg = _oauth_config()
+    svc._configs[cfg.id] = cfg
+    # Token that expires far in the future.
+    svc._save_oauth_data(
+        cfg.id,
+        {
+            "access_token": "fresh_tok",
+            "expires_at": time.time() + 3600,
+        },
+    )
+    # Should return without making any HTTP call.
+    await svc._ensure_oauth_token(cfg)  # no error
+
+
+@pytest.mark.asyncio
+async def test_ensure_oauth_token_refreshes_when_expired(tmp_path):
+    svc = _make_service(tmp_path)
+    cfg = _oauth_config()
+    svc._configs[cfg.id] = cfg
+    svc._save_oauth_data(
+        cfg.id,
+        {
+            "access_token": "old_tok",
+            "refresh_token": "ref_tok",
+            "client_id": "cid",
+            "expires_at": time.time() - 10,  # expired
+        },
+    )
+
+    fake_response = MagicMock()
+    fake_response.json.return_value = {
+        "access_token": "new_tok",
+        "refresh_token": "new_ref",
+        "expires_in": 3600,
+    }
+    fake_response.raise_for_status = MagicMock()
+
+    import httpx
+
+    async def _fake_post(url, **kwargs):
+        return fake_response
+
+    with patch.object(httpx.AsyncClient, "post", new=AsyncMock(side_effect=_fake_post)):
+        with patch(
+            "httpx.AsyncClient.__aenter__",
+            return_value=MagicMock(post=AsyncMock(return_value=fake_response)),
+        ):
+            with patch("httpx.AsyncClient.__aexit__", return_value=None):
+                # Use a simpler mock approach
+                pass
+
+    # Directly test by mocking the client at a higher level
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client.post = AsyncMock(return_value=fake_response)
+
+    with patch("src.services.mcp_service.httpx.AsyncClient", return_value=mock_client):
+        await svc._ensure_oauth_token(cfg)
+
+    refreshed = svc._load_oauth_data(cfg.id)
+    assert refreshed["access_token"] == "new_tok"
+    assert refreshed["refresh_token"] == "new_ref"
+
+
+@pytest.mark.asyncio
+async def test_oauth_start_generates_auth_url(tmp_path):
+    svc = _make_service(tmp_path)
+    cfg = _oauth_config()
+    svc._configs[cfg.id] = cfg
+    # Pre-store a client_id so we skip registration.
+    svc._save_oauth_data(cfg.id, {"client_id": "test_client"})
+
+    resp = await svc.oauth_start(cfg.id, "https://app.example.com/api/mcp/oauth/callback")
+    assert "https://auth.example.com/authorize" in resp.auth_url
+    assert "code_challenge" in resp.auth_url
+    assert "state=" in resp.auth_url
+    assert resp.state in svc._oauth_states
+
+
+@pytest.mark.asyncio
+async def test_oauth_callback_stores_tokens(tmp_path):
+    svc = _make_service(tmp_path)
+    cfg = _oauth_config()
+    svc._configs[cfg.id] = cfg
+    svc._save_oauth_data(cfg.id, {"client_id": "test_client"})
+
+    # Seed the state as if oauth_start was already called.
+    state_token = "test_state_xyz"
+    svc._oauth_states[state_token] = {
+        "server_id": cfg.id,
+        "code_verifier": "verifier123",
+        "redirect_uri": "https://app.example.com/api/mcp/oauth/callback",
+        "client_id": "test_client",
+    }
+
+    fake_response = MagicMock()
+    fake_response.json.return_value = {
+        "access_token": "acc_token",
+        "refresh_token": "ref_token",
+        "expires_in": 3600,
+    }
+    fake_response.raise_for_status = MagicMock()
+
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client.post = AsyncMock(return_value=fake_response)
+
+    with patch("src.services.mcp_service.httpx.AsyncClient", return_value=mock_client):
+        server_id = await svc.oauth_callback("auth_code_xyz", state_token)
+
+    assert server_id == cfg.id
+    stored = svc._load_oauth_data(cfg.id)
+    assert stored["access_token"] == "acc_token"
+    assert stored["refresh_token"] == "ref_token"
+    assert stored["expires_at"] is not None
+    # State is consumed after use.
+    assert state_token not in svc._oauth_states
+
+
+@pytest.mark.asyncio
+async def test_oauth_callback_rejects_unknown_state(tmp_path):
+    svc = _make_service(tmp_path)
+    with pytest.raises(ValueError, match="Unknown or expired"):
+        await svc.oauth_callback("code", "nonexistent_state")
+
+
+@pytest.mark.asyncio
+async def test_add_server_oauth_skips_discovery(tmp_path):
+    """OAuth servers are added without tool discovery (no token yet)."""
+    agent_registry = MagicMock()
+    agent_registry.get_agent_by_name.return_value = None
+    svc = _make_service(tmp_path, agent_registry=agent_registry)
+
+    async def _fake_discover_meta(url):
+        return McpOAuthMetadata(
+            authorization_endpoint="https://auth.example.com/authorize",
+            token_endpoint="https://auth.example.com/token",
+            registration_endpoint="https://auth.example.com/register",
+        )
+
+    request = McpServerCreateRequest(
+        id="openseo",
+        display_name="OpenSEO",
+        url="https://openseo.example.com/mcp",
+        auth_type="oauth2",
+        oauth_scopes=["read"],
+        intent_keywords=["seo"],
+    )
+
+    with patch.object(svc, "_discover_oauth_metadata", side_effect=_fake_discover_meta):
+        with patch.object(svc, "_discover") as mock_discover:
+            cfg = await svc.add_server(request)
+            # _discover must NOT be called for OAuth servers.
+            mock_discover.assert_not_called()
+
+    assert cfg.auth_type == "oauth2"
+    assert cfg.discovered_tools == []
+    assert cfg.oauth_metadata is not None
+    agent_registry.create_agent.assert_called_once()

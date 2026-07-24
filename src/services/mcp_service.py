@@ -1,35 +1,37 @@
 """Service for managing MCP (Model Context Protocol) servers.
 
-Phase 1: connect to remote MCP servers over Streamable HTTP, discover their
-tools, register each tool in the global ToolRegistry as ``mcp_{id}_{tool}``, and
-execute tool calls by opening a short-lived session per call.
-
-Phase 2: launch local MCP servers as stdio subprocesses (e.g. ``npx …`` or
-``uvx …``) and keep the subprocess alive across calls via a per-server
-``_StdioSessionManager``.
+Supports remote MCP servers reached over Streamable HTTP with three auth modes:
+- ``none``: no authentication
+- ``header``: static auth headers (values stored encrypted)
+- ``oauth2``: OAuth 2.1 PKCE authorization-code flow with dynamic client
+  registration (RFC 7591 / RFC 9728). Tokens stored encrypted.
 
 Design notes
 ------------
-* This mirrors :class:`~src.services.plugin_service.PluginService`: dynamic tools
+* Mirrors :class:`~src.services.plugin_service.PluginService`: dynamic tools
   with ``service_name=f"mcp_{id}"`` and ``executor=None``; execution is routed
   through :meth:`execute_tool` by :class:`~src.core.tools.executor.ToolExecutor`.
 * The ``mcp`` SDK is imported lazily inside the methods that actually talk to a
   server, so the application still boots (and can register cached tools) even if
   the package is not installed yet.
-* Auth/credentials: header *values* (HTTP) and env var *values* (stdio) are
-  stored encrypted in ``service_credentials`` under ``mcp_{id}`` as
-  ``{"headers": {...}, "env": {...}}``. Config JSON holds only names, never
-  secret values.
+* Auth/credentials: all secrets are stored encrypted in ``service_credentials``
+  under ``mcp_{id}`` as ``{"headers": {...}, "oauth": {...}}``. Config JSON
+  holds only header names and non-secret OAuth metadata, never secret values.
 * Adding a server also creates an agent/skill row so the server's tools are
   triggered by the user's chosen intent keywords — see ``docs/mcp-servers.md``
   and ``src/models/skill.py`` for why agents == skills.
 """
 
 import asyncio
+import base64
+import hashlib
 import json
-from contextlib import AsyncExitStack
+import secrets
+import time
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
+
+import httpx
 
 from src.agents.registry import AgentRegistry
 from src.core.repositories.audit import AuditLogRepository
@@ -40,6 +42,8 @@ from src.core.tools.schema import ToolSchema, _sanitize_property
 from src.models.mcp import (
     McpCredentialsRequest,
     McpDiscoveredTool,
+    McpOAuthMetadata,
+    McpOAuthStartResponse,
     McpServerConfig,
     McpServerCreateRequest,
     McpServerListItem,
@@ -53,6 +57,8 @@ logger = get_logger(__name__)
 
 # How long (seconds) to wait when connecting to / calling an MCP server.
 _MCP_TIMEOUT_SECONDS = 30.0
+# Refresh the OAuth token this many seconds before it actually expires.
+_OAUTH_REFRESH_BUFFER_SECONDS = 60.0
 
 
 class McpSdkNotInstalled(RuntimeError):
@@ -85,69 +91,10 @@ def _describe_exception(exc: BaseException) -> str:
     return "; ".join(unique) or str(exc) or type(exc).__name__
 
 
-class _StdioSessionManager:
-    """Manages a persistent stdio subprocess connection to one MCP server.
-
-    The subprocess is started lazily on the first call and kept alive across
-    subsequent calls. If the process dies, the next call reconnects. Thread
-    safety is provided by an ``asyncio.Lock``.
-    """
-
-    def __init__(self, server_id: str, command: str, args: List[str], env: Dict[str, str]):
-        self._server_id = server_id
-        self._command = command
-        self._args = args
-        self._env = env
-        self._lock = asyncio.Lock()
-        self._session: Any = None
-        self._exit_stack: Optional[AsyncExitStack] = None
-
-    async def run(self, fn: Callable[[Any], Awaitable[Any]]) -> Any:
-        """Ensure the subprocess session is alive, then run ``fn(session)``."""
-        async with self._lock:
-            if self._session is None:
-                await self._connect()
-        try:
-            return await fn(self._session)
-        except Exception:
-            # Session may be dead (process exited, pipe broken…); invalidate
-            # it so the next call reconnects cleanly.
-            async with self._lock:
-                await self._close_nolock()
-            raise
-
-    async def _connect(self) -> None:
-        from mcp import ClientSession
-        from mcp.client.stdio import StdioServerParameters, stdio_client
-
-        params = StdioServerParameters(
-            command=self._command,
-            args=self._args,
-            env=self._env or None,
-        )
-        stack = AsyncExitStack()
-        try:
-            read, write = await stack.enter_async_context(stdio_client(params))
-            session = await stack.enter_async_context(ClientSession(read, write))
-            await asyncio.wait_for(session.initialize(), timeout=_MCP_TIMEOUT_SECONDS)
-        except Exception:
-            await stack.aclose()
-            raise
-        self._exit_stack = stack
-        self._session = session
-
-    async def close(self) -> None:
-        async with self._lock:
-            await self._close_nolock()
-
-    async def _close_nolock(self) -> None:
-        if self._exit_stack is not None:
-            try:
-                await self._exit_stack.aclose()
-            except Exception:
-                pass  # best-effort teardown; process may already be dead
-            self._exit_stack = None
-            self._session = None
+def _pkce_challenge(verifier: str) -> str:
+    """Compute the S256 PKCE code_challenge for a given verifier."""
+    digest = hashlib.sha256(verifier.encode()).digest()
+    return base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
 
 
 class McpService(BaseService):
@@ -167,8 +114,9 @@ class McpService(BaseService):
         self.agent_registry = agent_registry
 
         self._configs: Dict[str, McpServerConfig] = {}
-        # Persistent stdio subprocess managers, keyed by server_id.
-        self._stdio_conns: Dict[str, _StdioSessionManager] = {}
+        # In-memory PKCE state store: state_token → {server_id, code_verifier,
+        # redirect_uri, client_id}.  Never persisted.
+        self._oauth_states: Dict[str, Dict[str, str]] = {}
         self._load_all_configs()
 
     # ------------------------------------------------------------------
@@ -232,12 +180,7 @@ class McpService(BaseService):
 
     @staticmethod
     def _sanitize_input_schema(input_schema: Dict[str, Any]) -> Dict[str, Any]:
-        """Normalise an MCP tool ``inputSchema`` into a provider-safe JSON schema.
-
-        MCP tools may return arbitrary JSON Schema (``$ref``/``$defs``/``anyOf``);
-        reuse the same sanitizer the plugin/tool system uses for LLM
-        compatibility (notably Gemini).
-        """
+        """Normalise an MCP tool ``inputSchema`` into a provider-safe JSON schema."""
         if not isinstance(input_schema, dict):
             return {"type": "object", "properties": {}}
         defs = input_schema.get("$defs", {}) or input_schema.get("definitions", {}) or {}
@@ -252,7 +195,7 @@ class McpService(BaseService):
         }
 
     # ------------------------------------------------------------------
-    # Credentials (secure, multi-header + env vars)
+    # Credentials — shared encrypted blob {"headers": {...}, "oauth": {...}}
     # ------------------------------------------------------------------
 
     def _load_credentials(self, server_id: str) -> Dict[str, Any]:
@@ -288,27 +231,27 @@ class McpService(BaseService):
         creds["headers"] = existing
         self._save_credentials(server_id, creds)
 
-    def _load_env_values(self, server_id: str) -> Dict[str, str]:
-        """Return the decrypted {env_var_name: value} map for a server."""
+    def _load_oauth_data(self, server_id: str) -> Dict[str, Any]:
+        """Return the decrypted OAuth token data for a server."""
         creds = self._load_credentials(server_id)
-        env = creds.get("env")
-        return {str(k): str(v) for k, v in env.items()} if isinstance(env, dict) else {}
+        oauth = creds.get("oauth")
+        return oauth if isinstance(oauth, dict) else {}
 
-    def _store_env_values(self, server_id: str, env: Dict[str, str]) -> None:
-        """Encrypt and persist the {env_var_name: value} map for a server."""
-        clean = {k: v for k, v in env.items() if v}
-        if not clean:
-            return
+    def _save_oauth_data(self, server_id: str, oauth: Dict[str, Any]) -> None:
+        """Persist OAuth token data (client_id, access_token, refresh_token, expires_at)."""
         creds = self._load_credentials(server_id)
-        existing = creds.get("env") or {}
-        if not isinstance(existing, dict):
-            existing = {}
-        existing.update(clean)
-        creds["env"] = existing
+        creds["oauth"] = oauth
         self._save_credentials(server_id, creds)
 
     def _build_request_headers(self, cfg: McpServerConfig) -> Dict[str, str]:
         """Assemble the auth headers to send, from stored secret values."""
+        if cfg.auth_type == "none":
+            return {}
+        if cfg.auth_type == "oauth2":
+            oauth = self._load_oauth_data(cfg.id)
+            token = oauth.get("access_token", "")
+            return {"Authorization": f"Bearer {token}"} if token else {}
+        # auth_type == "header"
         stored = self._load_header_values(cfg.id)
         headers: Dict[str, str] = {}
         for h in cfg.auth_headers:
@@ -316,52 +259,253 @@ class McpService(BaseService):
                 headers[h.name] = stored[h.name]
         return headers
 
-    def _build_stdio_env(self, cfg: McpServerConfig) -> Dict[str, str]:
-        """Assemble the env vars to pass to the subprocess, from stored values."""
-        stored = self._load_env_values(cfg.id)
-        env: Dict[str, str] = {}
-        for ev in cfg.env_vars:
-            if ev.name in stored:
-                env[ev.name] = stored[ev.name]
-        return env
-
     # ------------------------------------------------------------------
-    # MCP client (lazy import, transport-aware)
+    # OAuth 2.1 helpers
     # ------------------------------------------------------------------
 
-    def _get_stdio_conn(self, cfg: McpServerConfig) -> _StdioSessionManager:
-        """Return the persistent stdio session manager for a server, creating it
-        lazily. Call this each time (not once at startup) because credentials
-        may have changed after the manager was last created."""
-        existing = self._stdio_conns.get(cfg.id)
-        env = self._build_stdio_env(cfg)
-        if existing is None:
-            mgr = _StdioSessionManager(
-                cfg.id,
-                cfg.command,  # type: ignore[arg-type]
-                cfg.args,
-                env,
+    async def _discover_oauth_metadata(self, url: str) -> McpOAuthMetadata:
+        """Discover OAuth server metadata via RFC 9728 + RFC 8414.
+
+        1. GET ``{url}/.well-known/oauth-protected-resource`` → authorization_servers
+        2. GET ``{as_url}/.well-known/oauth-authorization-server`` → endpoints
+        """
+        base = url.rstrip("/")
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            # Step 1: protected-resource metadata
+            pr_resp = await client.get(f"{base}/.well-known/oauth-protected-resource")
+            pr_resp.raise_for_status()
+            pr_data = pr_resp.json()
+
+            auth_servers = pr_data.get("authorization_servers") or []
+            if not auth_servers:
+                raise ValueError(
+                    f"MCP server at {url} returned no authorization_servers in its "
+                    "protected-resource metadata"
+                )
+            as_url = auth_servers[0].rstrip("/")
+
+            # Step 2: authorization-server metadata
+            as_resp = await client.get(f"{as_url}/.well-known/oauth-authorization-server")
+            as_resp.raise_for_status()
+            as_data = as_resp.json()
+
+        return McpOAuthMetadata(
+            authorization_endpoint=as_data["authorization_endpoint"],
+            token_endpoint=as_data["token_endpoint"],
+            registration_endpoint=as_data.get("registration_endpoint"),
+            scopes_supported=as_data.get("scopes_supported") or [],
+        )
+
+    async def _register_oauth_client(
+        self, server_id: str, metadata: McpOAuthMetadata, redirect_uri: str
+    ) -> str:
+        """Dynamic client registration (RFC 7591). Returns the ``client_id``."""
+        if not metadata.registration_endpoint:
+            raise ValueError(
+                f"MCP server '{server_id}' does not support dynamic client registration "
+                "(no registration_endpoint in OAuth metadata)"
             )
-            self._stdio_conns[cfg.id] = mgr
-            return mgr
-        # If env has changed (e.g. credentials were updated), rebuild the manager
-        # so the next call reconnects with the new values.
-        if existing._env != env:
-            self._stdio_conns.pop(cfg.id)
-            mgr = _StdioSessionManager(cfg.id, cfg.command, cfg.args, env)  # type: ignore[arg-type]
-            self._stdio_conns[cfg.id] = mgr
-            return mgr
-        return existing
+        payload = {
+            "client_name": "Open Assistant",
+            "redirect_uris": [redirect_uri],
+            "grant_types": ["authorization_code", "refresh_token"],
+            "response_types": ["code"],
+            "token_endpoint_auth_method": "none",
+            "code_challenge_methods_supported": ["S256"],
+        }
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                metadata.registration_endpoint,
+                json=payload,
+                headers={"Content-Type": "application/json"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+        client_id = data.get("client_id")
+        if not client_id:
+            raise ValueError(f"Dynamic registration for '{server_id}' returned no client_id")
+        return client_id
+
+    async def oauth_start(self, server_id: str, redirect_uri: str) -> McpOAuthStartResponse:
+        """Begin the OAuth 2.1 PKCE flow.
+
+        Ensures dynamic client registration has been completed (or retries it),
+        generates a PKCE code_verifier/challenge, stores the PKCE state in
+        memory, and returns the authorization URL to redirect the user to.
+        """
+        cfg = self._configs.get(server_id)
+        if not cfg:
+            raise KeyError(f"MCP server '{server_id}' not found")
+        if cfg.auth_type != "oauth2":
+            raise ValueError(f"MCP server '{server_id}' does not use OAuth 2.1")
+
+        # Fetch OAuth metadata if we don't have it yet.
+        metadata = cfg.oauth_metadata
+        if metadata is None:
+            metadata = await self._discover_oauth_metadata(cfg.url)
+            data = cfg.model_dump()
+            data["oauth_metadata"] = metadata.model_dump()
+            cfg = McpServerConfig.model_validate(data)
+            self._configs[server_id] = cfg
+            self._save_config(cfg)
+
+        # Dynamic client registration — get or (re-)register client_id.
+        oauth_data = self._load_oauth_data(server_id)
+        client_id = oauth_data.get("client_id")
+        if not client_id:
+            client_id = await self._register_oauth_client(server_id, metadata, redirect_uri)
+            oauth_data["client_id"] = client_id
+            self._save_oauth_data(server_id, oauth_data)
+
+        # PKCE
+        code_verifier = secrets.token_urlsafe(64)
+        code_challenge = _pkce_challenge(code_verifier)
+        state_token = secrets.token_urlsafe(32)
+
+        self._oauth_states[state_token] = {
+            "server_id": server_id,
+            "code_verifier": code_verifier,
+            "redirect_uri": redirect_uri,
+            "client_id": client_id,
+        }
+
+        scopes = " ".join(cfg.oauth_scopes) if cfg.oauth_scopes else ""
+        params = {
+            "response_type": "code",
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "state": state_token,
+            "code_challenge": code_challenge,
+            "code_challenge_method": "S256",
+        }
+        if scopes:
+            params["scope"] = scopes
+
+        from urllib.parse import urlencode
+
+        auth_url = f"{metadata.authorization_endpoint}?{urlencode(params)}"
+        return McpOAuthStartResponse(auth_url=auth_url, state=state_token)
+
+    async def oauth_callback(self, code: str, state: str) -> str:
+        """Exchange the authorization code for tokens. Returns the server_id.
+
+        Looks up the in-memory PKCE state, exchanges the code at the token
+        endpoint, and stores the resulting tokens in encrypted credentials.
+        """
+        state_data = self._oauth_states.pop(state, None)
+        if not state_data:
+            raise ValueError("Unknown or expired OAuth state — please try again")
+
+        server_id = state_data["server_id"]
+        cfg = self._configs.get(server_id)
+        if not cfg or not cfg.oauth_metadata:
+            raise ValueError(f"MCP server '{server_id}' has no OAuth metadata")
+
+        token_endpoint = cfg.oauth_metadata.token_endpoint
+        payload = {
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": state_data["redirect_uri"],
+            "client_id": state_data["client_id"],
+            "code_verifier": state_data["code_verifier"],
+        }
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                token_endpoint,
+                data=payload,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+            resp.raise_for_status()
+            token_data = resp.json()
+
+        access_token = token_data.get("access_token")
+        if not access_token:
+            raise ValueError("Token exchange did not return an access_token")
+
+        expires_in = token_data.get("expires_in")
+        expires_at = (time.time() + expires_in) if expires_in else None
+
+        oauth_data = self._load_oauth_data(server_id)
+        oauth_data.update(
+            {
+                "client_id": state_data["client_id"],
+                "access_token": access_token,
+                "refresh_token": token_data.get("refresh_token"),
+                "expires_at": expires_at,
+            }
+        )
+        self._save_oauth_data(server_id, oauth_data)
+        logger.info(f"OAuth 2.1 tokens stored for MCP server '{server_id}'")
+        return server_id
+
+    async def _ensure_oauth_token(self, cfg: McpServerConfig) -> None:
+        """Refresh the OAuth access token if it is expired or about to expire."""
+        oauth_data = self._load_oauth_data(cfg.id)
+        access_token = oauth_data.get("access_token")
+        expires_at = oauth_data.get("expires_at")
+        refresh_token = oauth_data.get("refresh_token")
+
+        if not access_token:
+            raise RuntimeError(
+                f"MCP server '{cfg.id}' is not yet authorized. " "Please connect via OAuth first."
+            )
+
+        # If expires_at is unknown or still fresh, nothing to do.
+        if expires_at is None or (expires_at - time.time()) > _OAUTH_REFRESH_BUFFER_SECONDS:
+            return
+
+        if not refresh_token:
+            raise RuntimeError(
+                f"OAuth access token for '{cfg.id}' has expired and no refresh token "
+                "is available. Please re-authorize via OAuth."
+            )
+
+        if cfg.oauth_metadata is None:
+            raise RuntimeError(f"MCP server '{cfg.id}' has no OAuth metadata for token refresh")
+
+        client_id = oauth_data.get("client_id", "")
+        payload = {
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+            "client_id": client_id,
+        }
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                cfg.oauth_metadata.token_endpoint,
+                data=payload,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+            resp.raise_for_status()
+            token_data = resp.json()
+
+        new_access = token_data.get("access_token")
+        if not new_access:
+            raise RuntimeError(f"Token refresh for '{cfg.id}' did not return an access_token")
+
+        expires_in = token_data.get("expires_in")
+        oauth_data.update(
+            {
+                "access_token": new_access,
+                "refresh_token": token_data.get("refresh_token", refresh_token),
+                "expires_at": (time.time() + expires_in) if expires_in else None,
+            }
+        )
+        self._save_oauth_data(cfg.id, oauth_data)
+        logger.info(f"Refreshed OAuth token for MCP server '{cfg.id}'")
+
+    def _is_oauth_authorized(self, server_id: str) -> bool:
+        """Return True if the server has a stored (possibly expired) access token."""
+        oauth = self._load_oauth_data(server_id)
+        return bool(oauth.get("access_token"))
+
+    # ------------------------------------------------------------------
+    # MCP client (lazy import)
+    # ------------------------------------------------------------------
 
     async def _run_with_session(
-        self, cfg: McpServerConfig, fn: Callable[[Any], Awaitable[Any]]
-    ) -> Any:
-        """Dispatch to the appropriate transport and run ``fn(session)``."""
-        if cfg.transport == "stdio":
-            return await self._run_with_stdio_session(cfg, fn)
-        return await self._run_with_http_session(cfg, fn)
-
-    async def _run_with_http_session(
         self, cfg: McpServerConfig, fn: Callable[[Any], Awaitable[Any]]
     ) -> Any:
         """Open a short-lived Streamable-HTTP session and run ``fn(session)``."""
@@ -373,6 +517,10 @@ class McpService(BaseService):
                 "The 'mcp' Python SDK is not installed. Install it (pip install mcp) "
                 "to connect to MCP servers."
             ) from e
+
+        # Refresh OAuth tokens before building headers.
+        if cfg.auth_type == "oauth2":
+            await self._ensure_oauth_token(cfg)
 
         headers = self._build_request_headers(cfg)
 
@@ -397,34 +545,6 @@ class McpService(BaseService):
             # real failure (connection refused, HTTP 401, DNS, OAuth challenge…)
             # arrives wrapped in an ExceptionGroup whose default message is the
             # unhelpful "unhandled errors in a TaskGroup". Surface the leaf cause.
-            raise RuntimeError(_describe_exception(e)) from None
-
-    async def _run_with_stdio_session(
-        self, cfg: McpServerConfig, fn: Callable[[Any], Awaitable[Any]]
-    ) -> Any:
-        """Run ``fn(session)`` against a persistent stdio subprocess."""
-        try:
-            from mcp import ClientSession  # noqa: F401 – presence check
-            from mcp.client.stdio import stdio_client  # noqa: F401
-        except ImportError as e:  # pragma: no cover
-            raise McpSdkNotInstalled(
-                "The 'mcp' Python SDK is not installed. Install it (pip install mcp) "
-                "to connect to MCP servers."
-            ) from e
-
-        conn = self._get_stdio_conn(cfg)
-
-        try:
-            return await asyncio.wait_for(conn.run(fn), timeout=_MCP_TIMEOUT_SECONDS)
-        except asyncio.TimeoutError:
-            # Invalidate the session: the subprocess may be hanging.
-            await conn.close()
-            self._stdio_conns.pop(cfg.id, None)
-            raise RuntimeError(
-                f"Timed out after {int(_MCP_TIMEOUT_SECONDS)}s communicating with "
-                f"stdio server '{cfg.id}' (command: {cfg.command})"
-            )
-        except Exception as e:
             raise RuntimeError(_describe_exception(e)) from None
 
     async def _discover(self, cfg: McpServerConfig) -> List[McpDiscoveredTool]:
@@ -468,7 +588,7 @@ class McpService(BaseService):
         self._log_web_request(
             service_name=f"mcp_{server_id}",
             action=mcp_tool_name,
-            endpoint=cfg.url or f"stdio:{cfg.command}",
+            endpoint=cfg.url,
             method="POST",
         )
 
@@ -478,7 +598,7 @@ class McpService(BaseService):
         result = await self._run_with_session(cfg, _call)
         return self._serialize_result(result)
 
-    def _resolve_tool(self, tool_name: str):
+    def _resolve_tool(self, tool_name: str) -> Tuple[Optional[str], Optional[str]]:
         """Return (server_id, mcp_tool_name) for a registered mcp tool name."""
         for server_id, cfg in self._configs.items():
             for tool in cfg.discovered_tools:
@@ -528,14 +648,6 @@ class McpService(BaseService):
             agent = self.agent_registry.get_agent_by_name(f"mcp_{server_id}")
             if agent:
                 self.agent_registry.toggle_agent(agent.id, enabled)
-        # Close the stdio subprocess when a server is disabled so it doesn't
-        # linger in the background.
-        if not enabled and server_id in self._stdio_conns:
-            conn = self._stdio_conns.pop(server_id)
-            try:
-                await conn.close()
-            except Exception as e:
-                logger.warning(f"Error closing stdio conn for '{server_id}': {e}")
 
     # ------------------------------------------------------------------
     # CRUD
@@ -552,10 +664,10 @@ class McpService(BaseService):
                     icon=cfg.icon,
                     transport=cfg.transport,
                     url=cfg.url,
+                    auth_type=cfg.auth_type,
                     header_names=[h.name for h in cfg.auth_headers],
-                    command=cfg.command,
-                    args=cfg.args,
-                    env_var_names=[ev.name for ev in cfg.env_vars],
+                    oauth_scopes=cfg.oauth_scopes,
+                    oauth_authorized=self._is_oauth_authorized(server_id),
                     enabled=self._is_enabled(server_id),
                     has_credentials=bool(self.credentials_repo.get(f"mcp_{server_id}")),
                     intent_keywords=cfg.intent_keywords,
@@ -569,8 +681,15 @@ class McpService(BaseService):
         return self._configs.get(server_id)
 
     async def add_server(self, request: McpServerCreateRequest) -> McpServerConfig:
-        """Add a new MCP server: connect, discover tools, persist, and wire up
-        the agent/skill row that triggers those tools.
+        """Add a new MCP server: discover (or register OAuth client), persist,
+        and wire up the agent/skill row that triggers those tools.
+
+        For ``auth_type="oauth2"``: discovers OAuth metadata and registers a
+        dynamic client, but skips tool discovery (tokens not yet available).
+        The user must authorise via ``/api/mcp/{id}/oauth/start``.
+
+        For ``auth_type="header"`` / ``"none"``: stores headers and discovers
+        tools immediately.
         """
         if request.id in self._configs:
             raise ValueError(f"MCP server id '{request.id}' already exists")
@@ -580,30 +699,44 @@ class McpService(BaseService):
             display_name=request.display_name,
             description=request.description,
             icon=request.icon or "🔌",
-            transport=request.transport,
             url=request.url,
+            auth_type=request.auth_type,
             auth_headers=[{"name": h.name} for h in request.auth_headers],
-            command=request.command,
-            args=request.args,
-            env_vars=[{"name": ev.name} for ev in request.env_vars],
+            oauth_scopes=request.oauth_scopes,
             intent_keywords=[k.strip() for k in request.intent_keywords if k.strip()],
         )
 
-        # Store secret values BEFORE discovery so authenticated servers can be
-        # reached during the initial tools/list call.
-        if request.auth_headers:
-            self._store_header_values(request.id, {h.name: h.value for h in request.auth_headers})
-        if request.env_vars:
-            self._store_env_values(request.id, {ev.name: ev.value for ev in request.env_vars})
+        if request.auth_type == "oauth2":
+            # Discover OAuth metadata now (validates the URL is an MCP OAuth server).
+            try:
+                oauth_meta = await self._discover_oauth_metadata(request.url)
+                data = cfg.model_dump()
+                data["oauth_metadata"] = oauth_meta.model_dump()
+                cfg = McpServerConfig.model_validate(data)
+            except Exception as e:
+                logger.warning(
+                    f"OAuth metadata discovery failed for '{request.id}' ({request.url}): {e}. "
+                    "Adding server without pre-fetched metadata."
+                )
+            # Tool discovery deferred until after OAuth authorization.
+            cfg.discovered_tools = []
 
-        # Connect and discover tools (raises on failure — nothing is persisted).
-        try:
-            cfg.discovered_tools = await self._discover(cfg)
-        except Exception:
-            # Roll back the credentials we just stored so a failed add leaves no
-            # orphaned secrets behind.
-            self.credentials_repo.delete(f"mcp_{request.id}")
-            raise
+        else:
+            # Store secret header values BEFORE discovery so authenticated
+            # servers can be reached during the initial tools/list call.
+            if request.auth_headers:
+                self._store_header_values(
+                    request.id, {h.name: h.value for h in request.auth_headers}
+                )
+
+            # Connect and discover tools (raises on failure — nothing is persisted).
+            try:
+                cfg.discovered_tools = await self._discover(cfg)
+            except Exception:
+                # Roll back the credentials we just stored so a failed add leaves
+                # no orphaned secrets behind.
+                self.credentials_repo.delete(f"mcp_{request.id}")
+                raise
 
         # Persist config, register tools, create the agent/skill row, enable it.
         self._configs[cfg.id] = cfg
@@ -612,7 +745,10 @@ class McpService(BaseService):
         self._sync_agent_row(cfg)
         self.settings_repo.set(f"mcp.{cfg.id}.enabled", True, value_type="bool")
 
-        logger.info(f"Added MCP server '{cfg.id}' with {len(cfg.discovered_tools)} tool(s)")
+        logger.info(
+            f"Added MCP server '{cfg.id}' ({cfg.auth_type}) "
+            f"with {len(cfg.discovered_tools)} tool(s)"
+        )
         return cfg
 
     async def refresh_tools(self, server_id: str) -> McpServerConfig:
@@ -627,7 +763,7 @@ class McpService(BaseService):
         return cfg
 
     def save_credentials(self, server_id: str, request: McpCredentialsRequest) -> None:
-        """Update stored header values and/or env var values."""
+        """Update stored auth header values."""
         cfg = self._configs.get(server_id)
         if not cfg:
             raise KeyError(f"MCP server '{server_id}' not found")
@@ -645,21 +781,6 @@ class McpService(BaseService):
                 self._configs[server_id] = cfg
                 self._save_config(cfg)
             self._store_header_values(server_id, {h.name: h.value for h in request.headers})
-
-        if request.env_vars:
-            # Add any new env var names to the config.
-            known_env = {ev.name for ev in cfg.env_vars}
-            new_env_names = [ev.name for ev in request.env_vars if ev.name not in known_env]
-            if new_env_names:
-                data = cfg.model_dump()
-                data["env_vars"] = list(data["env_vars"]) + [{"name": n} for n in new_env_names]
-                cfg = McpServerConfig.model_validate(data)
-                self._configs[server_id] = cfg
-                self._save_config(cfg)
-            self._store_env_values(server_id, {ev.name: ev.value for ev in request.env_vars})
-            # Invalidate the stdio session so the next call picks up new env values.
-            if server_id in self._stdio_conns:
-                self._stdio_conns.pop(server_id)
 
     async def test_server(self, server_id: str) -> McpTestResult:
         """Connect to a server and report reachability + tool count."""
@@ -690,14 +811,6 @@ class McpService(BaseService):
         self.credentials_repo.delete(f"mcp_{server_id}")
         self.settings_repo.set(f"mcp.{server_id}.enabled", False, value_type="bool")
 
-        # Close any lingering stdio subprocess.
-        if server_id in self._stdio_conns:
-            conn = self._stdio_conns.pop(server_id)
-            try:
-                await conn.close()
-            except Exception as e:
-                logger.warning(f"Error closing stdio conn for '{server_id}': {e}")
-
         path = self._config_path(server_id)
         if path.exists():
             path.unlink()
@@ -709,13 +822,7 @@ class McpService(BaseService):
     # ------------------------------------------------------------------
 
     def _sync_agent_row(self, cfg: McpServerConfig) -> None:
-        """Create or update the agent/skill row that exposes this server.
-
-        The row's ``tools`` list holds the server's ``mcp_{id}_*`` tool names and
-        its ``intent_keywords`` are the user's chosen trigger words, so the
-        skills selector activates these tools on a keyword match — no separate
-        routing needed (agents and skills are the same table).
-        """
+        """Create or update the agent/skill row that exposes this server."""
         if not self.agent_registry:
             return
 

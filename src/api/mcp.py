@@ -1,10 +1,13 @@
 """REST API endpoints for the MCP (Model Context Protocol) server integration."""
 
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import RedirectResponse
 
 from src.models.mcp import (
     McpCredentialsRequest,
     McpEnableRequest,
+    McpOAuthStartRequest,
+    McpOAuthStartResponse,
     McpServerCreateRequest,
     McpServerListItem,
     McpTestResult,
@@ -115,3 +118,63 @@ async def delete_server(server_id: str, request: Request) -> dict:
         return {"success": True, "server_id": server_id}
     except KeyError:
         raise HTTPException(status_code=404, detail=f"MCP server '{server_id}' not found")
+
+
+# ============================================================================
+# OAuth 2.1 endpoints
+# ============================================================================
+
+
+@router.post("/{server_id}/oauth/start", response_model=McpOAuthStartResponse)
+async def oauth_start(
+    server_id: str, body: McpOAuthStartRequest, request: Request
+) -> McpOAuthStartResponse:
+    """Begin the OAuth 2.1 PKCE authorization flow for an MCP server.
+
+    Returns the authorization URL to redirect the user to. The client should
+    open this URL in the browser. After authorization, the provider redirects
+    to ``redirect_uri`` (which must point to the ``/api/mcp/oauth/callback``
+    endpoint on this server).
+    """
+    mcp_service = _get_mcp_service(request)
+    try:
+        return await mcp_service.oauth_start(server_id, body.redirect_uri)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"MCP server '{server_id}' not found")
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        logger.error(f"OAuth start failed for '{server_id}': {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail=f"OAuth flow failed: {e}")
+
+
+@router.get("/oauth/callback")
+async def oauth_callback(
+    request: Request,
+    code: str = "",
+    state: str = "",
+    error: str = "",
+    error_description: str = "",
+) -> RedirectResponse:
+    """OAuth 2.1 redirect callback — exchanges the authorization code for tokens.
+
+    This endpoint is registered as the ``redirect_uri`` during dynamic client
+    registration. After a successful exchange, the user is redirected to the
+    Settings page with ``?mcp_connected={server_id}`` so the UI can confirm
+    success. On failure, ``?mcp_error=...`` is appended instead.
+    """
+    if error:
+        desc = error_description or error
+        logger.warning(f"OAuth callback received error: {error} — {desc}")
+        return RedirectResponse(f"/settings?mcp_error={desc}", status_code=302)
+
+    if not code or not state:
+        return RedirectResponse("/settings?mcp_error=missing+code+or+state", status_code=302)
+
+    mcp_service = _get_mcp_service(request)
+    try:
+        server_id = await mcp_service.oauth_callback(code, state)
+        return RedirectResponse(f"/settings?mcp_connected={server_id}", status_code=302)
+    except Exception as e:
+        logger.error(f"OAuth callback failed: {e}", exc_info=True)
+        return RedirectResponse(f"/settings?mcp_error={str(e)[:200]}", status_code=302)
