@@ -2615,7 +2615,10 @@ def define_async_task_tools():
                     "When 'skill' is omitted the sub-task performs its own automatic skill "
                     "selection based on its description. "
                     "Returns a task_id immediately. Use get_task_result to poll for completion "
-                    "and retrieve the result. Multiple tasks can run simultaneously."
+                    "and retrieve the result. Multiple tasks run concurrently (a limited number "
+                    "at a time; extras queue automatically), so dispatch all independent work up "
+                    "front and then wait. Sub-tasks may dispatch their own sub-tasks up to a "
+                    "bounded depth."
                 ),
                 parameters_model=DispatchTaskRequest,
             ),
@@ -2660,7 +2663,12 @@ def define_async_task_tools():
                     "Use this after dispatch_task instead of polling get_task_result in a loop. "
                     "You MUST call this (or get_task_result) before providing a final response "
                     "whenever you have dispatched sub-tasks — the system will not allow a final "
-                    "response while tasks are still running."
+                    "response while tasks are still running. "
+                    "A sub-task is a full agent loop and can take several minutes, so pass a "
+                    "generous timeout_seconds (default 900). Tasks reported as 'still running' "
+                    "at the timeout are NOT failed — they keep working in the background; call "
+                    "wait_for_tasks again to keep waiting, or proceed, and any late results are "
+                    "surfaced automatically on the next turn."
                 ),
                 parameters_model=WaitForTasksRequest,
             ),
