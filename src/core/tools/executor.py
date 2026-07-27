@@ -54,6 +54,7 @@ class ToolExecutor:
         conversation_id: Optional[str] = None,
         settings_service=None,
         plugin_service=None,
+        mcp_service=None,
     ):
         """
         Initialize tool executor with service instances.
@@ -78,6 +79,7 @@ class ToolExecutor:
             plugin_service: Plugin service instance for dynamic REST API integrations
         """
         self.plugin_service = plugin_service
+        self.mcp_service = mcp_service
         self.services = {
             "google": google_service,
             "google_navigator": google_service,  # Same service, different auth (OAuth vs API key)
@@ -151,6 +153,40 @@ class ToolExecutor:
         if tool.service_name.startswith("plugin_") and self.plugin_service:
             try:
                 result = await self.plugin_service.execute_tool(tool_name, arguments)
+                execution_time_ms = int((time.time() - start_time) * 1000)
+                success_result = {"success": True, "result": result}
+                self._log_tool_execution(
+                    tool_name=tool_name,
+                    service_name=tool.service_name,
+                    arguments=arguments,
+                    result=result,
+                    success=True,
+                    execution_time_ms=execution_time_ms,
+                    tool_call_id=tool_call_id,
+                    iteration=iteration,
+                )
+                return success_result
+            except Exception as e:
+                execution_time_ms = int((time.time() - start_time) * 1000)
+                error_msg = str(e)
+                error_result = {"success": False, "error": error_msg}
+                self._log_tool_execution(
+                    tool_name=tool_name,
+                    service_name=tool.service_name,
+                    arguments=arguments,
+                    result=error_result,
+                    success=False,
+                    error_message=error_msg,
+                    execution_time_ms=execution_time_ms,
+                    tool_call_id=tool_call_id,
+                    iteration=iteration,
+                )
+                return error_result
+
+        # Route MCP server tools directly through McpService
+        if tool.service_name.startswith("mcp_") and self.mcp_service:
+            try:
+                result = await self.mcp_service.execute_tool(tool_name, arguments)
                 execution_time_ms = int((time.time() - start_time) * 1000)
                 success_result = {"success": True, "result": result}
                 self._log_tool_execution(

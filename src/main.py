@@ -38,6 +38,7 @@ from src.api.settings import router as settings_router
 from src.api.skills import router as skills_router
 from src.api.slack import router as slack_router
 from src.api.plugins import router as plugins_router
+from src.api.mcp import router as mcp_router
 from src.api.google_news import router as google_news_router
 from src.api.yahoo_finance import router as yahoo_finance_router
 from src.api.whatsapp import router as whatsapp_router
@@ -147,6 +148,20 @@ async def lifespan(app: FastAPI):
         plugin_service.register_plugin_tools()
         app.state.plugin_service = plugin_service
 
+        # Initialize MCP service and register cached MCP server tools
+        from src.agents.registry import AgentRegistry
+        from src.services.mcp_service import McpService
+
+        mcp_service = McpService(
+            settings_repo,
+            credentials_repo,
+            audit_repo,
+            data_dir=config.general.data_dir,
+            agent_registry=AgentRegistry(db_manager),
+        )
+        mcp_service.register_mcp_tools()
+        app.state.mcp_service = mcp_service
+
         # Create embedding service (shared by search and system services)
         from src.services.embedding import EmbeddingService
         from src.services.search import UnifiedSearchService
@@ -197,6 +212,7 @@ async def lifespan(app: FastAPI):
             conversation_id=None,  # No conversation context for cron jobs
             settings_service=settings_service,
             plugin_service=plugin_service,
+            mcp_service=mcp_service,
         )
 
         # Create MessageHandler for new skills-based execution
@@ -503,6 +519,7 @@ def create_app() -> FastAPI:
     app.include_router(skills_router)
     app.include_router(slack_router)
     app.include_router(plugins_router)
+    app.include_router(mcp_router)
     app.include_router(google_news_router)
     app.include_router(yahoo_finance_router)
     app.include_router(whatsapp_router)

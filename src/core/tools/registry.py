@@ -118,6 +118,10 @@ class ToolRegistry:
             if tool.service_name.startswith("plugin_"):
                 plugin_id = tool.service_name[len("plugin_") :]
                 setting_key = f"plugin.{plugin_id}.enabled"
+            # MCP server tools: check mcp.{id}.enabled
+            elif tool.service_name.startswith("mcp_"):
+                server_id = tool.service_name[len("mcp_") :]
+                setting_key = f"mcp.{server_id}.enabled"
             else:
                 # Get the settings key for this service
                 setting_key = service_to_setting.get(

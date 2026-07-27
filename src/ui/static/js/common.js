@@ -56,6 +56,10 @@ class APIClient {
         return this.request('PUT', endpoint, data);
     }
 
+    async patch(endpoint, data) {
+        return this.request('PATCH', endpoint, data);
+    }
+
     async delete(endpoint) {
         return this.request('DELETE', endpoint);
     }

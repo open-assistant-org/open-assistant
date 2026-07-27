@@ -830,6 +830,7 @@ def get_tool_executor(
         settings_service=settings_service,
         search_service=search_service,
         plugin_service=getattr(request.app.state, "plugin_service", None),
+        mcp_service=getattr(request.app.state, "mcp_service", None),
     )
 
 
