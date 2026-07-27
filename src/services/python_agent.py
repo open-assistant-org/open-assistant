@@ -521,13 +521,14 @@ async def python_agent(
                 response_message.content if response_message and response_message.content else ""
             )
             if tool_calls:
-                _tool_names = ", ".join(
-                    getattr(tc.function, "name", "?") for tc in tool_calls
-                )
+                _tool_names = ", ".join(getattr(tc.function, "name", "?") for tc in tool_calls)
                 _iter_content = _iter_content or f"[tool calls: {_tool_names}]"
             if _iter_content:
                 transparency_logger.log(
-                    conversation_id, "python_agent", _iter_content, role="assistant",
+                    conversation_id,
+                    "python_agent",
+                    _iter_content,
+                    role="assistant",
                     extra_metadata={"iteration": iterations},
                 )
         if not tool_calls:

@@ -485,8 +485,6 @@ class Planner:
         # Persist the plan as an internal transparency row (visibility only;
         # billing reads llm_consumption). Billing-neutral.
         if conversation_id:
-            transparency_logger.log(
-                conversation_id, "planner", plan_text, role="assistant"
-            )
+            transparency_logger.log(conversation_id, "planner", plan_text, role="assistant")
 
         return PlanTracker.from_llm_output(plan_text)

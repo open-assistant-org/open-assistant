@@ -123,7 +123,10 @@ async def compose_document(
     # billing reads llm_consumption). Billing-neutral.
     if conversation_id:
         transparency_logger.log(
-            conversation_id, "document", outline, role="assistant",
+            conversation_id,
+            "document",
+            outline,
+            role="assistant",
             extra_metadata={"stage": "outline"},
         )
 
@@ -239,7 +242,10 @@ async def compose_document(
     # Persist the final composed document as an internal transparency row.
     if conversation_id:
         transparency_logger.log(
-            conversation_id, "document", final_content, role="assistant",
+            conversation_id,
+            "document",
+            final_content,
+            role="assistant",
             extra_metadata={"stage": "final"},
         )
 

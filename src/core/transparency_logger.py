@@ -54,9 +54,7 @@ class TransparencyLogger:
         cls._has_system_prompt.clear()
 
     @classmethod
-    def has_internal(
-        cls, conversation_id: str, kind: Optional[str] = None
-    ) -> bool:
+    def has_internal(cls, conversation_id: str, kind: Optional[str] = None) -> bool:
         """Return True if an internal row already exists for this conversation.
 
         When ``kind`` is given, only rows of that kind are considered. Used to

@@ -87,8 +87,11 @@ class TestExtractUsage:
 
     def test_total_derived_from_prompt_plus_completion_when_absent(self):
         u = types.SimpleNamespace(
-            prompt_tokens=100, completion_tokens=50, total_tokens=None,
-            prompt_tokens_details=None, completion_tokens_details=None,
+            prompt_tokens=100,
+            completion_tokens=50,
+            total_tokens=None,
+            prompt_tokens_details=None,
+            completion_tokens_details=None,
         )
         assert _extract_usage(u)["total_tokens"] == 150
 
@@ -168,7 +171,9 @@ class TestBoundaryWrap:
         from src.core.llm_client import LLMClient, LLMConfig
 
         config = LLMConfig(
-            provider="openrouter", model="claude", api_key="k",
+            provider="openrouter",
+            model="claude",
+            api_key="k",
             base_url="https://openrouter.ai/api/v1",
         )
 
@@ -196,8 +201,13 @@ class TestMigrations:
         conn = dbm.get_connection()
         try:
             cols = {r[1] for r in conn.execute("PRAGMA table_info(llm_consumption)")}
-            assert {"prompt_tokens", "completion_tokens", "total_tokens",
-                    "cached_tokens", "reasoning_tokens"} <= cols
+            assert {
+                "prompt_tokens",
+                "completion_tokens",
+                "total_tokens",
+                "cached_tokens",
+                "reasoning_tokens",
+            } <= cols
             # baseline row present, current-month-dated
             row = conn.execute(
                 "SELECT provider, model, total_tokens, metadata "
@@ -264,9 +274,7 @@ class TestHistoryFilter:
         repo = MessageRepository(dbm)
         # Create the conversation row first (FK)
         conn = dbm.get_connection()
-        conn.execute(
-            "INSERT INTO conversations (conversation_id, channel) VALUES ('c1','webui')"
-        )
+        conn.execute("INSERT INTO conversations (conversation_id, channel) VALUES ('c1','webui')")
         conn.commit()
         conn.close()
 
@@ -305,13 +313,12 @@ class TestContinuity:
         # Baseline seeded against empty messages -> 0; just verify the current
         # month is present (the bridge exists) and accurate usage adds on top.
         UsageRecorder.set_db(dbm)
-        usage_recorder.record(_fake_usage(prompt=100, completion=40, total=140),
-                              provider="openrouter", model="claude")
+        usage_recorder.record(
+            _fake_usage(prompt=100, completion=40, total=140), provider="openrouter", model="claude"
+        )
         UsageRecorder.clear()
         totals2 = repo.get_monthly_totals(months=12)
-        current2 = next(
-            m for m in totals2 if m["year"] == now.year and m["month"] == now.month
-        )
+        current2 = next(m for m in totals2 if m["year"] == now.year and m["month"] == now.month)
         assert current2["tokens_total"] == current["tokens_total"] + 140
 
 
@@ -398,9 +405,7 @@ class TestCompaction:
         conn = compaction_db.get_connection()
         try:
             recent = {
-                r[0] for r in conn.execute(
-                    "SELECT content FROM messages WHERE content='recent'"
-                )
+                r[0] for r in conn.execute("SELECT content FROM messages WHERE content='recent'")
             }
             assert recent == {"recent"}  # both recent rows survived
             # one compacted row per conversation

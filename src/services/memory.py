@@ -457,9 +457,7 @@ Write an updated coherent summary in 2-4 paragraphs that merges the prior contex
 
             # Persist the summary as an internal transparency row (visibility
             # only; billing reads llm_consumption). Billing-neutral.
-            transparency_logger.log(
-                conversation_id, "memory_summary", summary, role="assistant"
-            )
+            transparency_logger.log(conversation_id, "memory_summary", summary, role="assistant")
 
             # Store as long-term memory
             self.memory_repo.store_memory(
@@ -533,9 +531,7 @@ List each fact as a single concise sentence, one per line."""
 
             # Persist the extracted facts as an internal transparency row
             # (visibility only; billing-neutral).
-            transparency_logger.log(
-                conversation_id, "memory_facts", facts_text, role="assistant"
-            )
+            transparency_logger.log(conversation_id, "memory_facts", facts_text, role="assistant")
 
             # Parse facts (one per line)
             facts = [

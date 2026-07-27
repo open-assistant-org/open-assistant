@@ -235,9 +235,7 @@ class SystemService:
         try:
             n = retention_days if retention_days is not None else self._get_retention_days()
             n = max(1, min(int(n), 3650))
-            cutoff = (datetime.utcnow() - timedelta(days=n)).isoformat(
-                sep=" ", timespec="seconds"
-            )
+            cutoff = (datetime.utcnow() - timedelta(days=n)).isoformat(sep=" ", timespec="seconds")
 
             conn = self._db_manager.get_connection()
             try:
@@ -250,7 +248,11 @@ class SystemService:
             logger.info(
                 "Compaction complete: messages(%d convs, %d rows removed), "
                 "llm_consumption(%d months, %d rows removed), %d errors",
-                msg_compacted, msg_removed, cons_months, cons_removed, errors,
+                msg_compacted,
+                msg_removed,
+                cons_months,
+                cons_removed,
+                errors,
             )
             return {
                 "success": True,

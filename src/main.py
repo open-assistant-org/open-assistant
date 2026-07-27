@@ -356,9 +356,7 @@ async def lifespan(app: FastAPI):
                     }
                 ],
             )
-            logger.info(
-                f"Created system compaction job (daily at 03:30): {_COMPACTION_JOB_ID}"
-            )
+            logger.info(f"Created system compaction job (daily at 03:30): {_COMPACTION_JOB_ID}")
         else:
             logger.info(f"System compaction job already exists: {_COMPACTION_JOB_ID}")
 

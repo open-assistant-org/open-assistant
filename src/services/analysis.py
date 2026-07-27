@@ -62,8 +62,6 @@ async def analyze_content(
     # Persist the analysis as an internal transparency row (visibility only;
     # billing reads llm_consumption). Billing-neutral.
     if conversation_id:
-        transparency_logger.log(
-            conversation_id, "analysis", analysis_result, role="assistant"
-        )
+        transparency_logger.log(conversation_id, "analysis", analysis_result, role="assistant")
 
     return {"analysis_result": analysis_result, "format": format}
