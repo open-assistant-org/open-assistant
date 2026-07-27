@@ -7,7 +7,6 @@ instead of the legacy ``SUM(messages.token_count)`` estimate.
 import json
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
-from uuid import uuid4
 
 from src.core.repositories.base import BaseRepository
 
