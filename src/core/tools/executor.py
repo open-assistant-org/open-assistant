@@ -693,6 +693,8 @@ class ToolExecutor:
             return service.update_soul_prompt(**arguments)
         elif tool_name == "system_clean_tmp_dir":
             return service.clean_tmp_dir(**arguments)
+        elif tool_name == "system_compact_messages":
+            return service.compact_messages(**arguments)
         elif tool_name == "memory_recall":
             return service.recall_conversation_memory(**arguments)
 
@@ -700,12 +702,20 @@ class ToolExecutor:
         elif tool_name == "compose_document":
             from src.services.document import compose_document
 
-            return await compose_document(**arguments, settings_service=self.settings_service)
+            return await compose_document(
+                **arguments,
+                settings_service=self.settings_service,
+                conversation_id=self.conversation_id,
+            )
 
         elif tool_name == "analyze_content":
             from src.services.analysis import analyze_content
 
-            return await analyze_content(**arguments, settings_service=self.settings_service)
+            return await analyze_content(
+                **arguments,
+                settings_service=self.settings_service,
+                conversation_id=self.conversation_id,
+            )
 
         elif tool_name == "create_docx":
             from src.services.document import create_docx
@@ -769,7 +779,11 @@ class ToolExecutor:
         elif tool_name == "python_agent":
             from src.services.python_agent import python_agent
 
-            return await python_agent(**arguments, settings_service=self.settings_service)
+            return await python_agent(
+                **arguments,
+                settings_service=self.settings_service,
+                conversation_id=self.conversation_id,
+            )
 
         # Batch tool (iterates any other tool over a list of items)
         elif tool_name == "batch_tool":

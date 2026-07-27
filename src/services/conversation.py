@@ -119,6 +119,7 @@ class ConversationService:
         content: str,
         model: str = "default",
         metadata: Optional[Dict[str, Any]] = None,
+        is_internal: bool = False,
     ) -> Dict[str, Any]:
         """
         Add a message to a conversation.
@@ -129,6 +130,9 @@ class ConversationService:
             content: Message content
             model: Model name for token counting
             metadata: Additional metadata
+            is_internal: If True, this is a transparency row (system prompt /
+                auxiliary LLM output) excluded from history re-sent to the LLM.
+                Billing-neutral.
 
         Returns:
             Created message dictionary
@@ -143,6 +147,7 @@ class ConversationService:
             content=content,
             metadata=metadata,
             token_count=token_count,
+            is_internal=is_internal,
         )
 
         # Update conversation last accessed
