@@ -968,7 +968,9 @@ class MessageHandler:
 
         max_plan_nudges = 3
         max_validation_nudges = 2
+        max_running_tasks_nudges = 2
         validation_nudge_count = 0
+        running_tasks_nudge_count = 0
 
         # Give iterative plans more room to finish
         effective_max_iterations = self.max_iterations
@@ -1108,12 +1110,16 @@ class MessageHandler:
 
                 # Safeguard: refuse to return while sub-tasks are still running.
                 # Nudge the LLM to call wait_for_tasks to collect all results first.
+                # After max_running_tasks_nudges attempts, allow the final response so
+                # we don't spin forever when a background task is genuinely slow.
                 running_tasks = self.async_task_dispatcher.get_running_tasks()
-                if running_tasks:
+                if running_tasks and running_tasks_nudge_count < max_running_tasks_nudges:
                     running_ids = [t["task_id"] for t in running_tasks]
+                    running_tasks_nudge_count += 1
                     logger.info(
                         f"{len(running_tasks)} sub-task(s) still running when LLM tried "
-                        f"to return a final response: {running_ids}. Nudging to wait."
+                        f"to return a final response: {running_ids}. "
+                        f"Nudging to wait ({running_tasks_nudge_count}/{max_running_tasks_nudges})."
                     )
                     messages.append({"role": "assistant", "content": final_response})
                     messages.append(
@@ -1128,6 +1134,13 @@ class MessageHandler:
                         }
                     )
                     continue
+                elif running_tasks:
+                    running_ids = [t["task_id"] for t in running_tasks]
+                    logger.warning(
+                        f"Running-tasks nudge limit ({max_running_tasks_nudges}) reached with "
+                        f"{len(running_tasks)} sub-task(s) still running: {running_ids}. "
+                        "Allowing final response — tasks will surface via collect_unreported."
+                    )
 
                 # Self-validation: before accepting the final response, ask the
                 # worker model whether the original task is actually complete.
