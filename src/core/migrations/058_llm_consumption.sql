@@ -1,4 +1,4 @@
--- Migration: 057_llm_consumption
+-- Migration: 058_llm_consumption
 -- Adds the per-call LLM consumption ledger used for accurate metered billing.
 --
 -- The previous billing source (SUM(messages.token_count)) only counted a local
@@ -45,4 +45,4 @@ FROM (SELECT COALESCE(SUM(token_count), 0) AS s
       FROM messages
       WHERE timestamp >= datetime('now', '-12 months'));
 
-INSERT OR IGNORE INTO schema_migrations (version) VALUES ('057_llm_consumption');
+INSERT OR IGNORE INTO schema_migrations (version) VALUES ('058_llm_consumption');
