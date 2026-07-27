@@ -1000,6 +1000,22 @@ class GoogleService(BaseService):
         client = self._get_drive_client()
         return client.docs_update(document_id=document_id, content=content)
 
+    def docs_replace_text(
+        self,
+        document_id: str,
+        find: str,
+        replace: str,
+        match_case: bool = False,
+    ) -> Dict[str, Any]:
+        """Find and replace text within a Google Doc."""
+        client = self._get_drive_client()
+        return client.docs_replace_text(
+            document_id=document_id,
+            find=find,
+            replace=replace,
+            match_case=match_case,
+        )
+
     # ========================================================================
     # GOOGLE SHEETS OPERATIONS
     # ========================================================================
@@ -1064,6 +1080,14 @@ class GoogleService(BaseService):
             values=values,
         )
 
+    def sheets_clear(self, spreadsheet_id: str, range_notation: str) -> Dict[str, Any]:
+        """Clear values from a Google Sheet range (formatting preserved)."""
+        client = self._get_drive_client()
+        return client.sheets_clear(
+            spreadsheet_id=spreadsheet_id,
+            range_notation=range_notation,
+        )
+
     # ========================================================================
     # GOOGLE SLIDES OPERATIONS
     # ========================================================================
@@ -1087,6 +1111,52 @@ class GoogleService(BaseService):
         """Get the content of a Google Slides presentation."""
         client = self._get_drive_client()
         return client.slides_get(presentation_id=presentation_id)
+
+    def slides_add_slide(
+        self,
+        presentation_id: str,
+        title: Optional[str] = None,
+        body: Optional[str] = None,
+        layout: str = "TITLE_AND_BODY",
+    ) -> Dict[str, Any]:
+        """Add a new slide (with optional title/body) to a presentation."""
+        client = self._get_drive_client()
+        return client.slides_add_slide(
+            presentation_id=presentation_id,
+            title=title,
+            body=body,
+            layout=layout,
+        )
+
+    def slides_replace_text(
+        self,
+        presentation_id: str,
+        find: str,
+        replace: str,
+        match_case: bool = False,
+    ) -> Dict[str, Any]:
+        """Find and replace text across a Google Slides presentation."""
+        client = self._get_drive_client()
+        return client.slides_replace_text(
+            presentation_id=presentation_id,
+            find=find,
+            replace=replace,
+            match_case=match_case,
+        )
+
+    def slides_insert_text(
+        self,
+        presentation_id: str,
+        slide_id: str,
+        text: str,
+    ) -> Dict[str, Any]:
+        """Insert a text box onto a slide."""
+        client = self._get_drive_client()
+        return client.slides_insert_text(
+            presentation_id=presentation_id,
+            slide_id=slide_id,
+            text=text,
+        )
 
     def complete_oauth(self, authorization_code: str) -> Dict[str, Any]:
         """

@@ -1,7 +1,9 @@
 """Outlook service for email, calendar, and OneDrive operations."""
 
+import re
 import threading
 from datetime import datetime, timedelta, timezone
+from html.parser import HTMLParser
 from typing import Any, Dict, List, Optional
 
 from dateutil import parser as dateutil_parser
@@ -107,6 +109,90 @@ def _normalize_calendar_date(value: Optional[str], boundary: str = "start") -> O
     )
 
 
+_BODY_TEXT_LIMIT = 1000
+
+
+class _HTMLTextExtractor(HTMLParser):
+    """Extracts plain text from HTML, skipping style/script blocks."""
+
+    _SKIP_TAGS = frozenset({"style", "script", "head"})
+    _BLOCK_TAGS = frozenset(
+        {"p", "div", "br", "tr", "li", "td", "th", "h1", "h2", "h3", "h4", "h5", "h6"}
+    )
+
+    def __init__(self):
+        super().__init__()
+        self._parts: List[str] = []
+        self._skip_depth = 0
+
+    def handle_starttag(self, tag, attrs):
+        tag_lower = tag.lower()
+        if tag_lower in self._SKIP_TAGS:
+            self._skip_depth += 1
+        elif tag_lower in self._BLOCK_TAGS:
+            self._parts.append("\n")
+
+    def handle_endtag(self, tag):
+        if tag.lower() in self._SKIP_TAGS:
+            self._skip_depth = max(0, self._skip_depth - 1)
+
+    def handle_data(self, data):
+        if self._skip_depth == 0:
+            self._parts.append(data)
+
+    def get_text(self) -> str:
+        text = "".join(self._parts)
+        text = re.sub(r"[ \t]+", " ", text)
+        text = re.sub(r"\n{3,}", "\n\n", text)
+        return text.strip()
+
+
+def _html_to_text(html_content: str) -> str:
+    extractor = _HTMLTextExtractor()
+    try:
+        extractor.feed(html_content)
+    except Exception:
+        # HTMLParser.feed may raise on severely malformed HTML; return partial extraction
+        pass
+    return extractor.get_text()
+
+
+def _summarize_email(msg: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a compact, LLM-friendly representation of a Graph API message object."""
+    body = msg.get("body", {})
+    content = body.get("content", "")
+    content_type = body.get("contentType", "text").lower()
+
+    body_text = _html_to_text(content) if content_type == "html" else content.strip()
+    if len(body_text) > _BODY_TEXT_LIMIT:
+        body_text = body_text[:_BODY_TEXT_LIMIT] + "..."
+
+    def _addrs(recipients):
+        return [
+            r["emailAddress"]["address"]
+            for r in (recipients or [])
+            if r.get("emailAddress", {}).get("address")
+        ]
+
+    from_field = msg.get("from") or msg.get("sender") or {}
+    from_addr = from_field.get("emailAddress", {})
+
+    return {
+        "id": msg.get("id", ""),
+        "subject": msg.get("subject", ""),
+        "receivedDateTime": msg.get("receivedDateTime", ""),
+        "from": {
+            "name": from_addr.get("name", ""),
+            "address": from_addr.get("address", ""),
+        },
+        "bodyPreview": msg.get("bodyPreview", ""),
+        "body_text": body_text,
+        "hasAttachments": msg.get("hasAttachments", False),
+        "toRecipients": _addrs(msg.get("toRecipients")),
+        "ccRecipients": _addrs(msg.get("ccRecipients")),
+    }
+
+
 class OutlookService(BaseService):
     """Service for Outlook/Microsoft Graph integration."""
 
@@ -177,12 +263,20 @@ class OutlookService(BaseService):
 
     # Mail operations
     def read_emails(
-        self, folder: str = "inbox", limit: int = 10, query: Optional[str] = None
+        self,
+        folder: str = "inbox",
+        limit: int = 10,
+        query: Optional[str] = None,
+        summary_mode: bool = True,
     ) -> List[Dict[str, Any]]:
         client = self._get_client()
         if query:
-            return client.search_emails(query=query, folder=folder, limit=limit)
-        return client.list_messages(folder=folder, limit=limit)
+            messages = client.search_emails(query=query, folder=folder, limit=limit)
+        else:
+            messages = client.list_messages(folder=folder, limit=limit)
+        if summary_mode:
+            return [_summarize_email(m) for m in messages]
+        return messages
 
     def send_email(self, to: List[str], subject: str, body: str, **kwargs) -> bool:
         client = self._get_client()
@@ -279,7 +373,7 @@ class OutlookService(BaseService):
         return client.get_message(message_id=message_id)
 
     def search_emails(
-        self, query: str, folder: str = "inbox", limit: int = 20
+        self, query: str, folder: str = "inbox", limit: int = 20, summary_mode: bool = True
     ) -> List[Dict[str, Any]]:
         """
         Search emails by query string.
@@ -288,12 +382,16 @@ class OutlookService(BaseService):
             query: Search query
             folder: Mail folder to search in
             limit: Maximum results
+            summary_mode: When True, returns compact plain-text summaries instead of raw Graph payloads
 
         Returns:
             List of matching messages
         """
         client = self._get_client()
-        return client.search_emails(query=query, folder=folder, limit=limit)
+        messages = client.search_emails(query=query, folder=folder, limit=limit)
+        if summary_mode:
+            return [_summarize_email(m) for m in messages]
+        return messages
 
     def create_draft(
         self,

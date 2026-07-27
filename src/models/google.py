@@ -426,6 +426,19 @@ class DocsUpdateRequest(BaseModel):
     )
 
 
+class DocsReplaceTextRequest(BaseModel):
+    """Request model for find-and-replace within a Google Doc."""
+
+    document_id: str = Field(..., description="Google Docs document ID")
+    find: str = Field(..., description="The exact text to search for in the document")
+    replace: str = Field(
+        ..., description="The text to substitute for every occurrence of 'find' (use '' to delete)"
+    )
+    match_case: bool = Field(
+        False, description="Whether the search should be case-sensitive (default: False)"
+    )
+
+
 # Google Sheets
 
 
@@ -486,6 +499,16 @@ class SheetsAppendRequest(BaseModel):
     )
 
 
+class SheetsClearRequest(BaseModel):
+    """Request model for clearing values from a Google Sheet range."""
+
+    spreadsheet_id: str = Field(..., description="Google Sheets spreadsheet ID")
+    range_notation: str = Field(
+        ...,
+        description="A1 notation range to clear. Examples: 'Sheet1!A1:D10', 'Sheet1!A:A' (whole column). Only cell values are cleared; formatting is kept.",
+    )
+
+
 # Google Slides
 
 
@@ -502,3 +525,43 @@ class SlidesGetRequest(BaseModel):
         ...,
         description="Google Slides presentation ID (from the URL: docs.google.com/presentation/d/<ID>/edit)",
     )
+
+
+class SlidesAddSlideRequest(BaseModel):
+    """Request model for adding a new slide to a Google Slides presentation."""
+
+    presentation_id: str = Field(..., description="Google Slides presentation ID")
+    title: Optional[str] = Field(
+        None, description="Optional title text placed in the slide's title placeholder"
+    )
+    body: Optional[str] = Field(
+        None, description="Optional body text placed in the slide's body placeholder"
+    )
+    layout: str = Field(
+        "TITLE_AND_BODY",
+        description="Predefined layout for the new slide. Common values: 'TITLE_AND_BODY', 'TITLE_ONLY', 'BLANK', 'SECTION_HEADER'.",
+    )
+
+
+class SlidesReplaceTextRequest(BaseModel):
+    """Request model for find-and-replace across a Google Slides presentation."""
+
+    presentation_id: str = Field(..., description="Google Slides presentation ID")
+    find: str = Field(..., description="The exact text to search for across all slides")
+    replace: str = Field(
+        ..., description="The text to substitute for every occurrence of 'find' (use '' to delete)"
+    )
+    match_case: bool = Field(
+        False, description="Whether the search should be case-sensitive (default: False)"
+    )
+
+
+class SlidesInsertTextRequest(BaseModel):
+    """Request model for inserting a text box onto a Google Slides slide."""
+
+    presentation_id: str = Field(..., description="Google Slides presentation ID")
+    slide_id: str = Field(
+        ...,
+        description="The objectId of the slide to add the text box to (from google_slides_get, field 'slide_id')",
+    )
+    text: str = Field(..., description="Text content to place in the new text box")
