@@ -198,6 +198,18 @@ class McpServerListItem(BaseModel):
     tool_names: List[str] = Field(default_factory=list)
 
 
+class McpServerUpdateRequest(BaseModel):
+    """Request to update mutable fields of an existing MCP server.
+
+    Only ``display_name`` and ``intent_keywords`` may be changed here.
+    To change auth headers use ``/credentials``; to re-discover tools use
+    ``/refresh``; to change enable state use ``/enable``.
+    """
+
+    display_name: Optional[str] = Field(None, min_length=1, max_length=100)
+    intent_keywords: Optional[List[str]] = None
+
+
 class McpTestResult(BaseModel):
     success: bool
     message: str

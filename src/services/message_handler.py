@@ -505,10 +505,17 @@ class MessageHandler:
         if not skills:
             logger.warning("No skills returned from repository")
 
-        # Merge sticky skills accumulated during this conversation so tools
-        # established in earlier messages remain available without re-triggering
-        # their intent keywords.
         if conversation_id:
+            # Persist any skill that matched by keyword immediately — so subsequent
+            # messages in the same conversation keep the skill's tools available
+            # even if the user's follow-up doesn't repeat the trigger word.
+            for skill in skills:
+                if skill.matches_intent(message):
+                    self._persist_active_skill(conversation_id, skill.name)
+
+            # Merge sticky skills accumulated during this conversation so tools
+            # established in earlier messages remain available without re-triggering
+            # their intent keywords.
             conv = self.conversation_service.conversation_repo.get_by_id(conversation_id)
             meta = (conv or {}).get("metadata") or {}
             active_names = set(meta.get("active_skills", []))

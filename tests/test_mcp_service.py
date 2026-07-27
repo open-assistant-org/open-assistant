@@ -12,6 +12,7 @@ from src.models.mcp import (
     McpOAuthMetadata,
     McpServerConfig,
     McpServerCreateRequest,
+    McpServerUpdateRequest,
 )
 from src.services.mcp_service import McpService, _describe_exception, _pkce_challenge
 
@@ -546,3 +547,74 @@ async def test_add_server_oauth_skips_discovery(tmp_path):
     assert cfg.discovered_tools == []
     assert cfg.oauth_metadata is not None
     agent_registry.create_agent.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_update_server_keywords_and_name(tmp_path):
+    """update_server persists new keywords and display_name, then syncs the agent row."""
+    agent_registry = MagicMock()
+    existing_agent = MagicMock()
+    existing_agent.id = 42
+    agent_registry.get_agent_by_name.return_value = existing_agent
+
+    svc = _make_service(tmp_path, agent_registry=agent_registry)
+    cfg = McpServerConfig(
+        id="pb",
+        display_name="PostBridge",
+        url="https://www.post-bridge.com/api/mcp/mcp",
+        auth_type="header",
+        intent_keywords=["email"],
+    )
+    svc._configs["pb"] = cfg
+    (tmp_path / "mcp_servers").mkdir(parents=True, exist_ok=True)
+
+    await svc.update_server(
+        "pb",
+        McpServerUpdateRequest(
+            display_name="PostBridge Mail",
+            intent_keywords=["email", "send", "compose"],
+        ),
+    )
+
+    updated = svc._configs["pb"]
+    assert updated.display_name == "PostBridge Mail"
+    assert updated.intent_keywords == ["email", "send", "compose"]
+
+    # Confirm the config file was written.
+    import json
+
+    saved = json.loads((tmp_path / "mcp_servers" / "pb.json").read_text())
+    assert saved["intent_keywords"] == ["email", "send", "compose"]
+
+    # Agent row should have been synced.
+    agent_registry.update_agent.assert_called_once()
+    call_kwargs = agent_registry.update_agent.call_args[0][1]
+    assert call_kwargs["intent_keywords"] == ["email", "send", "compose"]
+
+
+@pytest.mark.asyncio
+async def test_update_server_keywords_only(tmp_path):
+    """update_server with only intent_keywords leaves display_name unchanged."""
+    svc = _make_service(tmp_path)
+    cfg = McpServerConfig(
+        id="pb",
+        display_name="PostBridge",
+        url="https://www.post-bridge.com/api/mcp/mcp",
+        auth_type="none",
+        intent_keywords=["old"],
+    )
+    svc._configs["pb"] = cfg
+    (tmp_path / "mcp_servers").mkdir(parents=True, exist_ok=True)
+
+    await svc.update_server("pb", McpServerUpdateRequest(intent_keywords=["new1", "new2"]))
+
+    updated = svc._configs["pb"]
+    assert updated.display_name == "PostBridge"
+    assert updated.intent_keywords == ["new1", "new2"]
+
+
+@pytest.mark.asyncio
+async def test_update_server_unknown_raises(tmp_path):
+    svc = _make_service(tmp_path)
+    with pytest.raises(KeyError):
+        await svc.update_server("missing", McpServerUpdateRequest(intent_keywords=["x"]))

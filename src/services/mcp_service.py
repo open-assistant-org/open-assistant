@@ -47,6 +47,7 @@ from src.models.mcp import (
     McpServerConfig,
     McpServerCreateRequest,
     McpServerListItem,
+    McpServerUpdateRequest,
     McpTestResult,
 )
 from src.services.base import BaseService
@@ -750,6 +751,23 @@ class McpService(BaseService):
             f"with {len(cfg.discovered_tools)} tool(s)"
         )
         return cfg
+
+    async def update_server(self, server_id: str, request: McpServerUpdateRequest) -> None:
+        """Update mutable fields (display_name, intent_keywords) and sync the agent row."""
+        cfg = self._configs.get(server_id)
+        if not cfg:
+            raise KeyError(f"MCP server '{server_id}' not found")
+
+        data = cfg.model_dump()
+        if request.display_name is not None:
+            data["display_name"] = request.display_name
+        if request.intent_keywords is not None:
+            data["intent_keywords"] = [k.strip() for k in request.intent_keywords if k.strip()]
+
+        cfg = McpServerConfig.model_validate(data)
+        self._configs[server_id] = cfg
+        self._save_config(cfg)
+        self._sync_agent_row(cfg)
 
     async def refresh_tools(self, server_id: str) -> McpServerConfig:
         """Re-discover a server's tools and update the registry + agent row."""

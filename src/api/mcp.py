@@ -10,6 +10,7 @@ from src.models.mcp import (
     McpOAuthStartResponse,
     McpServerCreateRequest,
     McpServerListItem,
+    McpServerUpdateRequest,
     McpTestResult,
 )
 from src.services.mcp_service import McpSdkNotInstalled
@@ -52,6 +53,25 @@ async def add_server(body: McpServerCreateRequest, request: Request) -> McpServe
         if item.id == cfg.id:
             return item
     raise HTTPException(status_code=500, detail="Server added but not found in listing")
+
+
+@router.patch("/{server_id}", response_model=McpServerListItem)
+async def update_server(
+    server_id: str, body: McpServerUpdateRequest, request: Request
+) -> McpServerListItem:
+    """Update display_name and/or intent_keywords for an MCP server."""
+    mcp_service = _get_mcp_service(request)
+    try:
+        await mcp_service.update_server(server_id, body)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"MCP server '{server_id}' not found")
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    for item in mcp_service.list_servers():
+        if item.id == server_id:
+            return item
+    raise HTTPException(status_code=500, detail="Server updated but not found in listing")
 
 
 @router.put("/{server_id}/enable")

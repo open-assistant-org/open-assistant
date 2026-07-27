@@ -564,6 +564,32 @@
         </div>
     </div>
 
+    <!-- Edit MCP Server Modal (display_name + intent_keywords) -->
+    <div id="mcpEditModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width:480px;">
+            <div class="modal-header">
+                <h2>Edit MCP Server</h2>
+                <button class="modal-close" onclick="closeMcpEditModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="mcp-edit-server-id">
+                <div class="form-group">
+                    <label for="mcp-edit-display-name">Display Name</label>
+                    <input type="text" id="mcp-edit-display-name" class="form-input" maxlength="100">
+                </div>
+                <div class="form-group">
+                    <label for="mcp-edit-keywords">Intent Keywords <span class="text-muted">(comma-separated)</span></label>
+                    <input type="text" id="mcp-edit-keywords" class="form-input" placeholder="email, send, compose">
+                    <small class="text-muted">A message containing any of these words activates this server's tools.</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="closeMcpEditModal()" class="btn btn-secondary">Cancel</button>
+                <button onclick="saveMcpEdit()" class="btn btn-primary">Save</button>
+            </div>
+        </div>
+    </div>
+
     <script defer src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
     <script src="/static/js/common.js"></script>
     <script src="/static/js/settings.js"></script>

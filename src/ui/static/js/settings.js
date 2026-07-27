@@ -1644,9 +1644,11 @@ function createMcpAgentCard(agent, index, total) {
 
     const footerButtons = authType === 'oauth2'
         ? `<button onclick="connectMcpOAuth('${serverId}')" class="btn btn-secondary btn-sm">Connect via OAuth</button>
-           <button onclick="refreshMcpServer('${serverId}')" class="btn btn-secondary btn-sm">Refresh Tools</button>`
+           <button onclick="refreshMcpServer('${serverId}')" class="btn btn-secondary btn-sm">Refresh Tools</button>
+           <button onclick="openMcpEditModal('${serverId}')" class="btn btn-secondary btn-sm">Edit</button>`
         : `<button onclick="openMcpCredentialsModal('${serverId}')" class="btn btn-secondary btn-sm">Credentials</button>
-           <button onclick="refreshMcpServer('${serverId}')" class="btn btn-secondary btn-sm">Refresh Tools</button>`;
+           <button onclick="refreshMcpServer('${serverId}')" class="btn btn-secondary btn-sm">Refresh Tools</button>
+           <button onclick="openMcpEditModal('${serverId}')" class="btn btn-secondary btn-sm">Edit</button>`;
 
     const upDisabled = index === 0 ? 'disabled' : '';
     const downDisabled = index === total - 1 ? 'disabled' : '';
@@ -2711,6 +2713,38 @@ function handleMcpOAuthRedirect() {
 // ============================================================================
 // MCP CREDENTIALS MODAL (static-header servers only)
 // ============================================================================
+
+function openMcpEditModal(serverId) {
+    const srv = (settingsState.mcpServers || {})[`mcp_${serverId}`] || {};
+    document.getElementById('mcp-edit-server-id').value = serverId;
+    document.getElementById('mcp-edit-display-name').value = srv.display_name || '';
+    document.getElementById('mcp-edit-keywords').value = (srv.intent_keywords || []).join(', ');
+    document.getElementById('mcpEditModal').style.display = 'flex';
+}
+
+function closeMcpEditModal() {
+    document.getElementById('mcpEditModal').style.display = 'none';
+}
+
+async function saveMcpEdit() {
+    const serverId = document.getElementById('mcp-edit-server-id').value;
+    const displayName = document.getElementById('mcp-edit-display-name').value.trim();
+    const keywords = document.getElementById('mcp-edit-keywords').value
+        .split(',').map(k => k.trim()).filter(k => k);
+
+    const body = {};
+    if (displayName) body.display_name = displayName;
+    body.intent_keywords = keywords;
+
+    try {
+        await api.patch(`/api/mcp/${serverId}`, body);
+        toast.success('Server updated');
+        closeMcpEditModal();
+        await loadAgents();
+    } catch (error) {
+        toast.error('Failed to update: ' + (error.message || 'Unknown error'));
+    }
+}
 
 function openMcpCredentialsModal(serverId) {
     const srv = (settingsState.mcpServers || {})[`mcp_${serverId}`] || {};
