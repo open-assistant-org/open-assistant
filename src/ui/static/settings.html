@@ -486,6 +486,10 @@
                     <input type="text" id="new-mcp-keywords" class="form-input" placeholder="cloudflare, gateway, cdn">
                     <div class="form-hint">A message containing any of these words activates this server's tools.</div>
                 </div>
+                <div class="form-group">
+                    <label for="new-mcp-backstory">Backstory <span class="text-muted">(optional)</span></label>
+                    <textarea id="new-mcp-backstory" class="form-input" rows="3" maxlength="2000" placeholder="Custom system-prompt text injected when this server is active. Leave blank for the default."></textarea>
+                </div>
 
                 <!-- Server URL -->
                 <div class="form-group">
@@ -564,7 +568,7 @@
         </div>
     </div>
 
-    <!-- Edit MCP Server Modal (display_name + intent_keywords) -->
+    <!-- Edit MCP Server Modal (display_name + intent_keywords + backstory) -->
     <div id="mcpEditModal" class="modal" style="display: none;">
         <div class="modal-content" style="max-width:480px;">
             <div class="modal-header">
@@ -581,6 +585,10 @@
                     <label for="mcp-edit-keywords">Intent Keywords <span class="text-muted">(comma-separated)</span></label>
                     <input type="text" id="mcp-edit-keywords" class="form-input" placeholder="email, send, compose">
                     <small class="text-muted">A message containing any of these words activates this server's tools.</small>
+                </div>
+                <div class="form-group">
+                    <label for="mcp-edit-backstory">Backstory <span class="text-muted">(optional)</span></label>
+                    <textarea id="mcp-edit-backstory" class="form-input" rows="3" maxlength="2000" placeholder="Custom system-prompt text injected when this server is active. Leave blank for the default."></textarea>
                 </div>
             </div>
             <div class="modal-footer">
