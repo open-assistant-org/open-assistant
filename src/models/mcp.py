@@ -83,6 +83,9 @@ class McpServerConfig(BaseModel):
 
     # Intent keywords copied onto the generated agent/skill row for triggering.
     intent_keywords: List[str] = Field(default_factory=list)
+    # Optional system-prompt text injected when this server's tools are active.
+    # When empty the service generates a default backstory.
+    backstory: Optional[str] = None
     # Cached tool schemas from the last successful discovery, so startup can
     # register tools without contacting every server.
     discovered_tools: List[McpDiscoveredTool] = Field(default_factory=list)
@@ -149,6 +152,7 @@ class McpServerCreateRequest(BaseModel):
     auth_headers: List[McpAuthHeaderInput] = Field(default_factory=list)
     oauth_scopes: List[str] = Field(default_factory=list)
     intent_keywords: List[str] = Field(default_factory=list)
+    backstory: Optional[str] = Field(default=None, max_length=2000)
 
 
 class McpCredentialsRequest(BaseModel):
@@ -194,6 +198,7 @@ class McpServerListItem(BaseModel):
     enabled: bool
     has_credentials: bool
     intent_keywords: List[str] = Field(default_factory=list)
+    backstory: Optional[str] = None
     tool_count: int = 0
     tool_names: List[str] = Field(default_factory=list)
 
@@ -201,13 +206,14 @@ class McpServerListItem(BaseModel):
 class McpServerUpdateRequest(BaseModel):
     """Request to update mutable fields of an existing MCP server.
 
-    Only ``display_name`` and ``intent_keywords`` may be changed here.
-    To change auth headers use ``/credentials``; to re-discover tools use
-    ``/refresh``; to change enable state use ``/enable``.
+    Only ``display_name``, ``intent_keywords``, and ``backstory`` may be
+    changed here. To change auth headers use ``/credentials``; to re-discover
+    tools use ``/refresh``; to change enable state use ``/enable``.
     """
 
     display_name: Optional[str] = Field(None, min_length=1, max_length=100)
     intent_keywords: Optional[List[str]] = None
+    backstory: Optional[str] = Field(default=None, max_length=2000)
 
 
 class McpTestResult(BaseModel):

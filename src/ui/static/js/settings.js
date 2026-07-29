@@ -2628,6 +2628,7 @@ async function createMcpServer() {
     const keywords = document.getElementById('new-mcp-keywords').value
         .split(',').map(k => k.trim()).filter(Boolean);
 
+    const backstory = document.getElementById('new-mcp-backstory').value.trim();
     const body = {
         id,
         display_name: displayName,
@@ -2635,6 +2636,7 @@ async function createMcpServer() {
         url,
         auth_type: authType,
         intent_keywords: keywords,
+        ...(backstory ? { backstory } : {}),
     };
 
     if (authType === 'header') {
@@ -2719,6 +2721,7 @@ function openMcpEditModal(serverId) {
     document.getElementById('mcp-edit-server-id').value = serverId;
     document.getElementById('mcp-edit-display-name').value = srv.display_name || '';
     document.getElementById('mcp-edit-keywords').value = (srv.intent_keywords || []).join(', ');
+    document.getElementById('mcp-edit-backstory').value = srv.backstory || '';
     document.getElementById('mcpEditModal').style.display = 'flex';
 }
 
@@ -2731,10 +2734,12 @@ async function saveMcpEdit() {
     const displayName = document.getElementById('mcp-edit-display-name').value.trim();
     const keywords = document.getElementById('mcp-edit-keywords').value
         .split(',').map(k => k.trim()).filter(k => k);
+    const backstory = document.getElementById('mcp-edit-backstory').value.trim();
 
     const body = {};
     if (displayName) body.display_name = displayName;
     body.intent_keywords = keywords;
+    body.backstory = backstory || null;
 
     try {
         await api.patch(`/api/mcp/${serverId}`, body);

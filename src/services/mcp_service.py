@@ -672,6 +672,7 @@ class McpService(BaseService):
                     enabled=self._is_enabled(server_id),
                     has_credentials=bool(self.credentials_repo.get(f"mcp_{server_id}")),
                     intent_keywords=cfg.intent_keywords,
+                    backstory=cfg.backstory,
                     tool_count=len(cfg.discovered_tools),
                     tool_names=[t.name for t in cfg.discovered_tools],
                 )
@@ -705,6 +706,7 @@ class McpService(BaseService):
             auth_headers=[{"name": h.name} for h in request.auth_headers],
             oauth_scopes=request.oauth_scopes,
             intent_keywords=[k.strip() for k in request.intent_keywords if k.strip()],
+            backstory=request.backstory or None,
         )
 
         if request.auth_type == "oauth2":
@@ -763,6 +765,8 @@ class McpService(BaseService):
             data["display_name"] = request.display_name
         if request.intent_keywords is not None:
             data["intent_keywords"] = [k.strip() for k in request.intent_keywords if k.strip()]
+        if request.backstory is not None:
+            data["backstory"] = request.backstory.strip() or None
 
         cfg = McpServerConfig.model_validate(data)
         self._configs[server_id] = cfg
@@ -848,7 +852,7 @@ class McpService(BaseService):
         tool_names = [f"mcp_{cfg.id}_{t.name}" for t in cfg.discovered_tools]
         role = f"{cfg.display_name} (MCP server)"
         goal = cfg.description or f"Use the {cfg.display_name} MCP server's tools."
-        backstory = (
+        backstory = cfg.backstory or (
             f"You have access to the '{cfg.display_name}' MCP server. "
             f"Use its tools to fulfil requests related to it."
         )
