@@ -149,7 +149,7 @@ client.on('message', async (message) => {
                         console.log(`📎 Media downloaded: ${media.mimetype}, size: ${media.data.length} chars (base64)`);
                     }
                 } catch (mediaError) {
-                    console.error('Failed to download media:', mediaError.message);
+                    console.error('Failed to download media:', mediaError.message, '| stack:', mediaError.stack || '(no stack)');
                     // Still forward the message without media data
                 }
             }
