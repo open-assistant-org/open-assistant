@@ -347,8 +347,11 @@ def compaction_db(test_db_path):
             "token_count, timestamp) VALUES (?,?,?,?,?,?)",
             (f"{cid}-new", cid, "assistant", "recent", 50, recent),
         )
-    om = (datetime.utcnow() - timedelta(days=120)).strftime("%Y-%m-%d %H:%M:%S")
-    om2 = (datetime.utcnow() - timedelta(days=100)).strftime("%Y-%m-%d %H:%M:%S")
+    # Use fixed months in the past so they're always >90 days old AND in
+    # different calendar months (the day-delta approach is date-sensitive and
+    # can land both timestamps in the same month depending on when the test runs).
+    om = "2024-01-15 12:00:00"
+    om2 = "2024-03-15 12:00:00"
     rt = (datetime.utcnow() - timedelta(days=5)).strftime("%Y-%m-%d %H:%M:%S")
     for _ in range(4):
         conn.execute(

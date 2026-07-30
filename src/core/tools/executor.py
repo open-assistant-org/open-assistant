@@ -1,7 +1,9 @@
 """Tool executor for routing LLM tool calls to service methods."""
 
+import hashlib
+import json
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from src.core.tools.registry import get_tool_registry
 from src.models.nextcloud import UploadFileRequest as NextcloudUploadFileRequest
@@ -32,6 +34,9 @@ except ImportError:
 
 class ToolExecutor:
     """Executes tool calls from LLM."""
+
+    # Seconds within which an identical (tool, args) call is considered a duplicate.
+    _DEDUP_WINDOW = 30.0
 
     def __init__(
         self,
@@ -103,10 +108,19 @@ class ToolExecutor:
         self.audit_repo = audit_repo
         self.conversation_id = conversation_id
 
+        # Per-request dedup cache: maps key → (timestamp, cached_result)
+        self._dedup_cache: Dict[str, Tuple[float, Dict[str, Any]]] = {}
+
         # Debug logging
         logger.info(
             f"ToolExecutor initialized with audit_repo={audit_repo is not None}, conversation_id={conversation_id}"
         )
+
+    @staticmethod
+    def _make_dedup_key(tool_name: str, arguments: Dict[str, Any]) -> str:
+        """Return a short stable hash identifying a specific (tool, args) call."""
+        payload = f"{tool_name}:{json.dumps(arguments, sort_keys=True)}"
+        return hashlib.sha256(payload.encode()).hexdigest()[:16]
 
     async def execute_tool(
         self,
@@ -149,6 +163,26 @@ class ToolExecutor:
             )
             return error_result
 
+        # Dedup check — same (tool, args) within _DEDUP_WINDOW seconds returns cached result
+        dedup_key = self._make_dedup_key(tool_name, arguments)
+        cached = self._dedup_cache.get(dedup_key)
+        if cached is not None:
+            cached_at, cached_result = cached
+            age_s = time.time() - cached_at
+            if age_s < self._DEDUP_WINDOW:
+                logger.info(
+                    "Dedup: skipping duplicate '%s' call (already ran %.0fs ago)",
+                    tool_name,
+                    age_s,
+                )
+                return {
+                    **cached_result,
+                    "note": (
+                        f"This {tool_name} call was already executed {int(age_s)}s ago "
+                        "and returned the same result — no action taken."
+                    ),
+                }
+
         # Route plugin tools directly through PluginService
         if tool.service_name.startswith("plugin_") and self.plugin_service:
             try:
@@ -165,6 +199,7 @@ class ToolExecutor:
                     tool_call_id=tool_call_id,
                     iteration=iteration,
                 )
+                self._dedup_cache[dedup_key] = (time.time(), success_result)
                 return success_result
             except Exception as e:
                 execution_time_ms = int((time.time() - start_time) * 1000)
@@ -199,6 +234,7 @@ class ToolExecutor:
                     tool_call_id=tool_call_id,
                     iteration=iteration,
                 )
+                self._dedup_cache[dedup_key] = (time.time(), success_result)
                 return success_result
             except Exception as e:
                 execution_time_ms = int((time.time() - start_time) * 1000)
@@ -258,6 +294,7 @@ class ToolExecutor:
                 iteration=iteration,
             )
 
+            self._dedup_cache[dedup_key] = (time.time(), success_result)
             return success_result
         except Exception as e:
             execution_time_ms = int((time.time() - start_time) * 1000)
