@@ -1,8 +1,6 @@
 """Tests for duplicate tool-call suppression in ToolExecutor."""
 
-import time
-from typing import Any, Dict
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
