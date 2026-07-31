@@ -511,8 +511,9 @@ class McpService(BaseService):
     ) -> Any:
         """Open a short-lived Streamable-HTTP session and run ``fn(session)``."""
         try:
+            import httpx2
             from mcp import ClientSession
-            from mcp.client.streamable_http import streamablehttp_client
+            from mcp.client.streamable_http import streamable_http_client
         except ImportError as e:  # pragma: no cover - depends on optional dep
             raise McpSdkNotInstalled(
                 "The 'mcp' Python SDK is not installed. Install it (pip install mcp) "
@@ -526,10 +527,12 @@ class McpService(BaseService):
         headers = self._build_request_headers(cfg)
 
         async def _do() -> Any:
-            async with streamablehttp_client(cfg.url, headers=headers or None) as (
+            # mcp >=2.0: headers are passed via a pre-built httpx2.AsyncClient;
+            # the context manager now yields a 2-tuple (read, write).
+            http_client = httpx2.AsyncClient(headers=headers) if headers else None
+            async with streamable_http_client(cfg.url, http_client=http_client) as (
                 read,
                 write,
-                _,
             ):
                 async with ClientSession(read, write) as session:
                     await session.initialize()
