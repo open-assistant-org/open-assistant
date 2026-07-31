@@ -8,6 +8,7 @@ Welcome to the Open Assistant documentation. This documentation covers architect
 - [Configuration Guide](setup/configuration.md) - Configure services and credentials
 - [Development Setup](setup/development.md) - Set up development environment
 - [Development Checklist](development-checklist.md) - Pre-flight checks before deploying
+- [Commands](commands.md) - Slash commands (`/clear` and more)
 
 ### Architecture
 - Architecture Overview
@@ -40,6 +41,7 @@ Welcome to the Open Assistant documentation. This documentation covers architect
 ```
 docs/
 ├── README.md                              # This file
+├── commands.md                            # Slash commands (/clear, etc.)
 ├── development-checklist.md                # Pre-flight checks before deploying
 ├── architecture/
 │   ├── system-architecture.md             # Deployment and infrastructure

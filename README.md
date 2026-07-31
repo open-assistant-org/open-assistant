@@ -55,6 +55,7 @@ This personal assistant bot provides a unified interface to interact with your p
 - **History**: Full conversation persistence with search and date filtering
 - **Memory**: Smart context management with automatic summarization
 - **Features**: Pin conversations, auto-generate titles, conversation statistics
+- **`/clear` command**: Start a fresh conversation thread when switching topics — keeps threads focused and responses sharp. Past conversations remain searchable; `memory_recall` and conversation search bridge context across threads when needed. See [Commands](docs/commands.md).
 
 ### Personalization
 - **System Prompt**: Default base prompt with customizable instructions on top
