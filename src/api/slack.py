@@ -18,6 +18,7 @@ from src.core.repositories.settings import SettingsRepository
 from src.core.tools.definitions import initialize_all_tools
 from src.models.slack import *
 from src.services.message_handler import MessageHandler
+from src.utils.settings import settings_truthy
 from src.services.settings import SettingsService
 from src.services.slack import SlackService
 from src.services.whatsapp_media import MediaHandler
@@ -254,10 +255,16 @@ async def handle_slack_event(
                     "I processed your message but couldn't generate a response. Please try again."
                 )
 
-            # Send reply
+            # Send reply (in-thread if configured)
+            reply_thread_ts = (
+                thread_ts
+                if settings_truthy(settings_service.get_setting("slack.thread_replies"))
+                else None
+            )
             slack_service.send_message(
                 channel=channel_id,
                 message=response_text,
+                thread_ts=reply_thread_ts,
             )
 
             logger.info(
@@ -270,9 +277,15 @@ async def handle_slack_event(
         except Exception as e:
             logger.error(f"Failed to process Slack message: {e}", exc_info=True)
             try:
+                reply_thread_ts = (
+                    thread_ts
+                    if settings_truthy(settings_service.get_setting("slack.thread_replies"))
+                    else None
+                )
                 slack_service.send_message(
                     channel=channel_id,
                     message=f"Sorry, I encountered an error processing your message: {str(e)}",
+                    thread_ts=reply_thread_ts,
                 )
             except Exception as send_error:
                 logger.error(f"Failed to send error message: {send_error}")

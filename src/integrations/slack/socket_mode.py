@@ -11,6 +11,7 @@ from slack_sdk.socket_mode.response import SocketModeResponse
 from slack_sdk.web import WebClient
 
 from src.utils.logger import get_logger
+from src.utils.settings import settings_truthy
 
 if TYPE_CHECKING:
     from src.services.message_handler import MessageHandler
@@ -205,6 +206,7 @@ class SlackSocketModeHandler:
         user_id = event.get("user", "")
         channel_id = event.get("channel", "")
         text = event.get("text", "")
+        thread_ts = event.get("thread_ts") or event.get("ts", "")
         files = _extract_slack_files(event)
 
         logger.info(
@@ -243,7 +245,7 @@ class SlackSocketModeHandler:
         logger.debug(f"[Slack Socket Mode] Submitting coroutine to event loop: {self.event_loop}")
 
         asyncio.run_coroutine_threadsafe(
-            self._process_and_reply(channel_id, user_id, text, files),
+            self._process_and_reply(channel_id, user_id, text, files, thread_ts),
             self.event_loop,
         )
 
@@ -253,6 +255,7 @@ class SlackSocketModeHandler:
         user_id: str,
         text: str,
         files: Optional[List[Dict[str, Any]]] = None,
+        thread_ts: Optional[str] = None,
     ) -> None:
         """Process the message and send a reply."""
         logger.info(f"[Slack Socket Mode] Processing message from {user_id} in {channel_id}")
@@ -340,10 +343,16 @@ class SlackSocketModeHandler:
                 f"{response_text[:20]}..."
             )
 
-            # Send reply directly to channel
+            # Send reply (in-thread if configured)
+            reply_thread_ts = (
+                thread_ts
+                if settings_truthy(self.settings_service.get_setting("slack.thread_replies"))
+                else None
+            )
             self.slack_service.send_message(
                 channel=channel_id,
                 message=response_text,
+                thread_ts=reply_thread_ts,
             )
 
             logger.info(
@@ -356,9 +365,15 @@ class SlackSocketModeHandler:
         except Exception as e:
             logger.error(f"[Slack Socket Mode] Failed to process message: {e}", exc_info=True)
             try:
+                reply_thread_ts = (
+                    thread_ts
+                    if settings_truthy(self.settings_service.get_setting("slack.thread_replies"))
+                    else None
+                )
                 self.slack_service.send_message(
                     channel=channel_id,
                     message=f"Sorry, I encountered an error processing your message: {str(e)}",
+                    thread_ts=reply_thread_ts,
                 )
             except Exception as send_error:
                 logger.error(f"[Slack Socket Mode] Failed to send error message: {send_error}")

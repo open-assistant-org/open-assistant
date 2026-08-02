@@ -791,6 +791,17 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
         ui_widget="text",
         placeholder="U01ABCDEF,U02GHIJKL",
     ),
+    "slack.thread_replies": SettingDefinition(
+        key="slack.thread_replies",
+        display_name="Reply in Thread",
+        description="When enabled, Open Assistant replies in a thread under each incoming message instead of posting to the channel root. Useful when multiple users share a channel.",
+        value_type=SettingValueType.BOOL,
+        category=ConfigCategory.SLACK,
+        default_value=False,
+        env_var_name="SLACK_THREAD_REPLIES",
+        display_order=7,
+        ui_widget="toggle",
+    ),
     # ========================================================================
     # BRAVE SEARCH INTEGRATION
     # ========================================================================
