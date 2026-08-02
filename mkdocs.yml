@@ -71,6 +71,7 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Setup:
+      - Installation & Updates: setup/install-and-update.md
       - Configuration: setup/configuration.md
       - Development: setup/development.md
   - Development Checklist: development-checklist.md

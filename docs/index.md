@@ -5,6 +5,7 @@ Welcome to the Open Assistant documentation. This documentation covers architect
 ## Quick Links
 
 ### Getting Started
+- [Installation & Updates](setup/install-and-update.md) - Install, update, volumes, and migration
 - [Configuration Guide](setup/configuration.md) - Configure services and credentials
 - [Development Setup](setup/development.md) - Set up development environment
 - [Development Checklist](development-checklist.md) - Pre-flight checks before deploying
