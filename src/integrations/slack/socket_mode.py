@@ -344,7 +344,11 @@ class SlackSocketModeHandler:
             )
 
             # Send reply (in-thread if configured)
-            reply_thread_ts = thread_ts if settings_truthy(self.settings_service.get_setting("slack.thread_replies")) else None
+            reply_thread_ts = (
+                thread_ts
+                if settings_truthy(self.settings_service.get_setting("slack.thread_replies"))
+                else None
+            )
             self.slack_service.send_message(
                 channel=channel_id,
                 message=response_text,
@@ -361,7 +365,11 @@ class SlackSocketModeHandler:
         except Exception as e:
             logger.error(f"[Slack Socket Mode] Failed to process message: {e}", exc_info=True)
             try:
-                reply_thread_ts = thread_ts if settings_truthy(self.settings_service.get_setting("slack.thread_replies")) else None
+                reply_thread_ts = (
+                    thread_ts
+                    if settings_truthy(self.settings_service.get_setting("slack.thread_replies"))
+                    else None
+                )
                 self.slack_service.send_message(
                     channel=channel_id,
                     message=f"Sorry, I encountered an error processing your message: {str(e)}",

@@ -256,7 +256,11 @@ async def handle_slack_event(
                 )
 
             # Send reply (in-thread if configured)
-            reply_thread_ts = thread_ts if settings_truthy(settings_service.get_setting("slack.thread_replies")) else None
+            reply_thread_ts = (
+                thread_ts
+                if settings_truthy(settings_service.get_setting("slack.thread_replies"))
+                else None
+            )
             slack_service.send_message(
                 channel=channel_id,
                 message=response_text,
@@ -273,7 +277,11 @@ async def handle_slack_event(
         except Exception as e:
             logger.error(f"Failed to process Slack message: {e}", exc_info=True)
             try:
-                reply_thread_ts = thread_ts if settings_truthy(settings_service.get_setting("slack.thread_replies")) else None
+                reply_thread_ts = (
+                    thread_ts
+                    if settings_truthy(settings_service.get_setting("slack.thread_replies"))
+                    else None
+                )
                 slack_service.send_message(
                     channel=channel_id,
                     message=f"Sorry, I encountered an error processing your message: {str(e)}",
