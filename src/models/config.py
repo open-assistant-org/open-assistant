@@ -802,6 +802,17 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
         display_order=7,
         ui_widget="toggle",
     ),
+    "slack.mention_only": SettingDefinition(
+        key="slack.mention_only",
+        display_name="Reply Only on Mention",
+        description="When enabled, Open Assistant only responds when directly @mentioned. All other channel messages are ignored, letting humans converse freely. Best combined with 'Reply in Thread' so each @mention starts a clean threaded reply.",
+        value_type=SettingValueType.BOOL,
+        category=ConfigCategory.SLACK,
+        default_value=False,
+        env_var_name="SLACK_MENTION_ONLY",
+        display_order=8,
+        ui_widget="toggle",
+    ),
     # ========================================================================
     # BRAVE SEARCH INTEGRATION
     # ========================================================================
