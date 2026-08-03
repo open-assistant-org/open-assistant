@@ -5,6 +5,7 @@ import json
 import time
 from typing import Any, Dict, Optional, Tuple
 
+from src.core.concurrency import get_browser_semaphore, get_search_semaphore
 from src.core.tools.registry import get_tool_registry
 from src.models.nextcloud import UploadFileRequest as NextcloudUploadFileRequest
 from src.models.outlook import UploadFileRequest as OutlookUploadFileRequest
@@ -697,23 +698,33 @@ class ToolExecutor:
         elif tool_name == "yahoo_finance_search":
             return service.search(**arguments)
 
-        # Brave Search tools
+        # Brave Search tools — serialised globally to avoid API rate-limit
+        # bursts when multiple sub-tasks fan out parallel searches.
         elif tool_name == "web_search":
-            return service.web_search(**arguments)
+            async with get_search_semaphore():
+                return service.web_search(**arguments)
 
-        # Browser tools (async)
+        # Browser tools — serialised globally so that parallel sub-tasks
+        # cannot spawn multiple Playwright/Chromium instances simultaneously,
+        # which would exhaust CPU/RAM and cause the headless browser to crash.
         elif tool_name == "browse_url":
-            return await service.browse_url(**arguments)
+            async with get_browser_semaphore():
+                return await service.browse_url(**arguments)
         elif tool_name == "browse_get_tree":
-            return await service.browse_get_tree(**arguments)
+            async with get_browser_semaphore():
+                return await service.browse_get_tree(**arguments)
         elif tool_name == "browse_action":
-            return await service.browse_action(**arguments)
+            async with get_browser_semaphore():
+                return await service.browse_action(**arguments)
         elif tool_name == "browse_scroll":
-            return await service.browse_scroll(**arguments)
+            async with get_browser_semaphore():
+                return await service.browse_scroll(**arguments)
         elif tool_name == "browse_extract":
-            return await service.browse_extract()
+            async with get_browser_semaphore():
+                return await service.browse_extract()
         elif tool_name == "browse_fetch":
-            return await service.browse_fetch(**arguments)
+            async with get_browser_semaphore():
+                return await service.browse_fetch(**arguments)
 
         # System tools
         elif tool_name == "system_fetch_logs":
