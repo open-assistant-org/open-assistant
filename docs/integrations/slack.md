@@ -223,6 +223,35 @@ Restrict which Slack users can interact with the bot. To find a user ID:
 
 Leave this field empty to allow all workspace members.
 
+### Reply in Thread
+
+When enabled, Open Assistant posts its response as a **threaded reply** under the triggering message rather than at the channel root. Off by default.
+
+Useful when multiple users share a channel — each user's exchange stays visually contained in its own thread while the shared conversation context continues to work as before.
+
+### Reply Only on Mention
+
+When enabled, Open Assistant **only responds when directly @mentioned** (e.g. `@OpenAssistant`). All other channel messages are silently ignored, letting humans converse freely without constant bot interruptions. Off by default.
+
+When the bot is mentioned, the `@mention` token is stripped from the message before processing, so it does not appear as part of the prompt.
+
+**Recommended combo:** Enable both **Reply in Thread** and **Reply Only on Mention** together for the ideal shared-channel workflow:
+
+```
+#general
+Human A:  "hey team, let's ship on Friday"
+Human B:  "works for me 👍"
+Human A:  "@OpenAssistant can you draft a release checklist?"
+          └─ [thread] OpenAssistant: "Sure! Here's a checklist: …"
+Human B:  "looks good to me"
+Human A:  "@OpenAssistant add a rollback step"
+          └─ [thread] OpenAssistant: "Added: …"
+```
+
+Humans talk freely in the channel; the bot only enters when called by name and always replies in-thread.
+
+> **Note:** The conversation history shown to the AI contains only @mention messages and bot replies — human-to-human chatter is never included in the context.
+
 ## How Messages Work
 
 ### Socket Mode (Default)
@@ -288,8 +317,7 @@ Leave this field empty to allow all workspace members.
 
 ## Limitations
 
-- The bot responds in the channel, not as top-level channel messages
-- Socket Mode and HTTP webhooks cannot be used simultaneously for receiving events - choose one based on your network setup
+- Socket Mode and HTTP webhooks cannot be used simultaneously for receiving events — choose one based on your network setup
 
 ## File Handling
 
@@ -306,4 +334,4 @@ Media processing (image analysis, OCR, transcription) is not handled by the Slac
 
 ---
 
-**Last Updated**: February 2026
+**Last Updated**: August 2026

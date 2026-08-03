@@ -133,6 +133,16 @@ class SlackService(BaseService):
                 "message": f"Connection failed: {str(e)}",
             }
 
+    def get_bot_user_id(self) -> Optional[str]:
+        """Get the bot's Slack user ID (from auth.test)."""
+        try:
+            client = self._get_client()
+            info = client.get_bot_info()
+            return info.get("user_id") or None
+        except Exception as e:
+            logger.error(f"Failed to get bot user ID: {e}")
+            return None
+
     def is_user_allowed(self, user_id: str) -> bool:
         """Check if a Slack user is allowed to interact with the bot."""
         allowed_ids_str = self.settings_repo.get("slack.allowed_user_ids") or ""

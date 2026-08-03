@@ -98,6 +98,7 @@ class SlackSocketModeHandler:
         # Thread for running the client
         self._thread: Optional[threading.Thread] = None
         self._running = False
+        self._bot_user_id: Optional[str] = None
 
         logger.info(
             f"[Slack Socket Mode] Handler initialized (app_token={'configured' if app_token else 'MISSING'}, "
@@ -115,6 +116,17 @@ class SlackSocketModeHandler:
         self._thread = threading.Thread(target=self._run_client, daemon=True)
         self._thread.start()
         logger.info("Slack Socket Mode connection started")
+
+    def _get_bot_user_id(self) -> Optional[str]:
+        """Lazily fetch and cache the bot's Slack user ID via auth.test."""
+        if not self._bot_user_id:
+            try:
+                response = self.client.web_client.auth_test()
+                self._bot_user_id = response.get("user_id") or ""
+                logger.info(f"[Slack Socket Mode] Bot user ID: {self._bot_user_id}")
+            except Exception as e:
+                logger.warning(f"[Slack Socket Mode] Could not fetch bot user ID: {e}")
+        return self._bot_user_id or None
 
     def _run_client(self) -> None:
         """Run the Socket Mode client (blocking)."""
@@ -229,6 +241,17 @@ class SlackSocketModeHandler:
             return
 
         logger.info(f"[Slack Socket Mode] User {user_id} is allowed - processing message")
+
+        # Filter to mentions only if configured
+        if settings_truthy(self.settings_service.get_setting("slack.mention_only")):
+            bot_user_id = self._get_bot_user_id()
+            mention_token = f"<@{bot_user_id}>" if bot_user_id else None
+            if not mention_token or mention_token not in text:
+                logger.debug(
+                    f"[Slack Socket Mode] mention_only: ignoring non-mention from {user_id}"
+                )
+                return
+            text = text.replace(mention_token, "").strip()
 
         # Process message in background using the main event loop
         if self.event_loop is None:

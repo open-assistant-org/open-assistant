@@ -182,6 +182,15 @@ async def handle_slack_event(
         logger.info(f"Ignoring message from non-allowed Slack user {user_id}")
         return {"ok": True, "message": "Ignored (not allowed)"}
 
+    # Filter to mentions only if configured
+    if settings_truthy(settings_service.get_setting("slack.mention_only")):
+        bot_user_id = slack_service.get_bot_user_id()
+        mention_token = f"<@{bot_user_id}>" if bot_user_id else None
+        if not mention_token or mention_token not in text:
+            logger.debug(f"mention_only: ignoring non-mention from {user_id}")
+            return {"ok": True}
+        text = text.replace(mention_token, "").strip()
+
     async def process_and_reply():
         try:
             # Verify LLM configuration
