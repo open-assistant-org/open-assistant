@@ -105,3 +105,47 @@ def get_subtask_semaphore() -> asyncio.Semaphore:
 def current_subtask_depth() -> int:
     """Return the sub-task depth of the current execution context."""
     return subtask_depth.get()
+
+
+# ---------------------------------------------------------------------------
+# Web search concurrency limit
+# ---------------------------------------------------------------------------
+# Caps the number of parallel web_search calls so that fan-out sub-tasks
+# cannot simultaneously blast the Brave / DuckDuckGo APIs and trigger rate
+# limits or bans.  A limit of 1 means searches from concurrent sub-tasks are
+# queued and issued one-at-a-time; raise it only if you have a paid API tier
+# with a higher rate limit.  Override with MAX_CONCURRENT_SEARCHES.
+MAX_CONCURRENT_SEARCHES = max(1, int(os.getenv("MAX_CONCURRENT_SEARCHES", "1")))
+
+_search_semaphore: Optional[asyncio.Semaphore] = None
+
+
+def get_search_semaphore() -> asyncio.Semaphore:
+    """Return the process-wide web-search concurrency semaphore."""
+    global _search_semaphore
+    if _search_semaphore is None:
+        _search_semaphore = asyncio.Semaphore(MAX_CONCURRENT_SEARCHES)
+        logger.info("Web search semaphore initialized with limit=%d", MAX_CONCURRENT_SEARCHES)
+    return _search_semaphore
+
+
+# ---------------------------------------------------------------------------
+# Browser concurrency limit
+# ---------------------------------------------------------------------------
+# Each browse_url call spawns a fresh Playwright/Chromium instance.  Running
+# several in parallel exhausts CPU, RAM, and file-descriptor limits, causing
+# the headless browser to hang or crash.  Serialising all browser tool calls
+# behind a semaphore of 1 means only one Playwright session is active at a
+# time across all concurrent sub-tasks.  Override with MAX_CONCURRENT_BROWSERS.
+MAX_CONCURRENT_BROWSERS = max(1, int(os.getenv("MAX_CONCURRENT_BROWSERS", "1")))
+
+_browser_semaphore: Optional[asyncio.Semaphore] = None
+
+
+def get_browser_semaphore() -> asyncio.Semaphore:
+    """Return the process-wide browser concurrency semaphore."""
+    global _browser_semaphore
+    if _browser_semaphore is None:
+        _browser_semaphore = asyncio.Semaphore(MAX_CONCURRENT_BROWSERS)
+        logger.info("Browser semaphore initialized with limit=%d", MAX_CONCURRENT_BROWSERS)
+    return _browser_semaphore
