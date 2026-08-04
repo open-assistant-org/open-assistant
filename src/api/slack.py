@@ -191,6 +191,19 @@ async def handle_slack_event(
             return {"ok": True}
         text = text.replace(mention_token, "").strip()
 
+    # Resolve the thread scope once, up front, so the reply target, the
+    # progress-notification target and the conversation identity can never
+    # disagree — and so the error handler below can still reply in-thread.
+    #
+    # With "Reply in Thread" on, each Slack thread is its own conversation: the
+    # contact identifier carries the thread_ts, so context stays inside the
+    # thread instead of being shared channel-wide.  With it off the identifier
+    # stays the bare channel_id, preserving the existing channel-wide
+    # conversation behaviour.
+    thread_replies = settings_truthy(settings_service.get_setting("slack.thread_replies"))
+    reply_thread_ts = thread_ts if (thread_replies and thread_ts) else None
+    contact_identifier = f"{channel_id}:{reply_thread_ts}" if reply_thread_ts else channel_id
+
     async def process_and_reply():
         try:
             # Verify LLM configuration
@@ -241,16 +254,18 @@ async def handle_slack_event(
                 message=effective_message,
                 conversation_id=None,
                 channel="slack",
-                contact_identifier=channel_id,
+                contact_identifier=contact_identifier,
                 max_idle_seconds=SLACK_NEW_CHAT_IDLE_SECONDS,
                 metadata={
                     "source": "slack_event",
                     "channel": channel_id,
                     "user": user_id,
+                    "thread_ts": reply_thread_ts,
                     "has_media": bool(files),
                 },
                 image_base64=image_base64,
                 image_mimetype=image_mimetype,
+                reply_thread_ts=reply_thread_ts,
             )
 
             response_text = result["response"] or ""
@@ -265,11 +280,6 @@ async def handle_slack_event(
                 )
 
             # Send reply (in-thread if configured)
-            reply_thread_ts = (
-                thread_ts
-                if settings_truthy(settings_service.get_setting("slack.thread_replies"))
-                else None
-            )
             slack_service.send_message(
                 channel=channel_id,
                 message=response_text,
@@ -286,11 +296,6 @@ async def handle_slack_event(
         except Exception as e:
             logger.error(f"Failed to process Slack message: {e}", exc_info=True)
             try:
-                reply_thread_ts = (
-                    thread_ts
-                    if settings_truthy(settings_service.get_setting("slack.thread_replies"))
-                    else None
-                )
                 slack_service.send_message(
                     channel=channel_id,
                     message=f"Sorry, I encountered an error processing your message: {str(e)}",

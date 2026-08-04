@@ -112,6 +112,7 @@ class MessageHandler:
         image_mimetype: Optional[str] = None,
         event_callback: Optional[Callable[[dict], Awaitable[None]]] = None,
         pinned_skill: Optional[str] = None,
+        reply_thread_ts: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Handle a user message through the skills-based LLM system.
@@ -129,6 +130,9 @@ class MessageHandler:
             metadata: Optional metadata dict
             image_base64: Optional base64-encoded image data for vision
             image_mimetype: Optional MIME type of the image
+            reply_thread_ts: Optional Slack thread timestamp.  When set,
+                out-of-band progress notifications are posted inside that
+                thread instead of at the channel root.
 
         Returns:
             Dictionary with response, conversation_id, skills_used,
@@ -190,6 +194,7 @@ class MessageHandler:
                     channel=channel,
                     contact_identifier=contact_identifier,
                     event_callback=event_callback,
+                    reply_thread_ts=reply_thread_ts,
                 )
 
             # Step 2: Store user message
@@ -341,6 +346,7 @@ class MessageHandler:
                 plan=plan,
                 channel=channel,
                 contact_identifier=contact_identifier,
+                reply_thread_ts=reply_thread_ts,
                 event_callback=event_callback,
             )
         except Exception as e:
@@ -784,12 +790,18 @@ class MessageHandler:
         channel: str,
         contact_identifier: Optional[str],
         message: str,
+        reply_thread_ts: Optional[str] = None,
     ) -> None:
         """Send a progress notification back to the originating channel.
 
         - whatsapp: sends directly to the contact's phone number.
-        - slack: sends to the channel extracted from the contact_identifier
-          (format ``{channel_id}:{user_id}``).
+        - slack: sends to the channel extracted from the contact_identifier.
+          The Slack contact_identifier is ``{channel_id}`` when "Reply in
+          Thread" is off and ``{channel_id}:{thread_ts}`` when it is on, so
+          taking the part before the first ``:`` yields the channel in both
+          cases.  When *reply_thread_ts* is set the update is posted inside
+          that thread rather than at the channel root, keeping sub-task
+          progress with the exchange that triggered it.
         - webui / subtask / anything else: no-op — the user is watching
           synchronously or it is an internal sub-task.
 
@@ -804,9 +816,12 @@ class MessageHandler:
             elif channel == "slack" and contact_identifier:
                 slack_service = self.tool_executor.services.get("slack")
                 if slack_service:
-                    # contact_identifier is "{channel_id}:{user_id}"
                     slack_channel_id = contact_identifier.split(":")[0]
-                    slack_service.send_message(channel=slack_channel_id, message=message)
+                    slack_service.send_message(
+                        channel=slack_channel_id,
+                        message=message,
+                        thread_ts=reply_thread_ts,
+                    )
             # webui / subtask: user is watching synchronously — no notification needed
         except Exception as exc:
             logger.debug(f"_send_progress_notification ({channel}): {exc}")
@@ -838,6 +853,9 @@ class MessageHandler:
         # originating channel (WhatsApp/Slack) during wait_for_tasks.
         channel: str = "webui",
         contact_identifier: Optional[str] = None,
+        # Slack thread to post progress updates into.  None means post at the
+        # channel root (or the channel has no notion of threads).
+        reply_thread_ts: Optional[str] = None,
         # Resume parameters — when provided, skip message-building preamble
         resume_messages: Optional[List[Dict[str, Any]]] = None,
         resume_iteration: int = 0,
@@ -1434,6 +1452,7 @@ class MessageHandler:
                             channel=channel,
                             contact_identifier=contact_identifier,
                             message=f"⏳ {progress_message}",
+                            reply_thread_ts=reply_thread_ts,
                         )
 
                     # Emit periodic progress while long-running tasks work, so
@@ -1456,6 +1475,7 @@ class MessageHandler:
                                 contact_identifier=contact_identifier,
                                 message=f"⏳ Sub-tasks: {done}/{total} finished, "
                                 f"{counts['running']} still working…",
+                                reply_thread_ts=reply_thread_ts,
                             )
 
                     # Block until all requested tasks finish (or timeout). Tasks
@@ -1486,6 +1506,7 @@ class MessageHandler:
                             channel=channel,
                             contact_identifier=contact_identifier,
                             message=summary,
+                            reply_thread_ts=reply_thread_ts,
                         )
 
                     guidance = ""
@@ -1896,6 +1917,7 @@ class MessageHandler:
         channel: str = "webui",
         contact_identifier: Optional[str] = None,
         event_callback: Optional[Callable[[dict], Awaitable[None]]] = None,
+        reply_thread_ts: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Resume a suspended execution with the user's answer.
 
@@ -1960,6 +1982,7 @@ class MessageHandler:
             plan=plan,
             channel=channel,
             contact_identifier=contact_identifier,
+            reply_thread_ts=reply_thread_ts,
             resume_messages=messages,
             resume_iteration=iteration,
             resume_tools_executed=tools_executed,
