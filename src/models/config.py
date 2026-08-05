@@ -794,7 +794,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     "slack.thread_replies": SettingDefinition(
         key="slack.thread_replies",
         display_name="Reply in Thread",
-        description="When enabled, Open Assistant replies in a thread under each incoming message instead of posting to the channel root. Useful when multiple users share a channel.",
+        description="When enabled, Open Assistant replies in a thread under each incoming message instead of posting to the channel root — including background sub-task progress updates. Conversation context is also scoped to the thread, so separate threads in a shared channel no longer share history. When disabled, the whole channel shares one conversation.",
         value_type=SettingValueType.BOOL,
         category=ConfigCategory.SLACK,
         default_value=False,

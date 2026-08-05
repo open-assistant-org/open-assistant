@@ -227,7 +227,15 @@ Leave this field empty to allow all workspace members.
 
 When enabled, Open Assistant posts its response as a **threaded reply** under the triggering message rather than at the channel root. Off by default.
 
-Useful when multiple users share a channel — each user's exchange stays visually contained in its own thread while the shared conversation context continues to work as before.
+This applies to *every* message the bot sends for that exchange, including out-of-band progress updates such as background sub-task status — they land in the same thread, not at the channel root.
+
+Enabling it also **scopes conversation context to the thread**. Each Slack thread becomes its own conversation: it has its own history, and background sub-tasks dispatched in one thread report back only into that thread. Two people working in two threads of the same channel can no longer see or disturb each other's context.
+
+Useful when multiple users share a channel — each user's exchange stays contained in its own thread, both visually and in what the AI sees.
+
+> **Note:** With the toggle **off**, behaviour is unchanged: all messages in a channel share one channel-wide conversation. Use the `/clear` command to start a fresh context in that mode.
+>
+> With the toggle **on**, a brand-new top-level message starts a brand-new thread, and therefore a brand-new conversation with no prior history. The bot does not read messages posted in a thread before it was first mentioned there.
 
 ### Reply Only on Mention
 
@@ -260,14 +268,14 @@ Humans talk freely in the channel; the bot only enters when called by name and a
 2. A user sends a message in a channel where the bot is present (or via DM)
 3. Slack pushes the event through the WebSocket
 4. The bot processes the message through Open Assistant's message handler
-5. The response is sent back as a threaded reply in the same channel
+5. The response is sent back to the same channel — as a threaded reply when **Reply in Thread** is enabled, otherwise at the channel root
 
 ### HTTP Webhooks (Alternative)
 
 1. A user sends a message in a channel where the bot is present (or via DM)
 2. Slack sends the event to your webhook URL (`/api/slack/webhook/events`)
 3. The bot processes the message through Open Assistant's message handler
-4. The response is sent back as a threaded reply in the same channel
+4. The response is sent back to the same channel — as a threaded reply when **Reply in Thread** is enabled, otherwise at the channel root
 
 ## Troubleshooting
 
