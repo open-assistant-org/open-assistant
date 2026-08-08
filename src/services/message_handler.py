@@ -189,9 +189,7 @@ class MessageHandler:
                     content=response_text,
                     metadata={"cancelled_tasks": cancelled},
                 )
-                logger.info(
-                    f"/cancel: stopped {n} task(s) in conversation {conv_id}: {cancelled}"
-                )
+                logger.info(f"/cancel: stopped {n} task(s) in conversation {conv_id}: {cancelled}")
                 return {
                     "response": response_text,
                     "conversation_id": conv_id,

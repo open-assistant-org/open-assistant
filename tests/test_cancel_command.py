@@ -11,13 +11,11 @@ Covers:
 
 import asyncio
 import json
-from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from src.services.async_task_dispatcher import AsyncTaskDispatcher
-
 
 # ---------------------------------------------------------------------------
 # AsyncTaskDispatcher.cancel_all_for_conversation
@@ -111,9 +109,7 @@ def _make_handler():
     skill_repo.get_enabled_skills.return_value = []
 
     conversation_service = MagicMock()
-    conversation_service.create_or_get_conversation.return_value = {
-        "conversation_id": "conv-test"
-    }
+    conversation_service.create_or_get_conversation.return_value = {"conversation_id": "conv-test"}
     conversation_service.add_message.return_value = {"message_id": "msg-1"}
     conversation_service.message_repo = MagicMock()
     conversation_service.message_repo.get_recent_messages.return_value = []
