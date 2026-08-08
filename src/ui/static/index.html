@@ -455,6 +455,122 @@
             text-decoration: line-through;
             opacity: 0.7;
         }
+
+        /* ── Cancel button ──────────────────────────────────────── */
+        .cancel-btn {
+            padding: 12px 18px;
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+            border: 2px solid #ef4444;
+            border-radius: 24px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .cancel-btn:hover {
+            background: rgba(239, 68, 68, 0.22);
+            box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+            transform: translateY(-1px);
+        }
+
+        /* ── Confirmation modal ─────────────────────────────────── */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.65);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            backdrop-filter: blur(3px);
+            animation: fadeIn 0.15s ease-out;
+        }
+
+        .modal-overlay.hidden {
+            display: none;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to   { opacity: 1; }
+        }
+
+        .modal-card {
+            background: var(--card-background);
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            padding: 28px 32px;
+            max-width: 380px;
+            width: 90%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+            animation: slideUp 0.18s ease-out;
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(16px); }
+            to   { opacity: 1; transform: translateY(0);    }
+        }
+
+        .modal-icon {
+            font-size: 2rem;
+            margin-bottom: 12px;
+        }
+
+        .modal-title {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .modal-body {
+            font-size: 0.92rem;
+            color: var(--text-secondary);
+            line-height: 1.55;
+            margin-bottom: 24px;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .modal-btn-secondary {
+            padding: 9px 18px;
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .modal-btn-secondary:hover {
+            background: var(--background-color);
+            color: var(--text-primary);
+        }
+
+        .modal-btn-danger {
+            padding: 9px 18px;
+            background: rgba(239, 68, 68, 0.12);
+            color: #ef4444;
+            border: 1px solid #ef4444;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .modal-btn-danger:hover {
+            background: rgba(239, 68, 68, 0.25);
+            box-shadow: 0 0 8px rgba(239, 68, 68, 0.35);
+        }
     </style>
 </head>
 <body>
@@ -537,8 +653,25 @@
                         rows="1"
                         autocomplete="off"
                     ></textarea>
+                    <button id="cancelButton" class="cancel-btn" hidden title="Stop ongoing work">⛔ Stop</button>
                     <button id="sendButton">Send</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cancel confirmation modal -->
+    <div class="modal-overlay hidden" id="cancelModal" role="dialog" aria-modal="true" aria-labelledby="cancelModalTitle">
+        <div class="modal-card">
+            <div class="modal-icon">⛔</div>
+            <div class="modal-title" id="cancelModalTitle">Stop ongoing work?</div>
+            <div class="modal-body">
+                This will cancel all background tasks for this conversation.
+                You can send a new request straight away.
+            </div>
+            <div class="modal-actions">
+                <button class="modal-btn-secondary" id="cancelModalDismiss">Keep waiting</button>
+                <button class="modal-btn-danger" id="cancelModalConfirm">Yes, stop it</button>
             </div>
         </div>
     </div>
