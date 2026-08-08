@@ -108,6 +108,39 @@ class CreateDraftRequest(BaseModel):
     body_type: str = Field("text", description="Body type: 'text' or 'html'")
     cc: Optional[List[str]] = Field(None, description="CC recipients")
     bcc: Optional[List[str]] = Field(None, description="BCC recipients")
+    source_message_id: Optional[str] = Field(
+        None,
+        description=(
+            "Outlook message ID to copy attachments from. "
+            "When set, all file attachments on that message are automatically copied "
+            "to the new draft. Use this when replicating a draft (e.g. sending the same "
+            "email with attachments to multiple recipients). "
+            "Get the ID from outlook_read_emails or outlook_search_emails."
+        ),
+    )
+    reply_to_message_id: Optional[str] = Field(
+        None,
+        description=(
+            "Outlook message ID to reply to. When set, the draft is created as a thread-aware "
+            "reply using the Graph API createReply action, which preserves the full email thread "
+            "(In-Reply-To / References headers and the original quoted body). "
+            "Use this instead of a plain draft whenever you are replying to an existing email. "
+            "Incompatible with source_message_id — use one or the other."
+        ),
+    )
+
+
+class ListAttachmentsRequest(BaseModel):
+    """Request model for listing attachments on an Outlook message."""
+
+    message_id: str = Field(
+        ...,
+        description=(
+            "Outlook message ID to list attachments for. "
+            "Returns id, name, contentType, and size for each attachment. "
+            "Use outlook_get_attachment to download the content of a specific attachment."
+        ),
+    )
 
 
 class UpdateEventRequest(BaseModel):

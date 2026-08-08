@@ -120,6 +120,7 @@ from src.models.notion import (
 )
 from src.models.outlook import CreateEventRequest, ListEventsRequest
 from src.models.outlook import CreateDraftRequest as OutlookCreateDraftRequest
+from src.models.outlook import ListAttachmentsRequest as OutlookListAttachmentsRequest
 from src.models.outlook import DeleteEventRequest as OutlookDeleteEventRequest
 from src.models.outlook import GetAttachmentRequest as OutlookGetAttachmentRequest
 from src.models.outlook import GetEmailRequest as OutlookGetEmailRequest
@@ -918,8 +919,37 @@ def define_outlook_tools():
         Tool(
             schema=create_tool_schema(
                 name="outlook_create_draft",
-                description="Create an email draft in Outlook without sending it. Use when the user wants to compose an email to review or send later.",
+                description=(
+                    "Create an email draft in Outlook without sending it. "
+                    "Supports attachments and thread-aware replies:\n"
+                    "• To replicate a draft WITH its attachments for a new recipient, set "
+                    "source_message_id to the original draft's message ID — all file attachments "
+                    "are copied automatically.\n"
+                    "• To reply to an existing email thread (preserving quoted body and thread "
+                    "headers), set reply_to_message_id to the message you are replying to.\n"
+                    "source_message_id and reply_to_message_id are mutually exclusive."
+                ),
                 parameters_model=OutlookCreateDraftRequest,
+            ),
+            executor=None,
+            service_name="outlook",
+        )
+    )
+
+    # Outlook: List Attachments
+    registry.register(
+        Tool(
+            schema=create_tool_schema(
+                name="outlook_list_attachments",
+                description=(
+                    "List the attachments on an Outlook email message. "
+                    "Returns id, name, contentType, and size for each attachment — "
+                    "no file content is downloaded. "
+                    "Use this to discover what attachments are present before calling "
+                    "outlook_get_attachment to read a specific one, or before replicating "
+                    "a draft with source_message_id."
+                ),
+                parameters_model=OutlookListAttachmentsRequest,
             ),
             executor=None,
             service_name="outlook",

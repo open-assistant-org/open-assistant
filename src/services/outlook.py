@@ -401,6 +401,8 @@ class OutlookService(BaseService):
         body_type: str = "text",
         cc: Optional[List[str]] = None,
         bcc: Optional[List[str]] = None,
+        source_message_id: Optional[str] = None,
+        reply_to_message_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Create an email draft in Outlook.
@@ -412,14 +414,56 @@ class OutlookService(BaseService):
             body_type: Body type (text or html)
             cc: CC recipients
             bcc: BCC recipients
+            source_message_id: If set, all file attachments from this message are
+                automatically copied to the new draft.  Useful for replicating a
+                draft with attachments to multiple recipients.
+            reply_to_message_id: If set, the draft is created as a reply to this
+                message using the Graph API createReply action, which preserves
+                the full email thread (In-Reply-To / References headers and the
+                original quoted body).  ``subject`` is still applied via a PATCH
+                if supplied; ``body`` is used as the reply text.
 
         Returns:
-            Created draft
+            Created draft object.  Includes ``attachments_copied`` count when
+            ``source_message_id`` is provided.
         """
         client = self._get_client()
+
+        if reply_to_message_id:
+            # Thread-aware reply draft — use createReply so headers / quoted
+            # body are set up correctly by Graph.
+            return client.create_reply_draft(
+                message_id=reply_to_message_id,
+                to=to,
+                cc=cc,
+                bcc=bcc,
+                body=body if body else None,
+                body_type=body_type,
+            )
+
         return client.create_draft(
-            to=to, subject=subject, body=body, body_type=body_type, cc=cc, bcc=bcc
+            to=to,
+            subject=subject,
+            body=body,
+            body_type=body_type,
+            cc=cc,
+            bcc=bcc,
+            source_message_id=source_message_id,
         )
+
+    def list_attachments(self, message_id: str) -> List[Dict[str, Any]]:
+        """
+        List attachments on an Outlook email message.
+
+        Args:
+            message_id: Outlook message ID
+
+        Returns:
+            List of attachment metadata objects (id, name, contentType, size).
+            Use outlook_get_attachment to download the content of a specific attachment.
+        """
+        client = self._get_client()
+        return client.list_attachments(message_id=message_id)
 
     def get_attachment(
         self,

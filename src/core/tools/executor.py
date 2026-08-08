@@ -557,6 +557,8 @@ class ToolExecutor:
             return service.read_file(**arguments)
         elif tool_name == "outlook_get_attachment":
             return service.get_attachment(**arguments)
+        elif tool_name == "outlook_list_attachments":
+            return service.list_attachments(**arguments)
         elif tool_name == "onedrive_upload_file":
             validated = OutlookUploadFileRequest.model_validate(arguments)
             return service.upload_file(**validated.model_dump())

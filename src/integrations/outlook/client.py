@@ -166,8 +166,25 @@ class OutlookClient:
         body_type: str = "text",
         cc: Optional[List[str]] = None,
         bcc: Optional[List[str]] = None,
+        source_message_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Create email draft."""
+        """Create email draft.
+
+        Args:
+            to: Recipient email addresses
+            subject: Email subject
+            body: Email body content
+            body_type: 'text' or 'html'
+            cc: CC recipients
+            bcc: BCC recipients
+            source_message_id: If provided, attachments from this message are
+                copied to the new draft automatically.
+
+        Returns:
+            Created draft message object.  When source_message_id is given the
+            response also includes an ``attachments_copied`` key with the count
+            of attachments that were transferred.
+        """
         try:
             message_data = {
                 "subject": subject,
@@ -187,12 +204,58 @@ class OutlookClient:
             response.raise_for_status()
 
             draft = response.json()
-            logger.info(f"Created draft: {draft['id']}")
+            draft_id = draft["id"]
+            logger.info(f"Created draft: {draft_id}")
+
+            # Copy attachments from the source message when requested
+            if source_message_id:
+                attachments_copied = self._copy_attachments(source_message_id, draft_id)
+                draft["attachments_copied"] = attachments_copied
+
             return draft
 
         except requests.RequestException as e:
             logger.error(f"Failed to create draft: {e}")
             raise
+
+    def _copy_attachments(self, source_message_id: str, target_message_id: str) -> int:
+        """
+        Copy all file attachments from *source_message_id* to *target_message_id*.
+
+        Returns the number of attachments successfully copied.
+        """
+        # Fetch the list (metadata only, no content bytes yet)
+        attachments = self.list_attachments(source_message_id)
+        copied = 0
+        for att in attachments:
+            att_id = att.get("id")
+            if not att_id:
+                continue
+            # Skip non-file attachments (e.g. itemAttachment / referenceAttachment)
+            if att.get("@odata.type", "") not in (
+                "",
+                "#microsoft.graph.fileAttachment",
+            ):
+                logger.debug(f"Skipping non-file attachment type: {att.get('@odata.type')}")
+                continue
+            try:
+                # Fetch full attachment including contentBytes
+                full_att = self.get_attachment(source_message_id, att_id)
+                content_bytes_b64 = full_att.get("contentBytes", "")
+                if not content_bytes_b64:
+                    logger.warning(f"Attachment {att_id} has no content bytes, skipping")
+                    continue
+                self.add_attachment(
+                    message_id=target_message_id,
+                    name=full_att.get("name", "attachment"),
+                    content_type=full_att.get("contentType", "application/octet-stream"),
+                    content_bytes_b64=content_bytes_b64,
+                )
+                copied += 1
+            except Exception as e:
+                logger.error(f"Failed to copy attachment {att_id}: {e}")
+        logger.info(f"Copied {copied}/{len(attachments)} attachments to draft {target_message_id}")
+        return copied
 
     def send_email(
         self,
@@ -598,6 +661,106 @@ class OutlookClient:
 
         except requests.RequestException as e:
             logger.error(f"Failed to get attachment: {e}")
+            raise
+
+    def add_attachment(
+        self,
+        message_id: str,
+        name: str,
+        content_type: str,
+        content_bytes_b64: str,
+    ) -> Dict[str, Any]:
+        """
+        Add a file attachment to an existing message/draft.
+
+        Args:
+            message_id: Target message (draft) ID
+            name: Filename for the attachment
+            content_type: MIME type (e.g. 'application/pdf')
+            content_bytes_b64: Base64-encoded file content
+
+        Returns:
+            Created attachment object
+        """
+        try:
+            url = f"{self.graph_url}/me/messages/{self._encode_id(message_id)}/attachments"
+            body = {
+                "@odata.type": "#microsoft.graph.fileAttachment",
+                "name": name,
+                "contentType": content_type,
+                "contentBytes": content_bytes_b64,
+            }
+            response = requests.post(url, headers=self.headers, json=body)
+            response.raise_for_status()
+
+            att = response.json()
+            logger.info(f"Added attachment '{name}' to message {message_id}")
+            return att
+
+        except requests.RequestException as e:
+            logger.error(f"Failed to add attachment: {e}")
+            raise
+
+    def create_reply_draft(
+        self,
+        message_id: str,
+        to: Optional[List[str]] = None,
+        cc: Optional[List[str]] = None,
+        bcc: Optional[List[str]] = None,
+        body: Optional[str] = None,
+        body_type: str = "text",
+    ) -> Dict[str, Any]:
+        """
+        Create a reply draft for an existing message, preserving thread context.
+
+        Uses the Graph API createReply action so that the new draft carries the
+        correct In-Reply-To / References headers and includes the prior thread
+        body, mirroring what Outlook does when you click 'Reply'.
+
+        Args:
+            message_id: ID of the message being replied to
+            to: Override recipient list (defaults to sender of original)
+            cc: CC recipients
+            bcc: BCC recipients
+            body: Reply body text/HTML to prepend
+            body_type: 'text' or 'html'
+
+        Returns:
+            The newly created draft message object
+        """
+        try:
+            url = f"{self.graph_url}/me/messages/{self._encode_id(message_id)}/createReply"
+            # POST with an empty body first; the API returns a fully-formed draft
+            response = requests.post(url, headers=self.headers, json={})
+            response.raise_for_status()
+            draft = response.json()
+            draft_id = draft["id"]
+
+            # Build a PATCH payload to override recipients / body
+            patch: Dict[str, Any] = {}
+            if to is not None:
+                patch["toRecipients"] = [{"emailAddress": {"address": a}} for a in to]
+            if cc is not None:
+                patch["ccRecipients"] = [{"emailAddress": {"address": a}} for a in cc]
+            if bcc is not None:
+                patch["bccRecipients"] = [{"emailAddress": {"address": a}} for a in bcc]
+            if body is not None:
+                patch["body"] = {
+                    "contentType": "HTML" if body_type == "html" else "Text",
+                    "content": body,
+                }
+
+            if patch:
+                patch_url = f"{self.graph_url}/me/messages/{self._encode_id(draft_id)}"
+                patch_resp = requests.patch(patch_url, headers=self.headers, json=patch)
+                patch_resp.raise_for_status()
+                draft = patch_resp.json()
+
+            logger.info(f"Created reply draft {draft_id} for message {message_id}")
+            return draft
+
+        except requests.RequestException as e:
+            logger.error(f"Failed to create reply draft: {e}")
             raise
 
     def list_attachments(self, message_id: str) -> List[Dict[str, Any]]:
