@@ -468,18 +468,32 @@
             background: none;
             border: none;
             cursor: pointer;
-            font-size: 1.25rem;
             padding: 8px;
-            color: var(--text-secondary);
+            color: var(--border-color);
             border-radius: 50%;
-            transition: background 0.2s;
+            transition: color 0.2s, background 0.2s;
             flex-shrink: 0;
             align-self: flex-end;
-            margin-bottom: 2px;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
-        .attach-btn:hover {
-            background: rgba(0, 255, 0, 0.1);
+        .attach-btn:hover:not(:disabled) {
+            color: var(--primary-color);
+            background: rgba(0, 255, 0, 0.08);
+        }
+
+        .attach-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .attach-btn svg {
+            width: 20px;
+            height: 20px;
+            display: block;
         }
 
         .attachment-chips {
@@ -620,7 +634,11 @@
                 <div class="chat-input-container">
                     <!-- Hidden file picker — triggered by the paperclip button -->
                     <input type="file" id="fileInput" multiple style="display:none" />
-                    <button id="attachButton" title="Attach file(s)" class="attach-btn">📎</button>
+                    <button id="attachButton" title="Attach file(s)" class="attach-btn" aria-label="Attach file">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21.44 11.05L12.25 20.24a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66L9.41 17.41a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+                        </svg>
+                    </button>
                     <div class="chat-input-inner">
                         <!-- Attached file chips appear here before the textarea -->
                         <div id="attachmentChips" class="attachment-chips" style="display:none"></div>
