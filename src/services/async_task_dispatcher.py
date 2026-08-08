@@ -260,6 +260,33 @@ class AsyncTaskDispatcher:
             if t.conversation_id == conversation_id and t.status == "running"
         ]
 
+    def cancel_all_for_conversation(self, conversation_id: str) -> List[str]:
+        """Cancel every running sub-task that belongs to *conversation_id*.
+
+        Each in-flight asyncio.Task is cancelled (best-effort) and the
+        :class:`AsyncTask` record is immediately marked ``"cancelled"`` so
+        callers don't have to wait for the asyncio cancellation to propagate.
+
+        Args:
+            conversation_id: The parent conversation whose tasks should stop.
+
+        Returns:
+            List of *task_id* strings that were cancelled.
+        """
+        cancelled_ids: List[str] = []
+        for task in self._tasks.values():
+            if task.conversation_id == conversation_id and task.status == "running":
+                if task._asyncio_task is not None and not task._asyncio_task.done():
+                    task._asyncio_task.cancel()
+                task.status = "cancelled"
+                task.error = "Cancelled by /cancel command."
+                task.completed_at = datetime.now(timezone.utc)
+                task.reported = True
+                cancelled_ids.append(task.task_id)
+                self._persist_final(task)
+                logger.info(f"Cancelled sub-task {task.task_id} for conversation {conversation_id}")
+        return cancelled_ids
+
     async def wait_for(
         self,
         task_ids: List[str],

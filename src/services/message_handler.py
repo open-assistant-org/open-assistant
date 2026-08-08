@@ -157,7 +157,51 @@ class MessageHandler:
             conv_id = conversation["conversation_id"]
             logger.debug(f"Conversation ID: {conv_id}")
 
-            # Step 1b: Handle /clear command — start a fresh conversation,
+            # Step 1b: Handle /cancel command — stop all running threads,
+            # clear any suspended ask_user state, and let the user continue
+            # in the same conversation from a clean slate.
+            if message.strip() == "/cancel":
+                cancelled = self.async_task_dispatcher.cancel_all_for_conversation(conv_id)
+                # Clear any suspended ask_user state so the next message is
+                # treated as a fresh request rather than a resumed execution.
+                self._clear_suspended_state(conv_id)
+                n = len(cancelled)
+                if n:
+                    cancel_note = (
+                        f"Cancelled {n} background task{'s' if n != 1 else ''} "
+                        f"({', '.join(cancelled)}). "
+                    )
+                else:
+                    cancel_note = ""
+                response_text = (
+                    f"⛔ {cancel_note}All ongoing work has been stopped. "
+                    "You can start a new request whenever you're ready."
+                )
+                self.conversation_service.add_message(
+                    conversation_id=conv_id,
+                    role="user",
+                    content=message,
+                    metadata={"source": "cancel_command"},
+                )
+                self.conversation_service.add_message(
+                    conversation_id=conv_id,
+                    role="assistant",
+                    content=response_text,
+                    metadata={"cancelled_tasks": cancelled},
+                )
+                logger.info(f"/cancel: stopped {n} task(s) in conversation {conv_id}: {cancelled}")
+                return {
+                    "response": response_text,
+                    "conversation_id": conv_id,
+                    "skills_used": [],
+                    "tools_executed": [],
+                    "iterations": 0,
+                    "stuck_detected": False,
+                    "cancelled": True,
+                    "cancelled_tasks": cancelled,
+                }
+
+            # Step 1c: Handle /clear command — start a fresh conversation,
             # leaving the existing one intact as history.
             if message.strip() == "/clear":
                 new_conv_id = str(uuid4())
@@ -180,7 +224,7 @@ class MessageHandler:
                     "cleared": True,
                 }
 
-            # Step 1c: Check for suspended execution (ask_user resumption)
+            # Step 1d: Check for suspended execution (ask_user resumption)
             suspended_result = self._get_suspended_state(conv_id)
             if suspended_result:
                 suspended_state, suspended_msg_id = suspended_result
@@ -1889,6 +1933,40 @@ class MessageHandler:
         except Exception as e:
             logger.warning(f"Could not check for suspended state: {e}")
         return None
+
+    def _clear_suspended_state(self, conversation_id: str) -> bool:
+        """Clear any suspended ask_user state for *conversation_id*.
+
+        Replaces the ``suspended_state`` key in the most-recent suspended
+        message's metadata with ``{"cancelled": True}`` so that subsequent
+        messages are treated as fresh requests rather than resumed executions.
+
+        Returns True if a suspended state was found and cleared, False otherwise.
+        """
+        try:
+            history = self.conversation_service.message_repo.get_recent_messages(
+                conversation_id, count=5
+            )
+            if not history:
+                return False
+            for msg in reversed(history):
+                meta = msg.get("metadata")
+                if isinstance(meta, str):
+                    try:
+                        meta = json.loads(meta)
+                    except (json.JSONDecodeError, TypeError):
+                        meta = None
+                if isinstance(meta, dict) and meta.get("suspended_state"):
+                    msg_id = msg.get("message_id", "")
+                    if msg_id:
+                        self.conversation_service.message_repo.update_metadata(
+                            msg_id, {"cancelled": True}
+                        )
+                        logger.info(f"Cleared suspended state for conversation {conversation_id}")
+                    return True
+        except Exception as e:
+            logger.warning(f"Could not clear suspended state: {e}")
+        return False
 
     def _save_suspended_state(
         self, conversation_id: str, suspended_state: Dict[str, Any], question: str = ""
