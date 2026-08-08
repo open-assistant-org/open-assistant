@@ -3,10 +3,15 @@
 let conversationId = storage.get('current_conversation_id');
 let conversationHistory = [];
 
+// Tracks the AbortController for the active SSE stream so the cancel button
+// can tear it down immediately without waiting for the LLM to finish.
+let activeStreamAbortController = null;
+
 // DOM Elements
 const chatMessages = document.getElementById('chatMessages');
 const messageInput = document.getElementById('messageInput');
 const sendButton = document.getElementById('sendButton');
+const cancelButton = document.getElementById('cancelButton');
 const newConversationBtn = document.getElementById('newConversationBtn');
 const conversationIdDisplay = document.getElementById('conversationIdDisplay');
 const toggleSidebarBtn = document.getElementById('toggleSidebarBtn');
@@ -15,6 +20,9 @@ const chatLayout = document.getElementById('chatLayout');
 const conversationSearch = document.getElementById('conversationSearch');
 const dateFilter = document.getElementById('dateFilter');
 const loadMoreBtn = document.getElementById('loadMoreConversations');
+const cancelModal = document.getElementById('cancelModal');
+const cancelModalDismiss = document.getElementById('cancelModalDismiss');
+const cancelModalConfirm = document.getElementById('cancelModalConfirm');
 
 // Initialize
 function init() {
@@ -81,6 +89,67 @@ function displayIntegrationStatus(status) {
     }
 }
 
+// Switch the input area into "streaming" mode: disable send, show cancel button.
+function setStreamingState(streaming) {
+    sendButton.hidden = streaming;
+    sendButton.disabled = streaming;
+    cancelButton.hidden = !streaming;
+    messageInput.disabled = streaming;
+}
+
+// Show / hide the cancel confirmation modal.
+function showCancelModal() {
+    cancelModal.classList.remove('hidden');
+    cancelModalConfirm.focus();
+}
+
+function hideCancelModal() {
+    cancelModal.classList.add('hidden');
+}
+
+// Abort the live SSE stream and send /cancel to the backend so server-side
+// tasks are also stopped.  Called when the user confirms the cancel modal.
+async function executeCancel() {
+    hideCancelModal();
+
+    // 1. Tear down the live SSE connection immediately.
+    if (activeStreamAbortController) {
+        activeStreamAbortController.abort();
+        activeStreamAbortController = null;
+    }
+
+    // 2. Snap the UI back to idle right away — don't wait for the backend.
+    hideTypingIndicator();
+    setStreamingState(false);
+
+    // 3. Tell the backend to stop all running tasks; display the acknowledgement.
+    try {
+        const base = window.INSTANCE_BASE_PATH || '';
+        const result = await fetch(base + '/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                message: '/cancel',
+                conversation_id: conversationId,
+                channel: 'webui',
+            }),
+        });
+        if (result.ok) {
+            const data = await result.json();
+            if (data.conversation_id) {
+                conversationId = data.conversation_id;
+                storage.set('current_conversation_id', conversationId);
+                updateConversationDisplay();
+            }
+            addMessageToUI(data.response, 'assistant');
+        }
+    } catch (_) {
+        // Non-critical — the stream was already aborted; the UI is already clean.
+    }
+
+    messageInput.focus();
+}
+
 // Setup event listeners
 function setupEventListeners() {
     sendButton.addEventListener('click', sendMessage);
@@ -90,6 +159,33 @@ function setupEventListeners() {
             sendMessage();
         }
     });
+
+    // Cancel button → show confirmation modal.
+    if (cancelButton) {
+        cancelButton.addEventListener('click', showCancelModal);
+    }
+
+    // Modal buttons.
+    if (cancelModalDismiss) {
+        cancelModalDismiss.addEventListener('click', hideCancelModal);
+    }
+    if (cancelModalConfirm) {
+        cancelModalConfirm.addEventListener('click', executeCancel);
+    }
+
+    // Pressing Escape closes the modal without cancelling.
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !cancelModal.classList.contains('hidden')) {
+            hideCancelModal();
+        }
+    });
+
+    // Clicking the dark overlay (outside the card) also dismisses.
+    if (cancelModal) {
+        cancelModal.addEventListener('click', (e) => {
+            if (e.target === cancelModal) hideCancelModal();
+        });
+    }
 
     if (newConversationBtn) {
         newConversationBtn.addEventListener('click', startNewConversation);
@@ -161,23 +257,30 @@ async function sendMessage() {
     addMessageToUI(message, 'user');
     messageInput.value = '';
 
-    messageInput.disabled = true;
-    sendButton.disabled = true;
+    setStreamingState(true);
     showTypingIndicator();
 
     // Streaming path (modern browsers)
     if (typeof ReadableStream !== 'undefined' && typeof TextDecoder !== 'undefined') {
+        let aborted = false;
         try {
             await sendMessageStreaming(message);
         } catch (error) {
-            hideTypingIndicator();
-            console.error('Streaming error:', error);
-            toast.error(error.message || 'Failed to get response');
-            addMessageToUI('Sorry, I encountered an error. Please try again.', 'error');
+            if (error.name === 'AbortError') {
+                // User-initiated cancel — the UI is already cleaned up by executeCancel();
+                // swallow the error silently.
+                aborted = true;
+            } else {
+                hideTypingIndicator();
+                console.error('Streaming error:', error);
+                toast.error(error.message || 'Failed to get response');
+                addMessageToUI('Sorry, I encountered an error. Please try again.', 'error');
+            }
         } finally {
-            messageInput.disabled = false;
-            sendButton.disabled = false;
-            messageInput.focus();
+            if (!aborted) {
+                setStreamingState(false);
+                messageInput.focus();
+            }
         }
         return;
     }
@@ -206,14 +309,18 @@ async function sendMessage() {
         toast.error(error.message || 'Failed to get response');
         addMessageToUI('Sorry, I encountered an error. Please try again.', 'error');
     } finally {
-        messageInput.disabled = false;
-        sendButton.disabled = false;
+        setStreamingState(false);
         messageInput.focus();
     }
 }
 
 async function sendMessageStreaming(message) {
     const base = window.INSTANCE_BASE_PATH || '';
+
+    // Create a fresh AbortController for this stream so the cancel button can
+    // tear it down without navigating away or showing an error.
+    activeStreamAbortController = new AbortController();
+
     const resp = await fetch(base + '/api/chat/stream', {
         method: 'POST',
         redirect: 'manual',
@@ -222,7 +329,8 @@ async function sendMessageStreaming(message) {
             message: message,
             conversation_id: conversationId,
             channel: 'webui'
-        })
+        }),
+        signal: activeStreamAbortController.signal,
     });
 
     // Auth gateway returns 302 on expired sessions; fetch follows it converting
@@ -293,6 +401,7 @@ async function sendMessageStreaming(message) {
                 }
 
             } else if (event.type === 'complete') {
+                activeStreamAbortController = null;
                 hideTypingIndicator();
                 if (event.conversation_id) {
                     conversationId = event.conversation_id;
@@ -304,17 +413,12 @@ async function sendMessageStreaming(message) {
                 if (chatLayout.classList.contains('sidebar-open')) {
                     historyManager.loadConversations(false);
                 }
-                messageInput.disabled = false;
-                sendButton.disabled = false;
-                messageInput.focus();
 
             } else if (event.type === 'error') {
+                activeStreamAbortController = null;
                 hideTypingIndicator();
                 toast.error(event.error || 'Failed to get response');
                 addMessageToUI('Sorry, I encountered an error. Please try again.', 'error');
-                messageInput.disabled = false;
-                sendButton.disabled = false;
-                messageInput.focus();
             }
         }
     }
