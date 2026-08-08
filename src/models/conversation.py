@@ -38,6 +38,15 @@ class ChatRequest(BaseModel):
     conversation_history: Optional[List[Message]] = Field(
         None, description="DEPRECATED: Conversation history (loaded from DB)"
     )
+    # Vision support: base64-encoded image and its MIME type.  When present the
+    # LLM call is routed through the configured media model so vision-capable
+    # models are used automatically.
+    image_base64: Optional[str] = Field(
+        None, description="Base64-encoded image to include in the message (for vision models)"
+    )
+    image_mimetype: Optional[str] = Field(
+        None, description="MIME type of the attached image, e.g. 'image/png'"
+    )
 
 
 class PendingInput(BaseModel):

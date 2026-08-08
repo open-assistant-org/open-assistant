@@ -166,7 +166,15 @@ function renderAttachmentChips() {
         chip.title = f.filename;
 
         const icon = document.createElement('span');
-        icon.textContent = f.uploading ? '⏳' : '📄';
+        if (f.uploading) {
+            icon.textContent = '⏳';
+        } else if (f.image_base64) {
+            icon.textContent = '🖼️';
+        } else if (f.ocr_text || f.content_type === 'application/pdf' || (f.filename && f.filename.toLowerCase().endsWith('.pdf'))) {
+            icon.textContent = '📑';
+        } else {
+            icon.textContent = '📄';
+        }
 
         const name = document.createElement('span');
         name.className = 'attachment-chip-name';
@@ -231,6 +239,12 @@ async function handleFileSelection(event) {
                     size: data.size,
                     content_type: data.content_type,
                     uploading: false,
+                    // Image: backend returns base64 so we can send it to the vision path
+                    image_base64: data.image_base64 || null,
+                    image_mimetype: data.image_mimetype || null,
+                    // PDF: backend returns OCR text when Mistral OCR is configured
+                    ocr_text: data.ocr_text || null,
+                    ocr_available: data.ocr_available ?? null,
                 };
             }
         } catch (err) {
@@ -245,22 +259,85 @@ async function handleFileSelection(event) {
 }
 
 /**
- * Build a context prefix to inject into the message so the LLM knows which
- * files are available and where to find them on disk.
+ * Build a context prefix to inject into the message so the LLM knows about
+ * any non-image, non-OCR attachments (i.e. files that the LLM must read via
+ * tools like python_execute).
+ *
+ * Images are passed separately via image_base64/image_mimetype in the request
+ * body and don't need a text mention here.
+ *
+ * PDFs that were successfully OCR'd have their text injected inline instead of
+ * a file-path reference.
  */
 function buildFileContext() {
     const ready = attachedFiles.filter(f => !f.uploading && f.path);
     if (ready.length === 0) return '';
 
-    const lines = ready.map(f =>
-        `- "${f.filename}" → ${f.path} (${f.content_type || 'unknown type'}, ${formatFileSize(f.size)})`
+    const parts = [];
+
+    // ── OCR'd PDFs: inject extracted text inline ────────────────────────────
+    const ocrFiles = ready.filter(f => f.ocr_text);
+    for (const f of ocrFiles) {
+        parts.push(
+            `[The user attached "${f.filename}" (PDF, ${formatFileSize(f.size)}). ` +
+            `The following text was extracted from it via OCR:]\n` +
+            `\`\`\`\n${f.ocr_text}\n\`\`\``
+        );
+    }
+
+    // ── PDFs without OCR: fall back to file-path reference ──────────────────
+    const pdfNoOcr = ready.filter(
+        f => (f.content_type === 'application/pdf' || f.filename.toLowerCase().endsWith('.pdf'))
+             && !f.ocr_text
     );
-    return (
-        `[The user has attached the following file(s) to this message. ` +
-        `They are stored on the local filesystem and can be read with available tools such as python_execute or analyze_content:]\n` +
-        lines.join('\n') +
-        '\n\n'
+    if (pdfNoOcr.length > 0) {
+        const lines = pdfNoOcr.map(f =>
+            `- "${f.filename}" → ${f.path} (PDF, ${formatFileSize(f.size)})`
+        );
+        parts.push(
+            `[The user attached the following PDF(s). OCR is not configured, ` +
+            `so the files are available at the paths below — use python_execute ` +
+            `or analyze_content to read them:]\n` + lines.join('\n')
+        );
+    }
+
+    // ── Other non-image files: file-path reference ───────────────────────────
+    const otherFiles = ready.filter(
+        f => !f.image_base64
+             && f.content_type !== 'application/pdf'
+             && !f.filename.toLowerCase().endsWith('.pdf')
+             && !f.ocr_text
     );
+    if (otherFiles.length > 0) {
+        const lines = otherFiles.map(f =>
+            `- "${f.filename}" → ${f.path} (${f.content_type || 'unknown type'}, ${formatFileSize(f.size)})`
+        );
+        parts.push(
+            `[The user attached the following file(s). ` +
+            `They are stored on the local filesystem and can be read with available ` +
+            `tools such as python_execute or analyze_content:]\n` + lines.join('\n')
+        );
+    }
+
+    // ── Images: brief mention so the LLM knows it received one ──────────────
+    const images = ready.filter(f => f.image_base64);
+    if (images.length > 0) {
+        const names = images.map(f => `"${f.filename}"`).join(', ');
+        parts.push(`[The user attached the following image(s): ${names}. ` +
+                   `The image content is provided directly in this message.]`);
+    }
+
+    return parts.length > 0 ? parts.join('\n\n') + '\n\n' : '';
+}
+
+/**
+ * Return the first image attachment's base64/mimetype, if any.
+ * handle_message currently supports one image per turn.
+ */
+function getImageAttachment() {
+    const img = attachedFiles.find(f => !f.uploading && f.image_base64);
+    if (!img) return null;
+    return { image_base64: img.image_base64, image_mimetype: img.image_mimetype };
 }
 
 // Load conversation history
@@ -299,6 +376,9 @@ async function sendMessage() {
         return;
     }
 
+    // Capture image before clearing the list
+    const imageAttachment = getImageAttachment();
+
     // Build the full message that gets sent to the LLM (file context + user text)
     const fileContext = buildFileContext();
     const fullMessage = fileContext + (message || '(No additional message — please analyze the attached file(s).)');
@@ -324,7 +404,7 @@ async function sendMessage() {
     // Streaming path (modern browsers)
     if (typeof ReadableStream !== 'undefined' && typeof TextDecoder !== 'undefined') {
         try {
-            await sendMessageStreaming(fullMessage);
+            await sendMessageStreaming(fullMessage, imageAttachment);
         } catch (error) {
             hideTypingIndicator();
             console.error('Streaming error:', error);
@@ -344,7 +424,8 @@ async function sendMessage() {
         const response = await api.post('/api/chat', {
             message: fullMessage,
             conversation_id: conversationId,
-            channel: 'webui'
+            channel: 'webui',
+            ...(imageAttachment || {}),
         });
         if (response.conversation_id) {
             conversationId = response.conversation_id;
@@ -370,7 +451,7 @@ async function sendMessage() {
     }
 }
 
-async function sendMessageStreaming(message) {
+async function sendMessageStreaming(message, imageAttachment) {
     const base = window.INSTANCE_BASE_PATH || '';
     const resp = await fetch(base + '/api/chat/stream', {
         method: 'POST',
@@ -379,7 +460,8 @@ async function sendMessageStreaming(message) {
         body: JSON.stringify({
             message: message,
             conversation_id: conversationId,
-            channel: 'webui'
+            channel: 'webui',
+            ...(imageAttachment || {}),
         })
     });
 
