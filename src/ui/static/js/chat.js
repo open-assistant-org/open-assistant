@@ -3,6 +3,10 @@
 let conversationId = storage.get('current_conversation_id');
 let conversationHistory = [];
 
+// ── File attachment state ──────────────────────────────────────────────────
+// Each entry: { filename, path, size, content_type, uploading }
+let attachedFiles = [];
+
 // Tracks the AbortController for the active SSE stream so the cancel button
 // can tear it down immediately without waiting for the LLM to finish.
 let activeStreamAbortController = null;
@@ -20,6 +24,9 @@ const chatLayout = document.getElementById('chatLayout');
 const conversationSearch = document.getElementById('conversationSearch');
 const dateFilter = document.getElementById('dateFilter');
 const loadMoreBtn = document.getElementById('loadMoreConversations');
+const fileInput = document.getElementById('fileInput');
+const attachButton = document.getElementById('attachButton');
+const attachmentChips = document.getElementById('attachmentChips');
 const cancelModal = document.getElementById('cancelModal');
 const cancelModalDismiss = document.getElementById('cancelModalDismiss');
 const cancelModalConfirm = document.getElementById('cancelModalConfirm');
@@ -224,6 +231,209 @@ function setupEventListeners() {
             historyManager.loadConversations(true);
         });
     }
+
+    // File attachment
+    if (attachButton && fileInput) {
+        attachButton.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', handleFileSelection);
+    }
+}
+
+// ── File upload helpers ────────────────────────────────────────────────────
+
+function formatFileSize(bytes) {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function renderAttachmentChips() {
+    if (!attachmentChips) return;
+    if (attachedFiles.length === 0) {
+        attachmentChips.style.display = 'none';
+        attachmentChips.innerHTML = '';
+        return;
+    }
+    attachmentChips.style.display = 'flex';
+    attachmentChips.innerHTML = '';
+    attachedFiles.forEach((f, idx) => {
+        const chip = document.createElement('div');
+        chip.className = 'attachment-chip' + (f.uploading ? ' uploading' : '');
+        chip.title = f.filename;
+
+        const icon = document.createElement('span');
+        if (f.uploading) {
+            icon.textContent = '⏳';
+        } else if (f.image_base64) {
+            icon.textContent = '🖼️';
+        } else if (f.ocr_text || f.content_type === 'application/pdf' || (f.filename && f.filename.toLowerCase().endsWith('.pdf'))) {
+            icon.textContent = '📑';
+        } else {
+            icon.textContent = '📄';
+        }
+
+        const name = document.createElement('span');
+        name.className = 'attachment-chip-name';
+        name.textContent = f.filename;
+
+        const size = document.createElement('span');
+        size.className = 'attachment-chip-size';
+        size.textContent = f.size != null ? formatFileSize(f.size) : '';
+
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'attachment-chip-remove';
+        removeBtn.textContent = '×';
+        removeBtn.title = 'Remove attachment';
+        removeBtn.setAttribute('aria-label', `Remove ${f.filename}`);
+        removeBtn.addEventListener('click', () => {
+            attachedFiles.splice(idx, 1);
+            renderAttachmentChips();
+        });
+
+        chip.appendChild(icon);
+        chip.appendChild(name);
+        if (!f.uploading) chip.appendChild(size);
+        chip.appendChild(removeBtn);
+        attachmentChips.appendChild(chip);
+    });
+}
+
+async function handleFileSelection(event) {
+    const files = Array.from(event.target.files || []);
+    // Reset the input so the same file can be re-selected if needed
+    fileInput.value = '';
+    if (files.length === 0) return;
+
+    for (const file of files) {
+        // Add a placeholder chip while uploading
+        const placeholder = { filename: file.name, path: null, size: file.size, uploading: true };
+        attachedFiles.push(placeholder);
+        renderAttachmentChips();
+
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const base = window.INSTANCE_BASE_PATH || '';
+            const resp = await fetch(base + '/api/upload', {
+                method: 'POST',
+                body: formData,
+            });
+
+            if (!resp.ok) {
+                const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+                throw new Error(err.detail || `Upload failed (${resp.status})`);
+            }
+
+            const data = await resp.json();
+            // Replace placeholder with resolved file info
+            const idx = attachedFiles.indexOf(placeholder);
+            if (idx !== -1) {
+                attachedFiles[idx] = {
+                    filename: data.filename,
+                    path: data.path,
+                    size: data.size,
+                    content_type: data.content_type,
+                    uploading: false,
+                    // Image: backend returns base64 so we can send it to the vision path
+                    image_base64: data.image_base64 || null,
+                    image_mimetype: data.image_mimetype || null,
+                    // PDF: backend returns OCR text when Mistral OCR is configured
+                    ocr_text: data.ocr_text || null,
+                    ocr_available: data.ocr_available ?? null,
+                };
+            }
+        } catch (err) {
+            // Remove failed placeholder
+            const idx = attachedFiles.indexOf(placeholder);
+            if (idx !== -1) attachedFiles.splice(idx, 1);
+            toast.error(`Failed to upload "${file.name}": ${err.message}`);
+        }
+
+        renderAttachmentChips();
+    }
+}
+
+/**
+ * Build a context prefix to inject into the message so the LLM knows about
+ * any non-image, non-OCR attachments (i.e. files that the LLM must read via
+ * tools like python_execute).
+ *
+ * Images are passed separately via image_base64/image_mimetype in the request
+ * body and don't need a text mention here.
+ *
+ * PDFs that were successfully OCR'd have their text injected inline instead of
+ * a file-path reference.
+ */
+function buildFileContext() {
+    const ready = attachedFiles.filter(f => !f.uploading && f.path);
+    if (ready.length === 0) return '';
+
+    const parts = [];
+
+    // ── OCR'd PDFs: inject extracted text inline ────────────────────────────
+    const ocrFiles = ready.filter(f => f.ocr_text);
+    for (const f of ocrFiles) {
+        parts.push(
+            `[The user attached "${f.filename}" (PDF, ${formatFileSize(f.size)}). ` +
+            `The following text was extracted from it via OCR:]\n` +
+            `\`\`\`\n${f.ocr_text}\n\`\`\``
+        );
+    }
+
+    // ── PDFs without OCR: fall back to file-path reference ──────────────────
+    const pdfNoOcr = ready.filter(
+        f => (f.content_type === 'application/pdf' || f.filename.toLowerCase().endsWith('.pdf'))
+             && !f.ocr_text
+    );
+    if (pdfNoOcr.length > 0) {
+        const lines = pdfNoOcr.map(f =>
+            `- "${f.filename}" → ${f.path} (PDF, ${formatFileSize(f.size)})`
+        );
+        parts.push(
+            `[The user attached the following PDF(s). OCR is not configured, ` +
+            `so the files are available at the paths below — use python_execute ` +
+            `or analyze_content to read them:]\n` + lines.join('\n')
+        );
+    }
+
+    // ── Other non-image files: file-path reference ───────────────────────────
+    const otherFiles = ready.filter(
+        f => !f.image_base64
+             && f.content_type !== 'application/pdf'
+             && !f.filename.toLowerCase().endsWith('.pdf')
+             && !f.ocr_text
+    );
+    if (otherFiles.length > 0) {
+        const lines = otherFiles.map(f =>
+            `- "${f.filename}" → ${f.path} (${f.content_type || 'unknown type'}, ${formatFileSize(f.size)})`
+        );
+        parts.push(
+            `[The user attached the following file(s). ` +
+            `They are stored on the local filesystem and can be read with available ` +
+            `tools such as python_execute or analyze_content:]\n` + lines.join('\n')
+        );
+    }
+
+    // ── Images: brief mention so the LLM knows it received one ──────────────
+    const images = ready.filter(f => f.image_base64);
+    if (images.length > 0) {
+        const names = images.map(f => `"${f.filename}"`).join(', ');
+        parts.push(`[The user attached the following image(s): ${names}. ` +
+                   `The image content is provided directly in this message.]`);
+    }
+
+    return parts.length > 0 ? parts.join('\n\n') + '\n\n' : '';
+}
+
+/**
+ * Return the first image attachment's base64/mimetype, if any.
+ * handle_message currently supports one image per turn.
+ */
+function getImageAttachment() {
+    const img = attachedFiles.find(f => !f.uploading && f.image_base64);
+    if (!img) return null;
+    return { image_base64: img.image_base64, image_mimetype: img.image_mimetype };
 }
 
 // Load conversation history
@@ -252,19 +462,45 @@ async function loadConversationHistory() {
 // Send message — uses SSE streaming when supported, falls back to plain POST
 async function sendMessage() {
     const message = messageInput.value.trim();
-    if (!message) return;
+    // Require either a text message or at least one uploaded file
+    const hasFiles = attachedFiles.some(f => !f.uploading && f.path);
+    if (!message && !hasFiles) return;
 
-    addMessageToUI(message, 'user');
+    // Block send while any file is still uploading
+    if (attachedFiles.some(f => f.uploading)) {
+        toast.error('Please wait for all files to finish uploading.');
+        return;
+    }
+
+    // Capture image before clearing the list
+    const imageAttachment = getImageAttachment();
+
+    // Build the full message that gets sent to the LLM (file context + user text)
+    const fileContext = buildFileContext();
+    const fullMessage = fileContext + (message || '(No additional message — please analyze the attached file(s).)');
+
+    // Show the user-facing bubble with just the text they typed (+ file list if any)
+    const displayedFiles = attachedFiles.filter(f => !f.uploading && f.path);
+    if (displayedFiles.length > 0) {
+        addMessageToUI(message || '(See attached file(s))', 'user', displayedFiles);
+    } else {
+        addMessageToUI(message, 'user');
+    }
     messageInput.value = '';
 
+    // Clear attachments now that they've been included in the message
+    attachedFiles = [];
+    renderAttachmentChips();
+
     setStreamingState(true);
+    if (attachButton) attachButton.disabled = true;
     showTypingIndicator();
 
     // Streaming path (modern browsers)
     if (typeof ReadableStream !== 'undefined' && typeof TextDecoder !== 'undefined') {
         let aborted = false;
         try {
-            await sendMessageStreaming(message);
+            await sendMessageStreaming(fullMessage, imageAttachment);
         } catch (error) {
             if (error.name === 'AbortError') {
                 // User-initiated cancel — the UI is already cleaned up by executeCancel();
@@ -279,6 +515,7 @@ async function sendMessage() {
         } finally {
             if (!aborted) {
                 setStreamingState(false);
+                if (attachButton) attachButton.disabled = false;
                 messageInput.focus();
             }
         }
@@ -288,9 +525,10 @@ async function sendMessage() {
     // Fallback: plain POST (no streaming)
     try {
         const response = await api.post('/api/chat', {
-            message: message,
+            message: fullMessage,
             conversation_id: conversationId,
-            channel: 'webui'
+            channel: 'webui',
+            ...(imageAttachment || {}),
         });
         if (response.conversation_id) {
             conversationId = response.conversation_id;
@@ -310,11 +548,12 @@ async function sendMessage() {
         addMessageToUI('Sorry, I encountered an error. Please try again.', 'error');
     } finally {
         setStreamingState(false);
+        if (attachButton) attachButton.disabled = false;
         messageInput.focus();
     }
 }
 
-async function sendMessageStreaming(message) {
+async function sendMessageStreaming(message, imageAttachment) {
     const base = window.INSTANCE_BASE_PATH || '';
 
     // Create a fresh AbortController for this stream so the cancel button can
@@ -328,7 +567,8 @@ async function sendMessageStreaming(message) {
         body: JSON.stringify({
             message: message,
             conversation_id: conversationId,
-            channel: 'webui'
+            channel: 'webui',
+            ...(imageAttachment || {}),
         }),
         signal: activeStreamAbortController.signal,
     });
@@ -491,22 +731,38 @@ function renderMarkdown(content) {
 }
 
 // Add message to UI
-function addMessageToUI(content, role) {
+// attachments: optional array of { filename, path, size } for user messages
+function addMessageToUI(content, role, attachments) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}`;
 
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
 
+    // Render file attachment banners for user messages
+    if (role === 'user' && attachments && attachments.length > 0) {
+        const banner = document.createElement('div');
+        banner.className = 'attachment-banner';
+        banner.innerHTML = attachments
+            .map(f => `📎 <strong>${escapeHtml(f.filename)}</strong> (${formatFileSize(f.size)})`)
+            .join('<br>');
+        contentDiv.appendChild(banner);
+    }
+
     if (role === 'assistant') {
         const html = renderMarkdown(content);
+        const textNode = document.createElement('div');
         if (html !== null) {
-            contentDiv.innerHTML = html;
+            textNode.innerHTML = html;
         } else {
-            contentDiv.textContent = content;
+            textNode.textContent = content;
         }
+        contentDiv.appendChild(textNode);
     } else {
-        contentDiv.textContent = content;
+        if (content) {
+            const textNode = document.createTextNode(content);
+            contentDiv.appendChild(textNode);
+        }
     }
 
     messageDiv.appendChild(contentDiv);
@@ -541,6 +797,8 @@ function startNewConversation() {
     conversationId = null;
     storage.remove('current_conversation_id');
     conversationHistory = [];
+    attachedFiles = [];
+    renderAttachmentChips();
     chatMessages.innerHTML = '';
 
     // Add welcome message

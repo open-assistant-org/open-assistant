@@ -68,6 +68,8 @@ async def chat(
             channel=request.channel,
             contact_identifier=request.contact_identifier,
             metadata={"source": "chat_api"},
+            image_base64=request.image_base64,
+            image_mimetype=request.image_mimetype,
         )
 
         # Calculate token usage (approximate)
@@ -178,6 +180,8 @@ async def chat_stream(
                 contact_identifier=request.contact_identifier,
                 metadata={"source": "chat_api_stream"},
                 event_callback=event_callback,
+                image_base64=request.image_base64,
+                image_mimetype=request.image_mimetype,
             )
             prompt_tokens = count_tokens(request.message, model)
             completion_tokens = count_tokens(result["response"], model)
