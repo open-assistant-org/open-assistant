@@ -121,6 +121,7 @@ from src.models.notion import (
 from src.models.outlook import CreateEventRequest, ListEventsRequest
 from src.models.outlook import CreateDraftRequest as OutlookCreateDraftRequest
 from src.models.outlook import ListAttachmentsRequest as OutlookListAttachmentsRequest
+from src.models.outlook import AddAttachmentRequest as OutlookAddAttachmentRequest
 from src.models.outlook import DeleteEventRequest as OutlookDeleteEventRequest
 from src.models.outlook import GetAttachmentRequest as OutlookGetAttachmentRequest
 from src.models.outlook import GetEmailRequest as OutlookGetEmailRequest
@@ -950,6 +951,26 @@ def define_outlook_tools():
                     "a draft with source_message_id."
                 ),
                 parameters_model=OutlookListAttachmentsRequest,
+            ),
+            executor=None,
+            service_name="outlook",
+        )
+    )
+
+    # Outlook: Add Attachment (local file → draft)
+    registry.register(
+        Tool(
+            schema=create_tool_schema(
+                name="outlook_add_attachment",
+                description=(
+                    "Attach a local file to an existing Outlook draft. "
+                    "Use this after outlook_create_draft to add files from the local filesystem. "
+                    "Provide the draft's message_id (from outlook_create_draft) and the "
+                    "source_path of the file to attach (e.g. '/tmp/report.pdf'). "
+                    "The MIME type is auto-detected from the file extension unless you supply "
+                    "content_type explicitly. Call once per file for multiple attachments."
+                ),
+                parameters_model=OutlookAddAttachmentRequest,
             ),
             executor=None,
             service_name="outlook",

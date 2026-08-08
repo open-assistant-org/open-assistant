@@ -465,6 +465,64 @@ class OutlookService(BaseService):
         client = self._get_client()
         return client.list_attachments(message_id=message_id)
 
+    def add_attachment(
+        self,
+        message_id: str,
+        source_path: str,
+        filename: Optional[str] = None,
+        content_type: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Attach a local file to an existing Outlook draft.
+
+        Reads the file at *source_path*, base64-encodes it, and POSTs it to
+        the Graph API attachment endpoint.  Call this after outlook_create_draft
+        to attach files that live on the local filesystem.
+
+        Args:
+            message_id: ID of the draft to attach the file to.  The message
+                must still be a draft (not yet sent).
+            source_path: Absolute or relative path to the local file to attach.
+            filename: Override the filename shown in the email.  Defaults to
+                the basename of source_path.
+            content_type: MIME type (e.g. 'application/pdf', 'text/html').
+                Auto-detected from the file extension when not provided.
+
+        Returns:
+            Created attachment object from the Graph API.
+        """
+        import base64
+        import mimetypes
+        import os
+
+        if not os.path.isfile(source_path):
+            raise FileNotFoundError(f"Local file not found: {source_path}")
+
+        with open(source_path, "rb") as fh:
+            file_bytes = fh.read()
+
+        content_bytes_b64 = base64.b64encode(file_bytes).decode("ascii")
+        att_name = filename or os.path.basename(source_path)
+
+        if not content_type:
+            guessed, _ = mimetypes.guess_type(source_path)
+            content_type = guessed or "application/octet-stream"
+
+        client = self._get_client()
+        result = client.add_attachment(
+            message_id=message_id,
+            name=att_name,
+            content_type=content_type,
+            content_bytes_b64=content_bytes_b64,
+        )
+        return {
+            "id": result.get("id"),
+            "name": att_name,
+            "content_type": content_type,
+            "size": len(file_bytes),
+            "message": f"Attached '{att_name}' ({len(file_bytes):,} bytes) to draft {message_id}",
+        }
+
     def get_attachment(
         self,
         message_id: str,

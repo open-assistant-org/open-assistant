@@ -143,6 +143,41 @@ class ListAttachmentsRequest(BaseModel):
     )
 
 
+class AddAttachmentRequest(BaseModel):
+    """Request model for attaching a local file to an existing Outlook draft."""
+
+    message_id: str = Field(
+        ...,
+        description=(
+            "ID of the draft message to attach the file to. "
+            "Obtain this from the 'id' field returned by outlook_create_draft. "
+            "The message must still be a draft (not yet sent)."
+        ),
+    )
+    source_path: str = Field(
+        ...,
+        description=(
+            "Absolute path to the local file to attach (e.g. '/tmp/report.pdf'). "
+            "The file is read, base64-encoded, and uploaded to the draft. "
+            "Use this to attach any file that exists on the local filesystem."
+        ),
+    )
+    filename: Optional[str] = Field(
+        None,
+        description=(
+            "Override the filename shown to the recipient. "
+            "Defaults to the basename of source_path if not provided."
+        ),
+    )
+    content_type: Optional[str] = Field(
+        None,
+        description=(
+            "MIME type of the file (e.g. 'application/pdf', 'text/html', 'image/png'). "
+            "Auto-detected from the file extension when not provided."
+        ),
+    )
+
+
 class UpdateEventRequest(BaseModel):
     """Request model for updating a calendar event."""
 
