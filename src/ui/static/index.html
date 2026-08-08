@@ -455,6 +455,93 @@
             text-decoration: line-through;
             opacity: 0.7;
         }
+
+        /* ── File upload UI ── */
+        .chat-input-inner {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .attach-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1.25rem;
+            padding: 8px;
+            color: var(--text-secondary);
+            border-radius: 50%;
+            transition: background 0.2s;
+            flex-shrink: 0;
+            align-self: flex-end;
+            margin-bottom: 2px;
+        }
+
+        .attach-btn:hover {
+            background: rgba(0, 255, 0, 0.1);
+        }
+
+        .attachment-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            padding: 6px 0 4px 4px;
+        }
+
+        .attachment-chip {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            background: rgba(0, 255, 0, 0.1);
+            border: 1px solid var(--primary-color);
+            border-radius: 14px;
+            padding: 3px 10px 3px 8px;
+            font-size: 0.8rem;
+            color: var(--primary-color);
+            max-width: 220px;
+        }
+
+        .attachment-chip-name {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .attachment-chip-size {
+            font-size: 0.72rem;
+            opacity: 0.7;
+            flex-shrink: 0;
+        }
+
+        .attachment-chip-remove {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: var(--primary-color);
+            font-size: 0.9rem;
+            padding: 0;
+            line-height: 1;
+            flex-shrink: 0;
+            opacity: 0.8;
+        }
+
+        .attachment-chip-remove:hover {
+            opacity: 1;
+        }
+
+        .attachment-chip.uploading {
+            opacity: 0.6;
+        }
+
+        /* User messages that include a file attachment banner */
+        .message.user .attachment-banner {
+            font-size: 0.78rem;
+            opacity: 0.75;
+            margin-bottom: 4px;
+        }
     </style>
 </head>
 <body>
@@ -531,12 +618,19 @@
                 </div>
 
                 <div class="chat-input-container">
-                    <textarea
-                        id="messageInput"
-                        placeholder="Type your message..."
-                        rows="1"
-                        autocomplete="off"
-                    ></textarea>
+                    <!-- Hidden file picker — triggered by the paperclip button -->
+                    <input type="file" id="fileInput" multiple style="display:none" />
+                    <button id="attachButton" title="Attach file(s)" class="attach-btn">📎</button>
+                    <div class="chat-input-inner">
+                        <!-- Attached file chips appear here before the textarea -->
+                        <div id="attachmentChips" class="attachment-chips" style="display:none"></div>
+                        <textarea
+                            id="messageInput"
+                            placeholder="Type your message..."
+                            rows="1"
+                            autocomplete="off"
+                        ></textarea>
+                    </div>
                     <button id="sendButton">Send</button>
                 </div>
             </div>

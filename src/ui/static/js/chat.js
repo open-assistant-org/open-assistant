@@ -3,6 +3,10 @@
 let conversationId = storage.get('current_conversation_id');
 let conversationHistory = [];
 
+// ── File attachment state ──────────────────────────────────────────────────
+// Each entry: { filename, path, size, content_type, uploading }
+let attachedFiles = [];
+
 // DOM Elements
 const chatMessages = document.getElementById('chatMessages');
 const messageInput = document.getElementById('messageInput');
@@ -15,6 +19,9 @@ const chatLayout = document.getElementById('chatLayout');
 const conversationSearch = document.getElementById('conversationSearch');
 const dateFilter = document.getElementById('dateFilter');
 const loadMoreBtn = document.getElementById('loadMoreConversations');
+const fileInput = document.getElementById('fileInput');
+const attachButton = document.getElementById('attachButton');
+const attachmentChips = document.getElementById('attachmentChips');
 
 // Initialize
 function init() {
@@ -128,6 +135,132 @@ function setupEventListeners() {
             historyManager.loadConversations(true);
         });
     }
+
+    // File attachment
+    if (attachButton && fileInput) {
+        attachButton.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', handleFileSelection);
+    }
+}
+
+// ── File upload helpers ────────────────────────────────────────────────────
+
+function formatFileSize(bytes) {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function renderAttachmentChips() {
+    if (!attachmentChips) return;
+    if (attachedFiles.length === 0) {
+        attachmentChips.style.display = 'none';
+        attachmentChips.innerHTML = '';
+        return;
+    }
+    attachmentChips.style.display = 'flex';
+    attachmentChips.innerHTML = '';
+    attachedFiles.forEach((f, idx) => {
+        const chip = document.createElement('div');
+        chip.className = 'attachment-chip' + (f.uploading ? ' uploading' : '');
+        chip.title = f.filename;
+
+        const icon = document.createElement('span');
+        icon.textContent = f.uploading ? '⏳' : '📄';
+
+        const name = document.createElement('span');
+        name.className = 'attachment-chip-name';
+        name.textContent = f.filename;
+
+        const size = document.createElement('span');
+        size.className = 'attachment-chip-size';
+        size.textContent = f.size != null ? formatFileSize(f.size) : '';
+
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'attachment-chip-remove';
+        removeBtn.textContent = '×';
+        removeBtn.title = 'Remove attachment';
+        removeBtn.setAttribute('aria-label', `Remove ${f.filename}`);
+        removeBtn.addEventListener('click', () => {
+            attachedFiles.splice(idx, 1);
+            renderAttachmentChips();
+        });
+
+        chip.appendChild(icon);
+        chip.appendChild(name);
+        if (!f.uploading) chip.appendChild(size);
+        chip.appendChild(removeBtn);
+        attachmentChips.appendChild(chip);
+    });
+}
+
+async function handleFileSelection(event) {
+    const files = Array.from(event.target.files || []);
+    // Reset the input so the same file can be re-selected if needed
+    fileInput.value = '';
+    if (files.length === 0) return;
+
+    for (const file of files) {
+        // Add a placeholder chip while uploading
+        const placeholder = { filename: file.name, path: null, size: file.size, uploading: true };
+        attachedFiles.push(placeholder);
+        renderAttachmentChips();
+
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const base = window.INSTANCE_BASE_PATH || '';
+            const resp = await fetch(base + '/api/upload', {
+                method: 'POST',
+                body: formData,
+            });
+
+            if (!resp.ok) {
+                const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+                throw new Error(err.detail || `Upload failed (${resp.status})`);
+            }
+
+            const data = await resp.json();
+            // Replace placeholder with resolved file info
+            const idx = attachedFiles.indexOf(placeholder);
+            if (idx !== -1) {
+                attachedFiles[idx] = {
+                    filename: data.filename,
+                    path: data.path,
+                    size: data.size,
+                    content_type: data.content_type,
+                    uploading: false,
+                };
+            }
+        } catch (err) {
+            // Remove failed placeholder
+            const idx = attachedFiles.indexOf(placeholder);
+            if (idx !== -1) attachedFiles.splice(idx, 1);
+            toast.error(`Failed to upload "${file.name}": ${err.message}`);
+        }
+
+        renderAttachmentChips();
+    }
+}
+
+/**
+ * Build a context prefix to inject into the message so the LLM knows which
+ * files are available and where to find them on disk.
+ */
+function buildFileContext() {
+    const ready = attachedFiles.filter(f => !f.uploading && f.path);
+    if (ready.length === 0) return '';
+
+    const lines = ready.map(f =>
+        `- "${f.filename}" → ${f.path} (${f.content_type || 'unknown type'}, ${formatFileSize(f.size)})`
+    );
+    return (
+        `[The user has attached the following file(s) to this message. ` +
+        `They are stored on the local filesystem and can be read with available tools such as python_execute or analyze_content:]\n` +
+        lines.join('\n') +
+        '\n\n'
+    );
 }
 
 // Load conversation history
@@ -156,19 +289,42 @@ async function loadConversationHistory() {
 // Send message — uses SSE streaming when supported, falls back to plain POST
 async function sendMessage() {
     const message = messageInput.value.trim();
-    if (!message) return;
+    // Require either a text message or at least one uploaded file
+    const hasFiles = attachedFiles.some(f => !f.uploading && f.path);
+    if (!message && !hasFiles) return;
 
-    addMessageToUI(message, 'user');
+    // Block send while any file is still uploading
+    if (attachedFiles.some(f => f.uploading)) {
+        toast.error('Please wait for all files to finish uploading.');
+        return;
+    }
+
+    // Build the full message that gets sent to the LLM (file context + user text)
+    const fileContext = buildFileContext();
+    const fullMessage = fileContext + (message || '(No additional message — please analyze the attached file(s).)');
+
+    // Show the user-facing bubble with just the text they typed (+ file list if any)
+    const displayedFiles = attachedFiles.filter(f => !f.uploading && f.path);
+    if (displayedFiles.length > 0) {
+        addMessageToUI(message || '(See attached file(s))', 'user', displayedFiles);
+    } else {
+        addMessageToUI(message, 'user');
+    }
     messageInput.value = '';
+
+    // Clear attachments now that they've been included in the message
+    attachedFiles = [];
+    renderAttachmentChips();
 
     messageInput.disabled = true;
     sendButton.disabled = true;
+    if (attachButton) attachButton.disabled = true;
     showTypingIndicator();
 
     // Streaming path (modern browsers)
     if (typeof ReadableStream !== 'undefined' && typeof TextDecoder !== 'undefined') {
         try {
-            await sendMessageStreaming(message);
+            await sendMessageStreaming(fullMessage);
         } catch (error) {
             hideTypingIndicator();
             console.error('Streaming error:', error);
@@ -177,6 +333,7 @@ async function sendMessage() {
         } finally {
             messageInput.disabled = false;
             sendButton.disabled = false;
+            if (attachButton) attachButton.disabled = false;
             messageInput.focus();
         }
         return;
@@ -185,7 +342,7 @@ async function sendMessage() {
     // Fallback: plain POST (no streaming)
     try {
         const response = await api.post('/api/chat', {
-            message: message,
+            message: fullMessage,
             conversation_id: conversationId,
             channel: 'webui'
         });
@@ -208,6 +365,7 @@ async function sendMessage() {
     } finally {
         messageInput.disabled = false;
         sendButton.disabled = false;
+        if (attachButton) attachButton.disabled = false;
         messageInput.focus();
     }
 }
@@ -387,22 +545,38 @@ function renderMarkdown(content) {
 }
 
 // Add message to UI
-function addMessageToUI(content, role) {
+// attachments: optional array of { filename, path, size } for user messages
+function addMessageToUI(content, role, attachments) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}`;
 
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
 
+    // Render file attachment banners for user messages
+    if (role === 'user' && attachments && attachments.length > 0) {
+        const banner = document.createElement('div');
+        banner.className = 'attachment-banner';
+        banner.innerHTML = attachments
+            .map(f => `📎 <strong>${escapeHtml(f.filename)}</strong> (${formatFileSize(f.size)})`)
+            .join('<br>');
+        contentDiv.appendChild(banner);
+    }
+
     if (role === 'assistant') {
         const html = renderMarkdown(content);
+        const textNode = document.createElement('div');
         if (html !== null) {
-            contentDiv.innerHTML = html;
+            textNode.innerHTML = html;
         } else {
-            contentDiv.textContent = content;
+            textNode.textContent = content;
         }
+        contentDiv.appendChild(textNode);
     } else {
-        contentDiv.textContent = content;
+        if (content) {
+            const textNode = document.createTextNode(content);
+            contentDiv.appendChild(textNode);
+        }
     }
 
     messageDiv.appendChild(contentDiv);
@@ -437,6 +611,8 @@ function startNewConversation() {
     conversationId = null;
     storage.remove('current_conversation_id');
     conversationHistory = [];
+    attachedFiles = [];
+    renderAttachmentChips();
     chatMessages.innerHTML = '';
 
     // Add welcome message
