@@ -44,6 +44,7 @@ from src.api.yahoo_finance import router as yahoo_finance_router
 from src.api.whatsapp import router as whatsapp_router
 from src.api.whisper import router as whisper_router
 from src.api.mistral_ocr import router as mistral_ocr_router
+from src.api.uploads import router as uploads_router
 from src.core.config import init_config
 
 # Managed mode (Open Assistant Platform)
@@ -571,6 +572,7 @@ def create_app() -> FastAPI:
     app.include_router(whatsapp_router)
     app.include_router(whisper_router)
     app.include_router(mistral_ocr_router)
+    app.include_router(uploads_router)
 
     # Managed mode endpoints (only when MANAGED_API_KEY is configured)
     if _MANAGED_API_KEY:
