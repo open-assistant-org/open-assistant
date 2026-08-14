@@ -18,6 +18,60 @@ from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+# Keys under which tools commonly report a count of items produced. A value of 0
+# on any of these marks the output as empty for skip-guard purposes.
+_EMPTY_COUNT_KEYS = ("total_messages", "count", "total", "num_results")
+# Keys under which tools commonly return a list of items. An empty list marks the
+# output as empty.
+_EMPTY_LIST_KEYS = ("messages", "items", "results", "rows", "data")
+
+
+def _recipe_output_is_empty(result: Any) -> bool:
+    """Return True when a recipe step produced no meaningful data.
+
+    Generic across tools: unwraps the ``{"success", "result": ...}`` envelope
+    returned by ``ToolExecutor.execute_tool`` and inspects the common count/list
+    conventions. Kept deliberately conservative — it only reports "empty" when a
+    recognised signal clearly says so, so an unfamiliar result never trips the
+    guard by accident.
+    """
+    if not isinstance(result, dict):
+        return not result  # empty string / list / None
+
+    # Unwrap the pinned-tool envelope one level.
+    payload = result.get("result", result)
+    if not isinstance(payload, dict):
+        return not payload
+
+    for key in _EMPTY_COUNT_KEYS:
+        if key in payload:
+            try:
+                return int(payload[key]) == 0
+            except (TypeError, ValueError):
+                pass
+    for key in _EMPTY_LIST_KEYS:
+        if key in payload and isinstance(payload[key], (list, tuple, str)):
+            return len(payload[key]) == 0
+    return False
+
+
+def _recipe_output_text(result: Any) -> str:
+    """Best-effort extraction of a step's textual output for sentinel matching."""
+    if isinstance(result, dict):
+        # Prompt steps return {"response": ...}; fall back to the whole dict.
+        return str(result.get("response") or result)
+    return str(result)
+
+
+def _evaluate_skip_guards(step: Dict[str, Any], result: Any) -> Optional[str]:
+    """Return a human-readable reason if a step's skip guard trips, else None."""
+    if step.get("skip_remaining_if_empty") and _recipe_output_is_empty(result):
+        return "no_data"
+    sentinel = step.get("skip_remaining_if_output_contains")
+    if sentinel and sentinel.lower() in _recipe_output_text(result).lower():
+        return f"sentinel:{sentinel}"
+    return None
+
 
 class CronJobService:
     """Service for managing recurring scheduled tasks with APScheduler."""
@@ -263,10 +317,16 @@ class CronJobService:
                     self._run_job(job, execution_id, job_logger), timeout=self.max_job_timeout
                 )
 
-                self.repo.complete_execution(
-                    execution_id=execution_id, status="success", result=result
+                # A recipe that short-circuited via a skip guard is recorded as
+                # "skipped" (not "success") so idle runs are queryable and don't
+                # read as real work in the execution history.
+                status = (
+                    "skipped" if isinstance(result, dict) and result.get("skipped") else "success"
                 )
-                job_logger.info("Job completed successfully")
+                self.repo.complete_execution(
+                    execution_id=execution_id, status=status, result=result
+                )
+                job_logger.info("Job completed (%s)", status)
 
         except asyncio.TimeoutError:
             error_msg = f"Job exceeded timeout of {self.max_job_timeout}s"
@@ -389,6 +449,24 @@ class CronJobService:
                     )
 
                 results.append({"step": order, "status": "success", "result": result})
+
+                # --- Skip guards: short-circuit the rest of the recipe when a
+                # step signals there is nothing left to do. These only ever stop
+                # early — a genuine error takes the except branch below instead.
+                skip_reason = _evaluate_skip_guards(step, result)
+                if skip_reason:
+                    job_logger.info(
+                        "Step %s tripped skip guard (%s); skipping remaining steps",
+                        order,
+                        skip_reason,
+                    )
+                    results.append({"step": order, "status": "skipped_remaining"})
+                    return {
+                        "skipped": True,
+                        "skip_reason": skip_reason,
+                        "steps_executed": len(results),
+                        "results": results,
+                    }
 
             except Exception as exc:
                 job_logger.error("Step %s failed: %s", order, exc)

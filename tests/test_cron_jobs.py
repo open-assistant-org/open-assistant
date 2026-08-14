@@ -628,3 +628,153 @@ class TestCronJobModels:
         response = CronJobListResponse(jobs=jobs, total=3)
         assert response.total == 3
         assert len(response.jobs) == 3
+
+
+class TestRecipeSkipGuards:
+    """Tests for recipe step skip-guards (skip when there's nothing to do)."""
+
+    def test_output_is_empty_helpers(self):
+        from src.services.cron_job import _recipe_output_is_empty
+
+        # Pinned-tool envelope wrapping get_conversation_text's empty result.
+        assert _recipe_output_is_empty(
+            {"success": True, "result": {"total_messages": 0, "messages": []}}
+        )
+        assert _recipe_output_is_empty({"total_messages": 0, "messages": []})
+        assert _recipe_output_is_empty({"items": []})
+        assert _recipe_output_is_empty("")
+        assert _recipe_output_is_empty([])
+        # Non-empty / unrecognised results must NOT trip the guard.
+        assert not _recipe_output_is_empty(
+            {"success": True, "result": {"total_messages": 2, "messages": [1, 2]}}
+        )
+        assert not _recipe_output_is_empty({"status": "success", "response": "text"})
+
+    def test_evaluate_skip_guards(self):
+        from src.services.cron_job import _evaluate_skip_guards
+
+        empty_step = {"skip_remaining_if_empty": True}
+        assert _evaluate_skip_guards(empty_step, {"total_messages": 0}) == "no_data"
+        assert _evaluate_skip_guards(empty_step, {"total_messages": 5}) is None
+
+        sentinel_step = {"skip_remaining_if_output_contains": "NO_NEW_FACTS"}
+        assert (
+            _evaluate_skip_guards(sentinel_step, {"response": "  no_new_facts  "})
+            == "sentinel:NO_NEW_FACTS"
+        )
+        assert _evaluate_skip_guards(sentinel_step, {"response": "found a fact"}) is None
+
+    @pytest.mark.asyncio
+    async def test_recipe_skips_remaining_when_step_empty(self, clean_temp_db):
+        """An empty probe step short-circuits the recipe with no LLM calls."""
+        repo = CronJobRepository(clean_temp_db)
+        tool_executor = MagicMock()
+        tool_executor.execute_tool = AsyncMock(
+            return_value={"success": True, "result": {"total_messages": 0, "messages": []}}
+        )
+        message_handler = MagicMock()
+        message_handler.handle_message = AsyncMock()  # must never be awaited
+        service = CronJobService(repo, tool_executor=tool_executor, message_handler=message_handler)
+
+        job = {
+            "job_id": "cron-skip-empty",
+            "name": "Skip Empty",
+            "steps": [
+                {
+                    "order": 1,
+                    "description": "fetch",
+                    "tool_name": "system_get_conversation_text",
+                    "stores_as": "conversations",
+                    "skip_remaining_if_empty": True,
+                },
+                {
+                    "order": 2,
+                    "description": "extract",
+                    "prompt_template": "analyse",
+                    "uses_variable": "conversations",
+                },
+            ],
+        }
+
+        job_logger = MagicMock()
+        result = await service._run_recipe_job(job, job_logger)
+
+        assert result["skipped"] is True
+        assert result["skip_reason"] == "no_data"
+        tool_executor.execute_tool.assert_awaited_once()
+        message_handler.handle_message.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_recipe_skips_remaining_on_sentinel(self, clean_temp_db):
+        """A 'nothing to do' sentinel from a prompt step skips later steps."""
+        repo = CronJobRepository(clean_temp_db)
+        tool_executor = MagicMock()
+        tool_executor.execute_tool = AsyncMock(
+            return_value={"success": True, "result": {"total_messages": 3, "messages": [1, 2, 3]}}
+        )
+        service = CronJobService(repo, tool_executor=tool_executor, message_handler=MagicMock())
+        # Stub the LLM step to return the sentinel; a later tool step must not run.
+        service._run_message_handler_job = AsyncMock(
+            return_value={"status": "success", "response": "NO_NEW_FACTS"}
+        )
+
+        job = {
+            "job_id": "cron-skip-sentinel",
+            "name": "Skip Sentinel",
+            "steps": [
+                {
+                    "order": 1,
+                    "description": "fetch",
+                    "tool_name": "system_get_conversation_text",
+                    "stores_as": "conversations",
+                    "skip_remaining_if_empty": True,
+                },
+                {
+                    "order": 2,
+                    "description": "extract",
+                    "prompt_template": "analyse",
+                    "uses_variable": "conversations",
+                    "stores_as": "facts",
+                    "skip_remaining_if_output_contains": "NO_NEW_FACTS",
+                },
+                {
+                    "order": 3,
+                    "description": "update prompt",
+                    "tool_name": "system_update_memory_prompt",
+                    "uses_variable": "facts",
+                },
+            ],
+        }
+
+        result = await service._run_recipe_job(job, MagicMock())
+
+        assert result["skipped"] is True
+        assert result["skip_reason"] == "sentinel:NO_NEW_FACTS"
+        # Step 1 (fetch) executed; step 3 (update) never did.
+        assert service._run_message_handler_job.await_count == 1
+
+    def test_seeded_nightly_jobs_have_skip_guards(self, clean_temp_db):
+        """Migration 060 patches both nightly jobs with skip guards."""
+        repo = CronJobRepository(clean_temp_db)
+        for job_id, sentinel in (
+            ("cron-system-memory", "NO_NEW_FACTS"),
+            ("cron-system-soul", "NO_STYLE_UPDATES"),
+        ):
+            job = repo.get_job(job_id)
+            steps = job["steps"]
+            assert steps[0]["tool_parameters"] == {"hours": 24}
+            assert steps[0]["skip_remaining_if_empty"] is True
+            assert steps[2]["skip_remaining_if_output_contains"] == sentinel
+
+    def test_recipe_step_model_accepts_guard_fields(self):
+        from src.models.cron_jobs import RecipeStep
+
+        step = RecipeStep(
+            order=1,
+            description="probe",
+            tool_name="system_get_conversation_text",
+            skip_remaining_if_empty=True,
+            skip_remaining_if_output_contains="NO_NEW_FACTS",
+        )
+        assert step.skip_remaining_if_empty is True
+        assert step.skip_remaining_if_output_contains == "NO_NEW_FACTS"

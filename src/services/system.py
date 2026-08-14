@@ -548,6 +548,7 @@ class SystemService:
         until: Optional[str] = None,
         channel: Optional[str] = None,
         limit: int = 200,
+        hours: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Return conversation message text within a time window.
 
@@ -556,15 +557,26 @@ class SystemService:
             until: ISO-8601 end timestamp (inclusive). Defaults to now.
             channel: Optional channel filter (e.g. 'webui', 'whatsapp').
             limit: Max number of messages to return (default 200, max 1000).
+            hours: If set, use a rolling window of the last ``hours`` hours ending
+                now, overriding ``since`` (and ``until`` when ``until`` is unset).
+                This is what the nightly jobs use for a true "last 24 hours".
 
         Returns:
             Dict with messages list, metadata, and success flag.
+
+        Notes:
+            Internal/transparency rows (``is_internal = 1``) are always excluded.
+            When no explicit ``channel`` is given, the ``system`` channel is also
+            excluded so the nightly jobs' own scheduled runs are not mistaken for
+            user activity (which would defeat the "skip when idle" guard).
         """
         if not self._db_manager:
             return {"success": False, "error": "Database not available", "messages": []}
 
         try:
-            if not since:
+            if hours is not None:
+                since = (datetime.utcnow() - timedelta(hours=hours)).isoformat()
+            elif not since:
                 since = (
                     datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
                 )
@@ -591,6 +603,7 @@ class SystemService:
                     WHERE m.timestamp >= ?
                       AND m.timestamp <= ?
                       AND m.role IN ('user', 'assistant')
+                      AND m.is_internal = 0
                       AND c.channel = ?
                     ORDER BY m.timestamp ASC
                     LIMIT ?
@@ -610,6 +623,8 @@ class SystemService:
                     WHERE m.timestamp >= ?
                       AND m.timestamp <= ?
                       AND m.role IN ('user', 'assistant')
+                      AND m.is_internal = 0
+                      AND c.channel != 'system'
                     ORDER BY m.timestamp ASC
                     LIMIT ?
                     """,

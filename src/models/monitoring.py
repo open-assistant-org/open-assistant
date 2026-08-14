@@ -38,6 +38,14 @@ class GetConversationTextRequest(BaseModel):
         le=1000,
         description="Maximum number of messages to return (default 200, max 1000).",
     )
+    hours: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description=(
+            "If set, return messages from a rolling window of the last N hours "
+            "ending now, overriding 'since'. Use for a true 'last 24 hours'."
+        ),
+    )
 
 
 class GetPromptRequest(BaseModel):
