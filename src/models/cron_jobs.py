@@ -29,6 +29,22 @@ class RecipeStep(BaseModel):
     uses_variable: Optional[str] = Field(
         None, description="Variable name produced by a prior step to inject as context"
     )
+    skip_remaining_if_empty: Optional[bool] = Field(
+        None,
+        description=(
+            "If this step produces no data (e.g. an empty result set), skip all "
+            "remaining steps and record the run as 'skipped'. Use on a cheap "
+            "probe step to avoid spending LLM calls when there is nothing to do."
+        ),
+    )
+    skip_remaining_if_output_contains: Optional[str] = Field(
+        None,
+        description=(
+            "If this step's output text contains this sentinel (case-insensitive), "
+            "skip all remaining steps and record the run as 'skipped'. Lets an LLM "
+            "step signal 'nothing to do' (e.g. NO_NEW_FACTS) and short-circuit."
+        ),
+    )
 
 
 # --- LLM Tool Parameter Models ---

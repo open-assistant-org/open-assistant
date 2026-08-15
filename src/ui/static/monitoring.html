@@ -174,6 +174,11 @@
             color: var(--success-color);
         }
 
+        .status-badge-skipped {
+            background: rgba(107, 114, 128, 0.1);
+            color: var(--text-muted);
+        }
+
         /* Job Actions */
         .job-actions {
             display: flex;
@@ -1616,6 +1621,7 @@
                             const statusBadge = exec.status === 'success' ? 'success'
                                 : exec.status === 'failed' ? 'failed'
                                 : exec.status === 'cancelled' ? 'cancelled'
+                                : exec.status === 'skipped' ? 'skipped'
                                 : 'running';
                             const statusText = exec.status.charAt(0).toUpperCase() + exec.status.slice(1);
 
@@ -1771,6 +1777,8 @@
                 if (s.prompt_template) step.prompt_template = s.prompt_template;
                 if (s.stores_as) step.stores_as = s.stores_as;
                 if (s.uses_variable) step.uses_variable = s.uses_variable;
+                if (s.skip_remaining_if_empty) step.skip_remaining_if_empty = s.skip_remaining_if_empty;
+                if (s.skip_remaining_if_output_contains) step.skip_remaining_if_output_contains = s.skip_remaining_if_output_contains;
                 return step;
             });
 
