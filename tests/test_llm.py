@@ -59,6 +59,35 @@ class TestLLMClient:
                 "X-Title": "Open Assistant",
             }
 
+    def test_anthropic_initialization(self):
+        """Test initialization for the Anthropic provider.
+
+        Anthropic is reached through its OpenAI SDK compatibility layer, so it
+        goes through the same OpenAI client as OpenRouter/custom — just with a
+        different base URL and no extra headers.
+        """
+        config = LLMConfig(
+            provider="anthropic",
+            model="claude-sonnet-5",
+            api_key="test-key",
+            base_url="https://api.anthropic.com/v1/",
+        )
+
+        with patch("src.core.llm_client.OpenAI") as mock_openai:
+            LLMClient(config)
+
+            mock_openai.assert_called_once()
+            _, kwargs = mock_openai.call_args
+            assert kwargs["api_key"] == "test-key"
+            assert kwargs["base_url"] == "https://api.anthropic.com/v1/"
+            assert kwargs["default_headers"] is None
+
+    def test_anthropic_default_base_url(self):
+        """Test that get_default_base_url returns Anthropic's compat endpoint."""
+        from src.core.llm_client import get_default_base_url
+
+        assert get_default_base_url("anthropic") == "https://api.anthropic.com/v1/"
+
     def test_sanitize_messages(self):
         """Test message sanitization logic."""
         config = LLMConfig(
