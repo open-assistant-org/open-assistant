@@ -2679,7 +2679,10 @@ async function createMcpServer() {
 // ============================================================================
 
 async function connectMcpOAuth(serverId) {
-    const redirectUri = `${window.location.origin}/api/mcp/oauth/callback`;
+    // Include INSTANCE_BASE_PATH so the callback routes back through the
+    // instance on path-routed managed deployments instead of the management
+    // backend (sub_filter can't rewrite this — it's built in JS at runtime).
+    const redirectUri = `${window.location.origin}${window.INSTANCE_BASE_PATH || ''}/api/mcp/oauth/callback`;
     try {
         const resp = await api.post(`/api/mcp/${serverId}/oauth/start`, { redirect_uri: redirectUri });
         // Redirect the browser to the authorization endpoint.

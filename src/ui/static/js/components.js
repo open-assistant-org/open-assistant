@@ -16,6 +16,13 @@ const NAV_ITEMS = [
     { href: '/monitoring', label: 'Monitoring', icon: 'monitoring' },
 ];
 
+// These links are built at runtime, so the managed platform's sub_filter
+// (which only rewrites href/src/action attributes in the HTML it serves)
+// can never prefix them — prefix here instead, like every other
+// browser-initiated URL in the app (APIClient, PWA, service worker).
+// Injected as the first element of <head> before any script runs.
+const INSTANCE_BASE = window.INSTANCE_BASE_PATH || '';
+
 // A single inline SVG sprite sheet covering the small, fixed set of system
 // icons used across the app (nav, controls, status) — in place of the
 // previous mix of raw inline SVG, Unicode symbols, and emoji standing in
@@ -48,7 +55,7 @@ function renderNavbar() {
     if (!root) return;
 
     const links = NAV_ITEMS.map(item => `
-        <a href="${item.href}" class="nav-link" title="${item.label}">
+        <a href="${INSTANCE_BASE}${item.href}" class="nav-link" title="${item.label}">
             <svg class="nav-link-icon" aria-hidden="true"><use href="#icon-${item.icon}"></use></svg>
             <span class="nav-link-label">${item.label}</span>
         </a>`).join('');
@@ -66,7 +73,7 @@ function renderNavbar() {
     root.outerHTML = `
     <nav class="navbar${collapsed ? ' collapsed' : ''}">
         <div class="navbar-content">
-            <a href="/" class="navbar-brand" aria-label="Open Assistant home">
+            <a href="${INSTANCE_BASE}/" class="navbar-brand" aria-label="Open Assistant home">
                 <svg class="navbar-logo" viewBox="0 0 32 32" aria-hidden="true">
                     <rect x="2" y="2" width="28" height="28" rx="5" fill="var(--color-bg-darker)" stroke="var(--color-primary)" stroke-width="2"></rect>
                     <text x="16" y="21" font-family="monospace" font-size="12" font-weight="bold" fill="var(--color-primary)" text-anchor="middle">OA</text>

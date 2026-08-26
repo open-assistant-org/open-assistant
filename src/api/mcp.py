@@ -29,6 +29,19 @@ def _get_mcp_service(request: Request):
     return mcp_service
 
 
+def _redirect_to_settings(request: Request, query: str) -> RedirectResponse:
+    """302 back to the settings page, preserving any reverse-proxy path prefix.
+
+    When the app runs behind a prefix-stripping reverse proxy (signalled via
+    the standard X-Forwarded-Prefix header), an absolute-path Location would
+    drop the prefix and send the browser outside the app — so prepend the
+    prefix when it is present. Without a proxy the header is absent and the
+    redirect is the plain absolute path.
+    """
+    prefix = request.headers.get("x-forwarded-prefix", "").rstrip("/")
+    return RedirectResponse(f"{prefix}/settings?{query}", status_code=302)
+
+
 @router.get("", response_model=list[McpServerListItem])
 async def list_servers(request: Request) -> list[McpServerListItem]:
     """List all configured MCP servers with their state."""
@@ -186,15 +199,15 @@ async def oauth_callback(
     if error:
         desc = error_description or error
         logger.warning(f"OAuth callback received error: {error} — {desc}")
-        return RedirectResponse(f"/settings?mcp_error={desc}", status_code=302)
+        return _redirect_to_settings(request, f"mcp_error={desc}")
 
     if not code or not state:
-        return RedirectResponse("/settings?mcp_error=missing+code+or+state", status_code=302)
+        return _redirect_to_settings(request, "mcp_error=missing+code+or+state")
 
     mcp_service = _get_mcp_service(request)
     try:
         server_id = await mcp_service.oauth_callback(code, state)
-        return RedirectResponse(f"/settings?mcp_connected={server_id}", status_code=302)
+        return _redirect_to_settings(request, f"mcp_connected={server_id}")
     except Exception as e:
         logger.error(f"OAuth callback failed: {e}", exc_info=True)
-        return RedirectResponse(f"/settings?mcp_error={str(e)[:200]}", status_code=302)
+        return _redirect_to_settings(request, f"mcp_error={str(e)[:200]}")
