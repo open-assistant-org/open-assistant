@@ -240,7 +240,7 @@ collect_llm_config() {
   echo ""
   echo -e "  ${BOLD}LLM Provider${RESET}"
   prompt_choice CFG_LLM_PROVIDER "Which provider?" \
-    "openrouter,groq,custom" "openrouter"
+    "openrouter,anthropic,groq,custom" "openrouter"
 
   case "$CFG_LLM_PROVIDER" in
     openrouter)
@@ -248,6 +248,12 @@ collect_llm_config() {
       prompt_choice CFG_LLM_MODEL "Model" \
         "anthropic/claude-sonnet-4.6,anthropic/claude-3.5-sonnet,z-ai/glm-5-turbo,openai/gpt-4o,openai/gpt-4o-mini,google/gemini-2.0-flash-001,meta-llama/llama-3.3-70b-instruct" \
         "anthropic/claude-sonnet-4.6"
+      ;;
+    anthropic)
+      CFG_LLM_BASE_URL="https://api.anthropic.com/v1/"
+      prompt_choice CFG_LLM_MODEL "Model" \
+        "claude-sonnet-5,claude-opus-5,claude-haiku-4-5" \
+        "claude-sonnet-5"
       ;;
     groq)
       CFG_LLM_BASE_URL="https://api.groq.com/openai/v1"

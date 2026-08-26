@@ -4,6 +4,7 @@ This guide explains how to obtain API credentials for different LLM providers.
 
 ## Table of Contents
 - [OpenRouter (Recommended)](#openrouter-recommended)
+- [Anthropic](#anthropic)
 - [Groq](#groq)
 - [Local LLM (Ollama)](#local-llm-ollama)
 - [Self-Hosted Inference (vLLM)](#self-hosted-inference-vllm)
@@ -52,6 +53,65 @@ Pay-as-you-go pricing varies by model. Check current pricing at [https://openrou
 - No vendor lock-in
 - Automatic failover
 - Usage tracking
+
+---
+
+## Anthropic
+
+Connect directly to Claude models using your own Anthropic API key, instead of
+routing through OpenRouter. Open Assistant talks to Anthropic through its
+official [OpenAI SDK compatibility layer](https://platform.claude.com/docs/en/cli-sdks-libraries/libraries/openai-sdk),
+so it uses the same request path as every other provider here — no separate
+integration to maintain.
+
+### Setup Steps
+
+1. **Sign up**: Visit [https://console.anthropic.com/](https://console.anthropic.com/)
+2. **Get API Key**:
+   - Log in to your account
+   - Go to [Settings > API Keys](https://platform.claude.com/settings/keys)
+   - Click "Create Key"
+   - Copy your API key (starts with `sk-ant-`)
+3. **Configure in Settings**:
+   - Provider: `anthropic`
+   - API Key: Your Anthropic API key
+   - Model: `claude-sonnet-5` (or another Claude model — see below)
+   - Base URL: `https://api.anthropic.com/v1/` (pre-filled automatically)
+
+### Available Models
+
+- `claude-opus-5` - most capable, best for complex reasoning and agentic tasks
+- `claude-sonnet-5` - strong balance of intelligence, speed, and cost
+- `claude-haiku-4-5` - fastest and cheapest, good for simple/high-volume tasks
+
+Browse current models and pricing at
+[https://platform.claude.com/docs/en/about-claude/models](https://platform.claude.com/docs/en/about-claude/models).
+
+### Pricing
+
+Pay-as-you-go, billed directly by Anthropic. See
+[https://platform.claude.com/docs/en/about-claude/pricing](https://platform.claude.com/docs/en/about-claude/pricing).
+
+### Notes
+
+- **Use plain Claude model names**, not the `anthropic/...` OpenRouter-style
+  identifiers (e.g. `claude-sonnet-5`, not `anthropic/claude-sonnet-4.6`).
+- Requests go through Anthropic's OpenAI-compatible endpoint, which covers
+  everything Open Assistant needs (chat, tool calls, streaming, usage
+  reporting). A few OpenAI-only knobs are silently ignored — see Anthropic's
+  [compatibility limitations](https://platform.claude.com/docs/en/cli-sdks-libraries/libraries/openai-sdk#important-openai-compatibility-limitations)
+  if you're curious what doesn't carry over (e.g. prompt caching and strict
+  JSON-schema enforcement aren't available through this path).
+- If you previously tried to point the `custom` provider at
+  `https://api.anthropic.com` and got errors, that's expected — Anthropic's
+  native `/v1/messages` endpoint uses a different request/response shape than
+  OpenAI's `/v1/chat/completions`. Selecting the `anthropic` provider (or
+  using the `/v1/` compatibility base URL above) fixes this.
+
+**Benefits**:
+- Direct relationship with Anthropic — no intermediary
+- No markup — pay Anthropic's rates directly
+- Access to the newest Claude models as soon as Anthropic ships them
 
 ---
 
@@ -270,6 +330,11 @@ port) and point a `custom` provider at it.
 - You want to try different providers easily
 - You want automatic failover
 
+### Use Anthropic if:
+- You specifically want Claude models with no intermediary
+- You already have an Anthropic API key / billing relationship
+- You want the newest Claude models without waiting on a router to add them
+
 ### Use Groq if:
 - You need ultra-low latency responses
 - You want fast inference at low cost
@@ -330,6 +395,7 @@ Common issues:
 ## Need Help?
 
 - **OpenRouter**: [Documentation](https://openrouter.ai/docs)
+- **Anthropic**: [Documentation](https://platform.claude.com/docs)
 - **Groq**: [Documentation](https://console.groq.com/docs)
 - **Ollama**: [Documentation](https://ollama.ai/docs)
 - **vLLM**: [Documentation](https://docs.vllm.ai/)

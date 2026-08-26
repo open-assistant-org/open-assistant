@@ -272,11 +272,11 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     "llm.provider": SettingDefinition(
         key="llm.provider",
         display_name="LLM Provider",
-        description="LLM provider to use (openrouter, groq, ollama, vllm, or custom)",
+        description="LLM provider to use (openrouter, anthropic, groq, ollama, vllm, or custom)",
         value_type=SettingValueType.STRING,
         category=ConfigCategory.LLM,
         default_value="openrouter",
-        options=["openrouter", "groq", "ollama", "vllm", "custom"],
+        options=["openrouter", "anthropic", "groq", "ollama", "vllm", "custom"],
         env_var_name="LLM_PROVIDER",
         display_order=1,
         ui_widget="select",
@@ -288,6 +288,9 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
             "API key for the LLM provider. Not required for local servers like "
             "Ollama or vLLM (leave blank unless vLLM was started with --api-key)."
         ),
+        # NOTE: for Anthropic, this is your Claude API key from
+        # https://platform.claude.com/settings/keys — Open Assistant talks to
+        # it over Anthropic's OpenAI SDK compatibility endpoint.
         value_type=SettingValueType.STRING,
         category=ConfigCategory.LLM,
         is_sensitive=True,
@@ -314,6 +317,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
         display_name="Base URL",
         description=(
             "API endpoint URL for the LLM provider. "
+            "Anthropic default: https://api.anthropic.com/v1/ — "
             "Ollama default: http://localhost:11434/v1 — "
             "vLLM default: http://localhost:8000/v1"
         ),

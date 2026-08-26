@@ -185,7 +185,8 @@ Settings are organized into the following categories:
 - **Description**: Language model provider and settings
 - **Max Context Tokens** (`memory.max_tokens`, ENV `MEMORY_MAX_TOKENS`, default `100000`): tokens of conversation history loaded each turn — distinct from `llm.max_tokens`, which caps the response. The default is sized for 200K-context models, leaving headroom for the system prompt, tool definitions, in-turn tool results, and the response. Lower it for smaller-window models.
 - **Max Tool Output Chars** (`llm.tool_output_max_chars`, ENV `TOOL_RESULT_OFFLOAD_THRESHOLD`, default `300000` ≈ 75K tokens): tool results larger than this are written to a temp file and replaced in-context with a compact pointer (schema + sample) for `python_agent` to process, so a single large result never overflows the context window. Raise it to keep more inline; lower it to offload sooner.
-- **Supported Providers**: `openrouter`, `groq`, `ollama`, `vllm`, `custom`
+- **Supported Providers**: `openrouter`, `anthropic`, `groq`, `ollama`, `vllm`, `custom`
+- **Anthropic**: direct Claude API access (default base URL `https://api.anthropic.com/v1/`), via Anthropic's OpenAI SDK compatibility layer. Requires an Anthropic API key and plain Claude model names (e.g. `claude-sonnet-5`, not `anthropic/claude-sonnet-4.6`). See [LLM Providers](../integrations/llm-providers.md#anthropic).
 - **Local providers**: `ollama` (default base URL `http://localhost:11434/v1`) and `vllm` (default `http://localhost:8000/v1`) need no API key. For both, the media/worker/writer models always fall back to the main model since each endpoint serves a single model.
 
 ### 6. Google Integration (Gmail, Calendar)
@@ -302,7 +303,7 @@ config/
   - Set `whatsapp.enabled=true`
 
 ### LLM Configuration
-- [ ] Choose LLM provider: `llm.provider` (openrouter, groq, ollama, vllm, custom)
+- [ ] Choose LLM provider: `llm.provider` (openrouter, anthropic, groq, ollama, vllm, custom)
 - [ ] Set model: `llm.model` (e.g., `anthropic/claude-sonnet-4.6`)
 - [ ] Configure API key for chosen provider (stored encrypted; not needed for `ollama`/`vllm`)
 - [ ] Optional: Set `llm.base_url` (auto-filled per provider; required for `custom`)

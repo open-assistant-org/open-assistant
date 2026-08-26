@@ -1,4 +1,4 @@
-"""LLM client for API calls through OpenRouter or other providers."""
+"""LLM client for API calls through OpenRouter, Anthropic, or other providers."""
 
 import logging
 from typing import Any
@@ -22,6 +22,7 @@ class LLMPausedError(Exception):
 # Default base URLs for each provider
 PROVIDER_BASE_URLS = {
     "openrouter": "https://openrouter.ai/api/v1",
+    "anthropic": "https://api.anthropic.com/v1/",
     "groq": "https://api.groq.com/openai/v1",
     "ollama": "http://localhost:11434/v1",
     "vllm": "http://localhost:8000/v1",
@@ -50,7 +51,8 @@ class LLMConfig(BaseModel):
     """Configuration for LLM client."""
 
     provider: str = Field(
-        default="openrouter", description="LLM provider (openrouter, groq, ollama, vllm, custom)"
+        default="openrouter",
+        description="LLM provider (openrouter, anthropic, groq, ollama, vllm, custom)",
     )
     model: str = Field(default="anthropic/claude-3.5-sonnet", description="Model identifier")
     api_key: str = Field(
@@ -140,7 +142,10 @@ class LLMClient:
     """
     Client for making LLM API calls.
 
-    Supports OpenRouter, Groq, and other OpenAI-compatible APIs.
+    Supports OpenRouter, Anthropic, Groq, and other OpenAI-compatible APIs.
+    Anthropic is reached via its official OpenAI SDK compatibility layer
+    (https://api.anthropic.com/v1/) rather than the native Anthropic SDK, so
+    it goes through the same OpenAI client path as every other provider here.
     """
 
     def __init__(self, config: LLMConfig):

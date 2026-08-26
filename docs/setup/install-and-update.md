@@ -21,7 +21,7 @@ Verifies Docker is present and reachable. On Linux, if Docker is missing and the
 Asks two things:
 
 - **Application URL** — where the assistant will be reachable (defaults to your local IP and port). Used for OAuth redirects and CORS.
-- **LLM provider** — OpenRouter, Groq, or a custom OpenAI-compatible endpoint. After choosing a provider, you pick a model and enter your API key (input is hidden).
+- **LLM provider** — OpenRouter, Anthropic, Groq, or a custom OpenAI-compatible endpoint. After choosing a provider, you pick a model and enter your API key (input is hidden).
 
 No configuration files to edit by hand.
 

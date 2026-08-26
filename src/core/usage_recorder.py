@@ -19,9 +19,9 @@ Design notes
   try/except and logged. Delegates to :class:`LlmConsumptionRepository`, which
   uses :class:`BaseRepository` connection handling.
 * **Provider scope.** Works for any OpenAI-compatible provider that returns
-  ``usage`` on non-streaming completions (OpenRouter, OpenAI, Groq; Ollama/vLLM
-  usually). When ``usage`` is absent the recorder stores zeros and flags
-  ``missing_usage`` so the gap is visible rather than silent.
+  ``usage`` on non-streaming completions (OpenRouter, OpenAI, Anthropic, Groq;
+  Ollama/vLLM usually). When ``usage`` is absent the recorder stores zeros and
+  flags ``missing_usage`` so the gap is visible rather than silent.
 """
 
 from typing import Any, Dict, Optional
