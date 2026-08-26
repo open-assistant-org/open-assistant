@@ -906,7 +906,7 @@ body {
 
     .navbar-links {
         flex-direction: column;
-        gap: 1px;
+        gap: 6px;
     }
 
     .nav-link {

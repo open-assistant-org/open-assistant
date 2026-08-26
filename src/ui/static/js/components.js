@@ -53,11 +53,14 @@ function renderNavbar() {
             <span class="nav-link-label">${item.label}</span>
         </a>`).join('');
 
-    let collapsed = false;
+    // Collapsed by default — an explicit '0' is the only way to get the
+    // expanded rail, so a first-time visitor (or one with storage blocked)
+    // sees the compact icon-only sidebar.
+    let collapsed = true;
     try {
-        collapsed = localStorage.getItem(NAV_COLLAPSE_KEY) === '1';
+        collapsed = localStorage.getItem(NAV_COLLAPSE_KEY) !== '0';
     } catch (e) {
-        // localStorage unavailable (private browsing, blocked storage) — default to expanded.
+        // localStorage unavailable (private browsing, blocked storage) — default to collapsed.
     }
 
     root.outerHTML = `
