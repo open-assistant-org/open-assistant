@@ -93,15 +93,15 @@ function showInstallButton() {
     installButton = document.getElementById('installAppBtn');
 
     if (!installButton) {
-        // Create install button dynamically
+        // Create install button dynamically. Styled via .pwa-install-btn in
+        // common.css (which also hides it on desktop — installing "an app"
+        // is a mobile-home-screen affordance there, not a desktop one).
         installButton = document.createElement('button');
         installButton.id = 'installAppBtn';
-        installButton.className = 'nav-link';
-        installButton.textContent = '📱 Install';
-        installButton.style.cssText = `
-            background: rgba(0, 255, 0, 0.1);
-            border: 1px solid #00ff00;
-            color: #00ff00;
+        installButton.className = 'nav-link pwa-install-btn';
+        installButton.innerHTML = `
+            <svg class="nav-link-icon" aria-hidden="true"><use href="#icon-install"></use></svg>
+            <span>Install</span>
         `;
 
         // Add to navbar
@@ -112,7 +112,11 @@ function showInstallButton() {
     }
 
     if (installButton) {
-        installButton.style.display = 'inline-block';
+        // Clear any inline override from a previous hideInstallButton()
+        // call and let CSS decide (including hiding it on desktop via
+        // .pwa-install-btn's media query in common.css) rather than
+        // forcing it visible here.
+        installButton.style.removeProperty('display');
         installButton.addEventListener('click', promptInstall);
     }
 }

@@ -39,27 +39,9 @@
     <link rel="stylesheet" href="/static/css/mobile.css">
 </head>
 <body>
-    <nav class="navbar">
-        <div class="navbar-content">
-            <div class="navbar-brand">
-                <img src="/static/robot-logo.svg" alt="Logo" class="navbar-logo">
-                <span>Open Assistant</span>
-                <span class="navbar-brand-short">OA</span>
-            </div>
-            <div class="navbar-links">
-                <a href="/" class="nav-link">Chat</a>
-                <a href="/artifacts" class="nav-link">Artifacts</a>
-                <a href="/settings" class="nav-link active">Settings</a>
-                <a href="/monitoring" class="nav-link">Monitoring</a>
-            </div>
-            <button class="navbar-hamburger" id="navHamburger" aria-label="Toggle navigation" aria-expanded="false">
-                <span></span>
-                <span></span>
-                <span></span>
-            </button>
-        </div>
-    </nav>
+    <div id="navbar-root"></div>
 
+    <div class="page-content">
     <div class="main-container">
         <div class="settings-container">
             <div class="settings-header">
@@ -597,8 +579,10 @@
             </div>
         </div>
     </div>
+    </div>
 
     <script defer src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+    <script src="/static/js/components.js"></script>
     <script src="/static/js/common.js"></script>
     <script src="/static/js/settings.js"></script>
     <script src="/static/js/pwa.js"></script>

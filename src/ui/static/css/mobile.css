@@ -189,18 +189,6 @@ body.is-pwa {
         height: 28px;
     }
 
-    .navbar-brand {
-        font-size: 1.1rem;
-    }
-
-    .navbar-brand span {
-        display: none;
-    }
-
-    .navbar-brand .navbar-brand-short {
-        display: inline;
-    }
-
     /* Show hamburger, hide inline links */
     .navbar-hamburger {
         display: flex;
