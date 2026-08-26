@@ -30,7 +30,10 @@ const ICON_SPRITE = `
     <symbol id="icon-menu" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="3" y1="12" x2="21" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="3" y1="18" x2="21" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
     <symbol id="icon-alert" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="12" y1="9" x2="12" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="12" y1="17" x2="12.01" y2="17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
     <symbol id="icon-install" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="7 10 12 15 17 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="12" y1="15" x2="12" y2="3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="icon-panel-collapse" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><line x1="10" y1="4" x2="10" y2="20" stroke="currentColor" stroke-width="2"/><polyline points="7 9 5 12 7 15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
 </svg>`;
+
+const NAV_COLLAPSE_KEY = 'oa-nav-collapsed';
 
 function injectIconSprite() {
     if (document.getElementById('oa-icon-sprite')) return;
@@ -45,13 +48,20 @@ function renderNavbar() {
     if (!root) return;
 
     const links = NAV_ITEMS.map(item => `
-        <a href="${item.href}" class="nav-link">
+        <a href="${item.href}" class="nav-link" title="${item.label}">
             <svg class="nav-link-icon" aria-hidden="true"><use href="#icon-${item.icon}"></use></svg>
-            <span>${item.label}</span>
+            <span class="nav-link-label">${item.label}</span>
         </a>`).join('');
 
+    let collapsed = false;
+    try {
+        collapsed = localStorage.getItem(NAV_COLLAPSE_KEY) === '1';
+    } catch (e) {
+        // localStorage unavailable (private browsing, blocked storage) — default to expanded.
+    }
+
     root.outerHTML = `
-    <nav class="navbar">
+    <nav class="navbar${collapsed ? ' collapsed' : ''}">
         <div class="navbar-content">
             <a href="/" class="navbar-brand" aria-label="Open Assistant home">
                 <svg class="navbar-logo" viewBox="0 0 32 32" aria-hidden="true">
@@ -65,8 +75,34 @@ function renderNavbar() {
                 <span></span>
                 <span></span>
             </button>
+            <button class="navbar-collapse-btn" id="navCollapseBtn" title="${collapsed ? 'Expand sidebar' : 'Collapse sidebar'}" aria-label="Toggle sidebar width">
+                <svg class="icon navbar-collapse-icon" aria-hidden="true"><use href="#icon-panel-collapse"></use></svg>
+                <span class="nav-link-label">Collapse</span>
+            </button>
         </div>
     </nav>`;
+
+    initNavbarCollapse();
+}
+
+// Desktop-only fold-in/out for the sidebar rail. Persisted in
+// localStorage so it stays put across the full-page navigations this
+// (framework-free, multi-page) app does between Chat/Artifacts/Settings/
+// Monitoring.
+function initNavbarCollapse() {
+    const btn = document.getElementById('navCollapseBtn');
+    const navbar = document.querySelector('.navbar');
+    if (!btn || !navbar) return;
+
+    btn.addEventListener('click', () => {
+        const collapsed = navbar.classList.toggle('collapsed');
+        btn.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+        try {
+            localStorage.setItem(NAV_COLLAPSE_KEY, collapsed ? '1' : '0');
+        } catch (e) {
+            // Ignore — collapse state just won't persist this session.
+        }
+    });
 }
 
 document.addEventListener('DOMContentLoaded', () => {

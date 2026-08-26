@@ -139,31 +139,33 @@ body {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 16px;
+    padding: 7px 14px;
     text-decoration: none;
     color: var(--color-text);
     border-radius: 8px;
-    transition: all 0.2s;
+    font-size: 0.9rem;
     font-weight: 500;
+    transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
 }
 
 .nav-link-icon {
-    width: 16px;
-    height: 16px;
+    width: 15px;
+    height: 15px;
     flex-shrink: 0;
-    opacity: 0.85;
+    opacity: 0.75;
+    transition: opacity 0.25s ease;
 }
 
 .nav-link:hover {
-    background: rgba(0, 255, 0, 0.1);
+    background: rgba(0, 255, 0, 0.06);
     color: var(--color-primary);
 }
 
 .nav-link.active {
-    background: rgba(0, 255, 0, 0.2);
+    background: rgba(0, 255, 0, 0.12);
     color: var(--color-primary);
-    border: 1px solid var(--color-primary);
-    box-shadow: 0 0 8px var(--color-primary-glow);
+    border: 1px solid rgba(0, 255, 0, 0.35);
+    box-shadow: 0 0 6px var(--color-primary-glow);
 }
 
 .nav-link.active .nav-link-icon {
@@ -178,6 +180,31 @@ body {
     background: rgba(0, 255, 0, 0.1);
     border: 1px solid var(--color-primary);
     color: var(--color-primary);
+}
+
+/* Fold-in/out toggle for the desktop rail — hidden on mobile (the
+   top-bar layout has no rail to collapse). */
+.navbar-collapse-btn {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 7px 10px;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+.navbar-collapse-btn:hover {
+    background: rgba(0, 255, 0, 0.06);
+    color: var(--color-primary);
+}
+
+.navbar-collapse-icon {
+    transition: transform 0.2s ease;
 }
 
 /* Icon sprite <use> references throughout the app */
@@ -852,22 +879,23 @@ body {
         align-self: flex-start;
         flex-direction: column;
         flex-shrink: 0;
-        width: 224px;
+        width: 216px;
         height: 100vh;
         box-shadow: none;
         border-bottom: none;
         border-right: 1px solid var(--color-border);
-        padding: 20px 0;
+        padding: 16px 0;
+        transition: width 0.2s ease;
     }
 
     .navbar-content {
         flex-direction: column;
         align-items: stretch;
         justify-content: flex-start;
-        gap: 28px;
+        gap: 22px;
         max-width: none;
         height: 100%;
-        padding: 0 16px;
+        padding: 0 12px;
     }
 
     .navbar-brand {
@@ -878,23 +906,23 @@ body {
 
     .navbar-links {
         flex-direction: column;
-        gap: 2px;
+        gap: 1px;
     }
 
     .nav-link {
-        padding: 10px 12px;
+        padding: 7px 10px;
         border-left: 3px solid transparent;
-        border-radius: 0 8px 8px 0;
+        border-radius: 0 6px 6px 0;
     }
 
     /* Sleeker active state for a vertical rail: a left accent bar instead
        of the horizontal nav's full box outline + glow. */
     .nav-link.active {
-        background: rgba(0, 255, 0, 0.12);
+        background: rgba(0, 255, 0, 0.1);
         border: none;
         border-left: 3px solid var(--color-primary);
         box-shadow: none;
-        padding-left: 9px;
+        padding-left: 7px;
     }
 
     .navbar-hamburger {
@@ -903,6 +931,50 @@ body {
 
     .pwa-install-btn {
         display: none;
+    }
+
+    /* Fold-in/out toggle, pinned to the bottom of the rail */
+    .navbar-collapse-btn {
+        display: flex;
+        margin-top: auto;
+    }
+
+    /* Collapsed rail: icon-only, no labels */
+    .navbar.collapsed {
+        width: 60px;
+    }
+
+    .navbar.collapsed .navbar-content {
+        padding: 0 8px;
+        align-items: center;
+    }
+
+    .navbar.collapsed .navbar-brand,
+    .navbar.collapsed .nav-link,
+    .navbar.collapsed .navbar-collapse-btn {
+        justify-content: center;
+    }
+
+    .navbar.collapsed .nav-link {
+        width: 100%;
+        padding: 8px;
+        border-left: none;
+        border-radius: 6px;
+    }
+
+    .navbar.collapsed .nav-link.active {
+        padding-left: 8px;
+        border-left: none;
+        box-shadow: none;
+    }
+
+    .navbar.collapsed .nav-link-label,
+    .navbar.collapsed .pwa-install-btn span:not(.nav-link-icon) {
+        display: none;
+    }
+
+    .navbar.collapsed .navbar-collapse-icon {
+        transform: rotate(180deg);
     }
 }
 
