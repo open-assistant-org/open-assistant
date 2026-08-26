@@ -1,14 +1,13 @@
-// Shared page chrome: navbar, footer, and icon sprite.
+// Shared page chrome: navbar and icon sprite.
 //
 // The app has no server-side templating (FastAPI just serves static HTML
 // files — see src/main.py), so each page previously copy-pasted the navbar
 // markup, which let the 4 copies drift out of sync. This module injects the
 // shared chrome client-side instead: every page includes an empty
-// <div id="navbar-root"></div> (and, where appropriate, a
-// <div id="footer-root"></div>) placeholder, and this script fills them in
-// on DOMContentLoaded — before common.js's own DOMContentLoaded handler
-// runs setActiveNavLink()/initHamburgerMenu() against the injected markup,
-// as long as this script tag appears before common.js's in each page.
+// <div id="navbar-root"></div> placeholder, and this script fills it in on
+// DOMContentLoaded — before common.js's own DOMContentLoaded handler runs
+// setActiveNavLink()/initHamburgerMenu() against the injected markup, as
+// long as this script tag appears before common.js's in each page.
 
 const NAV_ITEMS = [
     { href: '/', label: 'Chat', icon: 'chat' },
@@ -54,9 +53,11 @@ function renderNavbar() {
     <nav class="navbar">
         <div class="navbar-content">
             <a href="/" class="navbar-brand" aria-label="Open Assistant home">
-                <img src="/static/robot-logo.svg" alt="" class="navbar-logo">
-                <span>Open Assistant</span>
-                <span class="navbar-brand-short">OA</span>
+                <svg class="navbar-logo" viewBox="0 0 32 32" aria-hidden="true">
+                    <rect x="2" y="2" width="28" height="28" rx="5" fill="var(--color-bg-darker)" stroke="var(--color-primary)" stroke-width="2"></rect>
+                    <text x="16" y="21" font-family="monospace" font-size="12" font-weight="bold" fill="var(--color-primary)" text-anchor="middle">OA</text>
+                </svg>
+                <span class="navbar-brand-text">Open Assistant</span>
             </a>
             <div class="navbar-links">${links}</div>
             <button class="navbar-hamburger" id="navHamburger" aria-label="Toggle navigation" aria-expanded="false">
@@ -68,20 +69,7 @@ function renderNavbar() {
     </nav>`;
 }
 
-function renderFooter() {
-    const root = document.getElementById('footer-root');
-    if (!root) return;
-
-    const year = new Date().getFullYear();
-    root.outerHTML = `
-    <footer class="site-footer">
-        <span>&copy; ${year} Open Assistant</span>
-        <a href="https://github.com/open-assistant-org/open-assistant" target="_blank" rel="noopener noreferrer">GitHub</a>
-    </footer>`;
-}
-
 document.addEventListener('DOMContentLoaded', () => {
     injectIconSprite();
     renderNavbar();
-    renderFooter();
 });

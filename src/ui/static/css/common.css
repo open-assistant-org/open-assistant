@@ -105,7 +105,6 @@ body {
     font-size: 1.25rem;
     font-weight: 700;
     color: var(--color-primary);
-    text-shadow: 0 0 10px var(--color-primary-glow);
     display: flex;
     align-items: center;
     gap: 12px;
@@ -115,10 +114,7 @@ body {
 .navbar-logo {
     width: 32px;
     height: 32px;
-}
-
-.navbar-brand-short {
-    display: none;
+    flex-shrink: 0;
 }
 
 .navbar-links {
@@ -170,34 +166,9 @@ body {
     stroke: currentColor;
 }
 
-/* Shared site footer, injected via js/components.js on non-chat pages */
-.site-footer {
-    margin-top: auto;
-    padding: 20px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 16px;
-    font-size: 0.85rem;
-    color: var(--color-text-muted);
-    border-top: 1px solid var(--color-border);
-}
-
-.site-footer a {
-    color: var(--color-text-muted);
-    text-decoration: none;
-    transition: color 0.2s;
-}
-
-.site-footer a:hover {
-    color: var(--color-primary);
-}
-
-/* Wraps .main-container (+ .site-footer, where present) as one column,
-   sibling to .navbar, so the desktop sidebar layout below can put the
-   navbar and this column side by side without the footer ending up next
-   to the nav instead of under the content. */
+/* Wraps .main-container as its own column, sibling to .navbar, so the
+   desktop sidebar layout below can put the navbar and content side by
+   side. */
 .page-content {
     flex: 1;
     min-width: 0;
@@ -351,6 +322,27 @@ body {
 .form-textarea {
     resize: vertical;
     min-height: 100px;
+}
+
+/* Integration status banner (chat page) — built by js/chat.js */
+.integration-status {
+    padding: 8px 20px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 10px;
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+    font-size: 0.8rem;
+}
+
+.integration-status-count {
+    color: var(--color-primary);
+    font-weight: 600;
+}
+
+.integration-status-active {
+    color: var(--color-text-muted);
 }
 
 /* Toast Notifications */
@@ -545,25 +537,25 @@ body {
 
 .sidebar-header {
     padding: 16px 20px;
-    background: var(--color-primary-gradient);
-    color: var(--color-bg-darker);
+    background: var(--color-surface);
+    color: var(--color-text);
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 1px solid var(--color-primary);
+    border-bottom: 1px solid var(--color-border);
 }
 
 .sidebar-header h3 {
-    font-size: 1.1rem;
+    font-size: 1rem;
     font-weight: 600;
     margin: 0;
+    color: var(--color-primary);
 }
 
 .sidebar-close-btn {
     background: none;
     border: none;
-    color: var(--color-bg-darker);
-    font-size: 1.8rem;
+    color: var(--color-text-muted);
     cursor: pointer;
     padding: 0;
     width: 32px;
@@ -571,12 +563,13 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 4px;
-    transition: background 0.2s;
+    border-radius: 6px;
+    transition: all 0.2s;
 }
 
 .sidebar-close-btn:hover {
-    background: rgba(0, 0, 0, 0.3);
+    background: rgba(0, 255, 0, 0.1);
+    color: var(--color-primary);
 }
 
 .sidebar-filters {
@@ -591,16 +584,23 @@ body {
 .sidebar-filters input,
 .sidebar-filters select {
     padding: 8px 12px;
-    border: 2px solid var(--color-border);
+    border: 1px solid var(--color-border);
     border-radius: 8px;
     font-size: 0.9rem;
     font-family: inherit;
+    background: var(--color-bg-darker);
+    color: var(--color-text);
+}
+
+.sidebar-filters input::placeholder {
+    color: var(--color-text-muted);
 }
 
 .sidebar-filters input:focus,
 .sidebar-filters select:focus {
     outline: none;
     border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-glow);
 }
 
 .sidebar-content {
@@ -692,7 +692,7 @@ body {
     border: none;
     cursor: pointer;
     font-size: 1.1rem;
-    color: #999;
+    color: var(--color-text-muted);
     padding: 0;
     width: 24px;
     height: 24px;
@@ -705,8 +705,8 @@ body {
 }
 
 .pin-button:hover {
-    background: rgba(0, 0, 0, 0.05);
-    color: #666;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--color-text);
 }
 
 .pin-button.pinned {
@@ -757,11 +757,13 @@ body {
 
 /* Sidebar Toggle Button */
 .sidebar-toggle-btn {
-    background: rgba(0, 0, 0, 0.2);
-    border: 1px solid var(--color-bg-darker);
-    color: var(--color-bg-darker);
-    font-size: 1.2rem;
-    padding: 4px 12px;
+    background: transparent;
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 10px;
     border-radius: 6px;
     cursor: pointer;
     transition: all 0.2s;
@@ -769,8 +771,9 @@ body {
 }
 
 .sidebar-toggle-btn:hover {
-    background: rgba(0, 0, 0, 0.3);
-    box-shadow: 0 0 8px rgba(0, 0, 0, 0.3);
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+    background: rgba(0, 255, 0, 0.08);
 }
 
 .chat-header-left {

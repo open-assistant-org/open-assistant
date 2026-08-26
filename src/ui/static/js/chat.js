@@ -51,43 +51,26 @@ async function loadIntegrationStatus() {
 }
 
 function displayIntegrationStatus(status) {
-    // Add a subtle indicator in the UI showing available integrations
+    // Add a subtle indicator in the UI showing available integrations.
+    // Themed via CSS (.integration-status in common.css) rather than
+    // inline styles, so it follows the app's dark palette instead of a
+    // hardcoded light-mode blue.
     const statusDiv = document.createElement('div');
     statusDiv.className = 'integration-status';
-    statusDiv.style.cssText = `
-        padding: 8px 12px;
-        margin: 8px 0;
-        background: rgba(59, 130, 246, 0.1);
-        border-radius: 6px;
-        font-size: 0.875rem;
-        color: #4b5563;
-    `;
 
     const toolCount = status.available_tools.length;
-    statusDiv.innerHTML = `
-        <div class="integration-badge" style="margin-bottom: 4px;">
-            🔌 ${toolCount} integration tool${toolCount !== 1 ? 's' : ''} available
-        </div>
-    `;
-
-    // Show which integrations are active
     const activeIntegrations = Object.entries(status.integrations)
         .filter(([_, info]) => info.available)
         .map(([name, _]) => name);
 
-    if (activeIntegrations.length > 0) {
-        statusDiv.innerHTML += `
-            <div class="active-integrations" style="font-size: 0.8rem; color: #6b7280;">
-                Active: ${activeIntegrations.join(', ')}
-            </div>
-        `;
-    } else {
-        statusDiv.innerHTML += `
-            <div class="active-integrations" style="font-size: 0.8rem; color: #9ca3af;">
-                No integrations configured. Configure them in Settings.
-            </div>
-        `;
-    }
+    const activeLine = activeIntegrations.length > 0
+        ? `<span class="integration-status-active">Active: ${escapeHtml(activeIntegrations.join(', '))}</span>`
+        : `<span class="integration-status-active">No integrations configured. Configure them in Settings.</span>`;
+
+    statusDiv.innerHTML = `
+        <span class="integration-status-count">${toolCount} integration tool${toolCount !== 1 ? 's' : ''} available</span>
+        ${activeLine}
+    `;
 
     // Insert at the top of chat container
     const chatContainer = chatMessages.parentElement;

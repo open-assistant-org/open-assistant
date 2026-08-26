@@ -57,18 +57,19 @@
         }
 
         .chat-header {
-            background: linear-gradient(135deg, #00ff00 0%, #00aa00 100%);
-            color: var(--background-darker);
-            padding: 16px 20px;
+            background: var(--card-background);
+            color: var(--text-secondary);
+            padding: 14px 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 1px solid var(--primary-color);
+            border-bottom: 1px solid var(--border-color);
         }
 
         .chat-header-title {
-            font-size: 1.25rem;
+            font-size: 1.05rem;
             font-weight: 600;
+            color: var(--text-primary);
         }
 
         .chat-header-actions {
@@ -78,22 +79,25 @@
         }
 
         .conversation-id {
-            font-size: 0.85rem;
-            opacity: 0.9;
+            font-size: 0.82rem;
+            color: var(--text-muted);
         }
 
         #newConversationBtn {
-            background: rgba(0, 0, 0, 0.2);
-            color: var(--background-darker);
-            border: 1px solid var(--background-darker);
-            padding: 6px 12px;
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+            padding: 6px 14px;
             border-radius: 6px;
             cursor: pointer;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
+            transition: all 0.2s;
         }
 
         #newConversationBtn:hover {
-            background: rgba(0, 0, 0, 0.3);
+            color: var(--primary-color);
+            border-color: var(--primary-color);
+            background: rgba(0, 255, 0, 0.08);
         }
 
         .chat-messages {
@@ -122,9 +126,9 @@
         }
 
         .message.user .message-content {
-            background: rgba(0, 255, 0, 0.15);
-            color: var(--primary-color);
-            border: 1px solid var(--primary-color);
+            background: rgba(0, 255, 0, 0.1);
+            color: var(--text-primary);
+            border: 1px solid rgba(0, 255, 0, 0.25);
         }
 
         .message.assistant .message-content {
