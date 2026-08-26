@@ -84,6 +84,14 @@ body {
     font-family: 'Courier New', 'Consolas', 'Monaco', 'Menlo', 'Liberation Mono', monospace;
     background: var(--color-bg);
     color: var(--color-text);
+    /* Was the 16px browser default, one size larger than the chat page's
+       text (which was tuned down to 0.9rem on its own). Every element
+       below that doesn't set its own font-size — table cells, paragraphs,
+       labels, help text — inherits this, so this one line is what keeps
+       Settings/Artifacts/Monitoring's "plain" text aligned with Chat's
+       instead of reading a size bigger. rem-based sizes elsewhere (h1s,
+       badges, etc.) are anchored to the root element and unaffected. */
+    font-size: 0.9rem;
     height: 100%;
     display: flex;
     flex-direction: column;
@@ -262,7 +270,7 @@ body {
     padding: 10px 20px;
     border: none;
     border-radius: 8px;
-    font-size: 1rem;
+    font-size: 0.9rem;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s;
@@ -355,7 +363,7 @@ body {
     padding: 10px 12px;
     border: 1px solid var(--color-border);
     border-radius: 8px;
-    font-size: 1rem;
+    font-size: 0.9rem;
     transition: all 0.3s;
     font-family: inherit;
     background: var(--color-bg-darker);
@@ -1023,7 +1031,7 @@ body {
     padding: 12px 24px;
     background: none;
     border: none;
-    font-size: 1rem;
+    font-size: 0.9rem;
     font-weight: 500;
     color: var(--color-text);
     cursor: pointer;
