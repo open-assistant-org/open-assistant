@@ -194,12 +194,23 @@ body {
     color: var(--color-primary);
 }
 
+/* Wraps .main-container (+ .site-footer, where present) as one column,
+   sibling to .navbar, so the desktop sidebar layout below can put the
+   navbar and this column side by side without the footer ending up next
+   to the nav instead of under the content. */
+.page-content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
 /* Main Content Container */
 .main-container {
     flex: 1;
     display: flex;
     justify-content: center;
-    align-items: center;
+    align-items: flex-start;
     padding: 20px;
 }
 
@@ -799,6 +810,76 @@ body {
     }
 }
 
+/* Desktop: navbar becomes a persistent left rail instead of a top bar —
+   a more "app-like" desktop layout, and it stops the nav from eating
+   vertical space above every page's content. Below 769px it stays the
+   familiar top bar + hamburger dropdown, unchanged. */
+@media (min-width: 769px) {
+    body {
+        flex-direction: row;
+        align-items: stretch;
+    }
+
+    .navbar {
+        position: sticky;
+        top: 0;
+        align-self: flex-start;
+        flex-direction: column;
+        flex-shrink: 0;
+        width: 224px;
+        height: 100vh;
+        box-shadow: none;
+        border-bottom: none;
+        border-right: 1px solid var(--color-border);
+        padding: 20px 0;
+    }
+
+    .navbar-content {
+        flex-direction: column;
+        align-items: stretch;
+        justify-content: flex-start;
+        gap: 28px;
+        max-width: none;
+        height: 100%;
+        padding: 0 16px;
+    }
+
+    .navbar-brand {
+        padding: 0 4px;
+        font-size: 1.05rem;
+        white-space: nowrap;
+    }
+
+    .navbar-links {
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .nav-link {
+        padding: 10px 12px;
+        border-left: 3px solid transparent;
+        border-radius: 0 8px 8px 0;
+    }
+
+    /* Sleeker active state for a vertical rail: a left accent bar instead
+       of the horizontal nav's full box outline + glow. */
+    .nav-link.active {
+        background: rgba(0, 255, 0, 0.12);
+        border: none;
+        border-left: 3px solid var(--color-primary);
+        box-shadow: none;
+        padding-left: 9px;
+    }
+
+    .navbar-hamburger {
+        display: none;
+    }
+
+    .chat-layout {
+        height: calc(100vh - 40px);
+    }
+}
+
 /* ============================================================================
    SETTINGS PAGE STYLES
    ============================================================================ */
@@ -809,7 +890,7 @@ body {
     border-radius: 16px;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
     width: 100%;
-    max-width: 1000px;
+    max-width: 1200px;
     padding: 30px;
     min-height: 600px;
 }
