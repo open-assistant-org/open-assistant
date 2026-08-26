@@ -7,7 +7,9 @@
  * prefixes (/i/{slug}/) in managed deployments.
  */
 
-const CACHE_VERSION = 'v3';
+// v4: components.js nav links now carry the INSTANCE_BASE_PATH prefix
+// (managed instances navigated to /settings etc. instead of /i/{slug}/settings).
+const CACHE_VERSION = 'v4';
 const CACHE_NAME = `personal-assistant-${CACHE_VERSION}`;
 
 // Derive base path from the SW's own registration scope.
