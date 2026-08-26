@@ -192,7 +192,7 @@
             font-size: 0.8rem;
             cursor: pointer;
             background: var(--primary-color);
-            color: white;
+            color: var(--color-on-primary);
             transition: opacity 0.2s;
         }
 
@@ -202,6 +202,7 @@
 
         .job-action-btn.btn-danger {
             background: var(--error-color);
+            color: #fff;
         }
 
         .job-action-btn.btn-warning {
@@ -406,6 +407,8 @@
             line-height: 1;
             cursor: pointer;
             padding: 0 4px;
+            display: inline-flex;
+            align-items: center;
             transition: color 0.2s;
         }
 
@@ -471,7 +474,7 @@
             height: 26px;
             border-radius: 50%;
             background: var(--primary-color);
-            color: #05130a;
+            color: var(--color-on-primary);
             font-weight: 700;
             font-size: 0.85rem;
             display: flex;
@@ -773,26 +776,7 @@
     </style>
 </head>
 <body>
-    <nav class="navbar">
-        <div class="navbar-content">
-            <div class="navbar-brand">
-                <img src="/static/robot-logo.svg" alt="Logo" class="navbar-logo">
-                <span>Open Assistant</span>
-                <span class="navbar-brand-short">OA</span>
-            </div>
-            <div class="navbar-links">
-                <a href="/" class="nav-link">Chat</a>
-                <a href="/artifacts" class="nav-link">Artifacts</a>
-                <a href="/settings" class="nav-link">Settings</a>
-                <a href="/monitoring" class="nav-link">Monitoring</a>
-            </div>
-            <button class="navbar-hamburger" id="navHamburger" aria-label="Toggle navigation" aria-expanded="false">
-                <span></span>
-                <span></span>
-                <span></span>
-            </button>
-        </div>
-    </nav>
+    <div id="navbar-root"></div>
 
     <div class="main-container">
         <div class="monitoring-container">
@@ -967,7 +951,9 @@
         <div class="modal-content recipe-graph-modal-content">
             <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
                 <span id="graphModalTitle">Recipe Flow</span>
-                <button class="modal-close-btn" onclick="closeRecipeGraphModal()" aria-label="Close">&times;</button>
+                <button class="modal-close-btn" onclick="closeRecipeGraphModal()" aria-label="Close">
+                    <svg class="icon" aria-hidden="true"><use href="#icon-close"></use></svg>
+                </button>
             </div>
             <div class="modal-body">
                 <div id="recipeGraphMeta" class="recipe-graph-meta"></div>
@@ -976,6 +962,9 @@
         </div>
     </div>
 
+    <div id="footer-root"></div>
+
+    <script src="/static/js/components.js"></script>
     <script src="/static/js/common.js"></script>
     <script>
         // State management

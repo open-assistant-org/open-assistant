@@ -675,27 +675,8 @@
     </style>
 </head>
 <body>
-    <!-- Navigation -->
-    <nav class="navbar">
-        <div class="navbar-content">
-            <div class="navbar-brand">
-                <img src="/static/robot-logo.svg" alt="Logo" class="navbar-logo">
-                <span>Open Assistant</span>
-                <span class="navbar-brand-short">OA</span>
-            </div>
-            <div class="navbar-links">
-                <a href="/" class="nav-link">Chat</a>
-                <a href="/artifacts" class="nav-link">Artifacts</a>
-                <a href="/settings" class="nav-link">Settings</a>
-                <a href="/monitoring" class="nav-link">Monitoring</a>
-            </div>
-            <button class="navbar-hamburger" id="navHamburger" aria-label="Toggle navigation" aria-expanded="false">
-                <span></span>
-                <span></span>
-                <span></span>
-            </button>
-        </div>
-    </nav>
+    <!-- Navigation (rendered by js/components.js) -->
+    <div id="navbar-root"></div>
 
     <!-- Main Content -->
     <div class="main-container">
@@ -704,7 +685,9 @@
             <div class="conversation-sidebar" id="conversationSidebar">
                 <div class="sidebar-header">
                     <h3>Conversations</h3>
-                    <button class="sidebar-close-btn" id="sidebarCloseBtn">&times;</button>
+                    <button class="sidebar-close-btn" id="sidebarCloseBtn" aria-label="Close conversation history">
+                        <svg class="icon" aria-hidden="true"><use href="#icon-close"></use></svg>
+                    </button>
                 </div>
                 <div class="sidebar-filters">
                     <input type="text" id="conversationSearch" placeholder="Search messages..." />
@@ -729,7 +712,7 @@
                 <div class="chat-header">
                     <div class="chat-header-left">
                         <button id="toggleSidebarBtn" class="sidebar-toggle-btn" title="Toggle conversation history">
-                            ☰
+                            <svg class="icon" aria-hidden="true"><use href="#icon-menu"></use></svg>
                         </button>
                         <div class="chat-header-title">Chat</div>
                     </div>
@@ -775,7 +758,9 @@
     <!-- Cancel confirmation modal -->
     <div class="modal-overlay hidden" id="cancelModal" role="dialog" aria-modal="true" aria-labelledby="cancelModalTitle">
         <div class="modal-card">
-            <div class="modal-icon">⛔</div>
+            <div class="modal-icon">
+                <svg class="icon" style="width:1.6em;height:1.6em;color:var(--color-error)" aria-hidden="true"><use href="#icon-alert"></use></svg>
+            </div>
             <div class="modal-title" id="cancelModalTitle">Stop ongoing work?</div>
             <div class="modal-body">
                 This will cancel all background tasks for this conversation.
@@ -791,6 +776,7 @@
     <!-- Scripts -->
     <script src="/static/js/marked.min.js"></script>
     <script src="/static/js/purify.min.js"></script>
+    <script src="/static/js/components.js"></script>
     <script src="/static/js/common.js"></script>
     <script src="/static/js/chat.js"></script>
     <script src="/static/js/pwa.js"></script>

@@ -112,7 +112,7 @@
             font-size: 0.8rem;
             cursor: pointer;
             background: var(--primary-color);
-            color: #0a0a0a;
+            color: var(--color-on-primary);
             transition: opacity 0.2s;
         }
         .job-action-btn:hover { opacity: 0.8; }
@@ -244,26 +244,7 @@
     </style>
 </head>
 <body>
-    <nav class="navbar">
-        <div class="navbar-content">
-            <div class="navbar-brand">
-                <img src="/static/robot-logo.svg" alt="Logo" class="navbar-logo">
-                <span>Open Assistant</span>
-                <span class="navbar-brand-short">OA</span>
-            </div>
-            <div class="navbar-links">
-                <a href="/" class="nav-link">Chat</a>
-                <a href="/artifacts" class="nav-link">Artifacts</a>
-                <a href="/settings" class="nav-link">Settings</a>
-                <a href="/monitoring" class="nav-link">Monitoring</a>
-            </div>
-            <button class="navbar-hamburger" id="navHamburger" aria-label="Toggle navigation" aria-expanded="false">
-                <span></span>
-                <span></span>
-                <span></span>
-            </button>
-        </div>
-    </nav>
+    <div id="navbar-root"></div>
 
     <div class="main-container">
         <div class="artifacts-container">
@@ -275,6 +256,9 @@
         </div>
     </div>
 
+    <div id="footer-root"></div>
+
+    <script src="/static/js/components.js"></script>
     <script src="/static/js/common.js"></script>
     <script>
         const BASE = window.INSTANCE_BASE_PATH || '';

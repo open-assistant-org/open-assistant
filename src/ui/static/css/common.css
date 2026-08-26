@@ -21,6 +21,11 @@
     /* Colors - Text */
     --color-text: #ffffff;
     --color-text-muted: #cccccc;
+    /* Text color for content sitting on a solid --color-primary/--color-success/
+       --color-warning fill (near-black, not pure white/black) — the single
+       source of truth for "readable text on a bright accent background".
+       See issue #88: a solid green button with white text fails contrast. */
+    --color-on-primary: #0a0a0a;
 
     /* Colors - Borders */
     --color-border: #2e2e2e;
@@ -104,6 +109,7 @@ body {
     display: flex;
     align-items: center;
     gap: 12px;
+    text-decoration: none;
 }
 
 .navbar-logo {
@@ -121,12 +127,22 @@ body {
 }
 
 .nav-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
     padding: 8px 16px;
     text-decoration: none;
     color: var(--color-text);
     border-radius: 8px;
     transition: all 0.2s;
     font-weight: 500;
+}
+
+.nav-link-icon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    opacity: 0.85;
 }
 
 .nav-link:hover {
@@ -139,6 +155,43 @@ body {
     color: var(--color-primary);
     border: 1px solid var(--color-primary);
     box-shadow: 0 0 8px var(--color-primary-glow);
+}
+
+.nav-link.active .nav-link-icon {
+    opacity: 1;
+}
+
+/* Icon sprite <use> references throughout the app */
+.icon {
+    width: 1.1em;
+    height: 1.1em;
+    flex-shrink: 0;
+    fill: none;
+    stroke: currentColor;
+}
+
+/* Shared site footer, injected via js/components.js on non-chat pages */
+.site-footer {
+    margin-top: auto;
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    border-top: 1px solid var(--color-border);
+}
+
+.site-footer a {
+    color: var(--color-text-muted);
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.site-footer a:hover {
+    color: var(--color-primary);
 }
 
 /* Main Content Container */
@@ -232,6 +285,21 @@ body {
 .btn-success:hover:not(:disabled) {
     background: rgba(0, 255, 0, 0.2);
     box-shadow: 0 0 12px rgba(0, 255, 0, 0.3);
+}
+
+/* Canonical *solid*-fill button (as opposed to the outline .btn-primary
+   above) — e.g. "Open URL", cron job row actions. Always pair a solid
+   --color-primary fill with --color-on-primary text, never white/black
+   literals, so this class of contrast bug (issue #88) can't recur. */
+.btn-solid {
+    background: var(--color-primary);
+    color: var(--color-on-primary);
+}
+
+.btn-solid:hover:not(:disabled) {
+    background: var(--color-primary-dark);
+    box-shadow: 0 0 12px var(--color-primary-glow);
+    transform: translateY(-2px);
 }
 
 /* Form Elements */
@@ -1649,7 +1717,7 @@ body {
 
 .open-url-btn {
     background: var(--color-primary);
-    color: #000;
+    color: var(--color-on-primary);
     padding: 0.75rem 1.5rem;
     border: none;
     border-radius: 0.5rem;
