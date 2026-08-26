@@ -11,7 +11,10 @@
     --color-primary: #00ff00;
     --color-primary-dark: #00aa00;
     --color-primary-gradient: linear-gradient(135deg, #00ff00 0%, #00aa00 100%);
-    --color-primary-glow: rgba(0, 255, 0, 0.3);
+    /* Dimmed from the original 0.3 alpha — every hover/focus "glow" in the
+       app derives from this one token, so a sleeker, less neon feel is a
+       one-line change here rather than editing each box-shadow. */
+    --color-primary-glow: rgba(0, 255, 0, 0.14);
 
     /* Colors - Backgrounds */
     --color-bg: #0f0f0f;
@@ -67,11 +70,21 @@
     --warning-background: var(--color-warning-bg);
 }
 
+/* height:100% (not min-height:100vh) on both html and body gives every
+   descendant a real, definite height to flex/stretch against — so
+   "fill the rest of the screen" layouts (the chat page in particular)
+   can be built with plain flexbox stretching instead of calc(100vh - N)
+   arithmetic that silently drifts out of sync whenever spacing above
+   or below it changes. */
+html {
+    height: 100%;
+}
+
 body {
     font-family: 'Courier New', 'Consolas', 'Monaco', 'Menlo', 'Liberation Mono', monospace;
     background: var(--color-bg);
     color: var(--color-text);
-    min-height: 100vh;
+    height: 100%;
     display: flex;
     flex-direction: column;
 }
@@ -157,6 +170,16 @@ body {
     opacity: 1;
 }
 
+/* PWA "install" nav entry (js/pwa.js) — kept visually distinct (always
+   green-tinted, not just on hover/active) since it's a one-off action,
+   not a destination. Desktop hides it: installing "an app" to a home
+   screen is a mobile affordance, not a desktop one. */
+.pwa-install-btn {
+    background: rgba(0, 255, 0, 0.1);
+    border: 1px solid var(--color-primary);
+    color: var(--color-primary);
+}
+
 /* Icon sprite <use> references throughout the app */
 .icon {
     width: 1.1em;
@@ -172,6 +195,7 @@ body {
 .page-content {
     flex: 1;
     min-width: 0;
+    min-height: 0;
     display: flex;
     flex-direction: column;
 }
@@ -179,6 +203,7 @@ body {
 /* Main Content Container */
 .main-container {
     flex: 1;
+    min-height: 0;
     display: flex;
     justify-content: center;
     align-items: flex-start;
@@ -226,7 +251,7 @@ body {
 .btn-primary {
     background: rgba(0, 255, 0, 0.1);
     color: var(--color-primary);
-    border: 2px solid var(--color-primary);
+    border: 1px solid var(--color-primary);
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -238,7 +263,7 @@ body {
 .btn-secondary {
     background: rgba(136, 136, 136, 0.1);
     color: var(--color-text);
-    border: 2px solid var(--color-text);
+    border: 1px solid var(--color-text);
 }
 
 .btn-secondary:hover:not(:disabled) {
@@ -250,23 +275,23 @@ body {
 .btn-danger {
     background: rgba(255, 0, 0, 0.1);
     color: var(--color-error);
-    border: 2px solid var(--color-error);
+    border: 1px solid var(--color-error);
 }
 
 .btn-danger:hover:not(:disabled) {
     background: rgba(255, 0, 0, 0.2);
-    box-shadow: 0 0 12px rgba(255, 0, 0, 0.3);
+    box-shadow: 0 0 12px rgba(255, 0, 0, 0.15);
 }
 
 .btn-success {
     background: rgba(0, 255, 0, 0.1);
     color: var(--color-success);
-    border: 2px solid var(--color-success);
+    border: 1px solid var(--color-success);
 }
 
 .btn-success:hover:not(:disabled) {
     background: rgba(0, 255, 0, 0.2);
-    box-shadow: 0 0 12px rgba(0, 255, 0, 0.3);
+    box-shadow: 0 0 12px rgba(0, 255, 0, 0.15);
 }
 
 /* Canonical *solid*-fill button (as opposed to the outline .btn-primary
@@ -301,7 +326,7 @@ body {
 .form-select {
     width: 100%;
     padding: 10px 12px;
-    border: 2px solid var(--color-border);
+    border: 1px solid var(--color-border);
     border-radius: 8px;
     font-size: 1rem;
     transition: all 0.3s;
@@ -448,13 +473,11 @@ body {
 
 .tab:hover {
     color: var(--color-primary);
-    text-shadow: 0 0 8px var(--color-primary-glow);
 }
 
 .tab.active {
     color: var(--color-primary);
     border-bottom-color: var(--color-primary);
-    text-shadow: 0 0 8px var(--color-primary-glow);
 }
 
 .tab-content {
@@ -505,7 +528,7 @@ body {
     display: flex;
     width: 100%;
     max-width: 1400px;
-    height: calc(100vh - 140px);
+    height: 100%;
     gap: 0;
     position: relative;
 }
@@ -878,8 +901,8 @@ body {
         display: none;
     }
 
-    .chat-layout {
-        height: calc(100vh - 40px);
+    .pwa-install-btn {
+        display: none;
     }
 }
 
@@ -939,13 +962,11 @@ body {
 
 .tab:hover {
     color: var(--color-primary);
-    text-shadow: 0 0 8px var(--color-primary-glow);
 }
 
 .tab.active {
     color: var(--color-primary);
     border-bottom-color: var(--color-primary);
-    text-shadow: 0 0 8px var(--color-primary-glow);
 }
 
 /* Tab Content */
@@ -1045,7 +1066,7 @@ body {
 .btn-icon {
     padding: 10px 16px;
     background: var(--color-bg);
-    border: 2px solid var(--color-border);
+    border: 1px solid var(--color-border);
     border-radius: 8px;
     cursor: pointer;
     transition: all 0.2s;
@@ -1152,7 +1173,7 @@ body {
 /* Integration Cards */
 .integration-card {
     background: var(--color-surface);
-    border: 2px solid var(--color-border);
+    border: 1px solid var(--color-border);
     border-radius: 12px;
     padding: 20px;
     margin-bottom: 16px;
@@ -1483,7 +1504,7 @@ body {
 
 .banner-warning {
     background: var(--color-warning-bg);
-    border: 2px solid var(--color-warning);
+    border: 1px solid var(--color-warning);
     color: var(--color-warning);
 }
 
@@ -1606,7 +1627,7 @@ body {
 /* Danger Zone */
 .danger-zone {
     background: var(--color-error-bg);
-    border: 2px solid var(--color-error);
+    border: 1px solid var(--color-error);
     border-radius: 12px;
     padding: 20px;
 }
@@ -2051,7 +2072,7 @@ body {
 /* Tools Tab - Drag & Drop Zones */
 .tool-drop-zone {
     background: var(--color-surface);
-    border: 2px solid var(--color-border);
+    border: 1px solid var(--color-border);
     border-radius: 8px;
     margin-bottom: 1rem;
     transition: all 0.2s;

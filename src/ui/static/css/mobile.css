@@ -189,16 +189,6 @@ body.is-pwa {
         height: 28px;
     }
 
-    .navbar-brand {
-        font-size: 1.1rem;
-    }
-
-    /* The logo badge already renders "OA" — just drop the full wordmark
-       on mobile instead of swapping in a redundant second "OA" label. */
-    .navbar-brand-text {
-        display: none;
-    }
-
     /* Show hamburger, hide inline links */
     .navbar-hamburger {
         display: flex;
