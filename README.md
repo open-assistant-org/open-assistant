@@ -1,148 +1,110 @@
-<img src="open-assistant.svg" width="120" alt="Open Assistant">
+<div align="center">
+  <img src="open-assistant.svg" width="150" alt="Open Assistant" />
 
 # Open Assistant
 
-A sophisticated multi-agent personal assistant system that integrates with your daily tools to manage emails, files, calendars, tasks, and notes through natural conversations.
+### The self-hosted AI assistant that *does* things.
 
-## Installation
+[![Release](https://img.shields.io/github/v/release/open-assistant-org/open-assistant?color=brightgreen)](https://github.com/open-assistant-org/open-assistant/releases)
+[![License: BUSL-1.1](https://img.shields.io/badge/license-BUSL--1.1-blue.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)](pyproject.toml)
+[![GitHub stars](https://img.shields.io/github/stars/open-assistant-org/open-assistant)](https://github.com/open-assistant-org/open-assistant/stargazers)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+
+</div>
+
+<br />
+
+<div align="center">
+  <a href="https://openassistant.s3.eu-central-1.amazonaws.com/blog/gifs/github-demo/open-assistant-chat.gif">
+    <img src="https://openassistant.s3.eu-central-1.amazonaws.com/blog/gifs/github-demo/open-assistant-chat.gif" width="800" alt="Open Assistant demo — asking 'what can you do?' and getting a tour of its capabilities" />
+  </a>
+
+  <p><i>"What can you do?" — Open Assistant knows, because it's wired into everything.</i></p>
+</div>
+
+Most AI chatbots  only talk. Open Assistant runs as a single Docker container and plugs your LLM into your **email, calendar, files, notes, and the web**. Ask it to *find that invoice from March*, *book lunch with Sarah on Thursday*, or *summarize what happened while you were asleep* — and a team of specialist agents gets it done. Your data, your machine, no SaaS middleman.
+
+<div align="center">
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/open-assistant-org/open-assistant/main/install.sh)
 ```
 
-That's it. The script will check for Docker, pull the image, and guide you through configuring your LLM provider.
+That's it — the script pulls the image, walks you through your LLM provider, and you're live at `http://localhost:8080`.
 
-## Overview
+[Quick start](#-quick-start) · [See it in action](#-see-it-in-action) · [Integrations](#-integrations) · [Architecture](#-architecture) · [Documentation](https://docs.open-assistant.org) · [Contributing](#-contributing)
 
-This personal assistant bot provides a unified interface to interact with your productivity tools through a multi-agent architecture. Each agent specializes in specific tasks (email management, file access, calendar operations, etc.) while coordinating to provide seamless assistance.
+</div>
 
-**Design Philosophy**: Built for **single-user, self-hosted** deployments. Runs in a single Docker container for simplicity, security, and ease of maintenance. Not designed for multi-user or high-availability scenarios.
+<br />
 
-## Core Features
+## ✨ See it in action
 
-### Email Management
-- **Gmail Integration**: Send, read, search emails; create drafts; list labels
-- **Outlook Integration**: Send, read emails; create drafts; support for multiple folders
+### 🤖 A specialist for every job
 
-### File Storage Access
-- **OneDrive**: List and search files from Microsoft OneDrive
-- **Nextcloud**: List, read, search, download files; get file info; check existence
+A **coordinator agent** routes each request to the right specialist — research, communication, writing, file handling, planning, browsing, and more. Not enough? Spin up your own agents with a custom role, goal, and backstory, or connect a **remote MCP server** and its tools become available instantly.
 
-### Calendar Management
-- **Google Calendar**: List calendars and events; create events with attendees, location, all-day support
-- **Outlook Calendar**: List calendars and events; create events with online meeting support
+<div align="center">
+  <img src="https://openassistant.s3.eu-central-1.amazonaws.com/blog/gifs/github-demo/open-assistant-agents.gif" width="800" alt="The Agents tab: browsing built-in agents, creating a custom agent, and adding an MCP server" />
+</div>
 
-### Note-taking & Knowledge Base
-- **Notion Integration**: Create notes and pages; search content; query databases; append content; update pages
+### 🎛️ Drag-and-drop tool control
 
-### Web Capabilities
-- **Web Search**: Privacy-focused web search via Brave Search API
-- **Web Browsing**: Automated browsing with Playwright - navigate, click, type, scroll, extract text
-  - Vision-based page understanding using screenshots
-  - Automatic text extraction for data analysis
-  - Headless browser with configurable viewport
+Every one of the **165+ tools** can be reassigned with a drag. Give your Notion agent exactly the tools it needs — nothing more, nothing less. Granular, visual, no config files.
 
-### Task Scheduling
-- **Cron Jobs**: Recurring scheduled tasks with cron expressions
-- **Future Tasks**: One-time scheduled tasks for reminders and delayed actions
-- **Job Management**: Enable/disable, edit, run now, view execution history
+<div align="center">
+  <img src="https://openassistant.s3.eu-central-1.amazonaws.com/blog/gifs/github-demo/open-assistant-tools.gif" width="800" alt="Dragging a tool from an agent to the unassigned pool in the Tools tab" />
+</div>
 
-### Communication Channels
-- **WhatsApp**: Interact via WhatsApp using whatsapp-web.js bridge (QR code authentication)
-- **Web UI**: Chat interface, settings management, conversation history, monitoring dashboard
+### 🎨 Artifacts that stick around
 
-### Conversation Management
-- **History**: Full conversation persistence with search and date filtering
-- **Memory**: Smart context management with automatic summarization
-- **Features**: Pin conversations, auto-generate titles, conversation statistics
-- **`/clear` command**: Start a fresh conversation thread when switching topics — keeps threads focused and responses sharp. Past conversations remain searchable; `memory_recall` and conversation search bridge context across threads when needed. See [Commands](docs/commands.md).
+Ask for a web page, dashboard, or document and the assistant saves it as an **artifact** — a rendered HTML file you can open, revisit, and share any time. It's not just chat history; it's a growing library of things your assistant built for you.
 
-### Personalization
-- **System Prompt**: Default base prompt with customizable instructions on top
-- **Memory**: Text-based store for user context — name, preferences, people, places, relations; built automatically by nightly cron job
-- **Soul**: Assistant personality and communication style; shaped automatically by nightly cron job from conversation feedback
+<div align="center">
+  <img src="https://openassistant.s3.eu-central-1.amazonaws.com/blog/gifs/github-demo/open-assistant-artifacts.gif" width="800" alt="The Artifacts tab: opening a hello world HTML artifact and viewing the rendered page" />
+</div>
 
-### Monitoring & Observability
-- **Health Checks**: Database, LLM API, disk space monitoring
-- **Metrics**: Conversation stats, message counts, API usage
-- **Audit Logging**: Track all tool executions, settings changes, authentication events
-- **System Logs**: View and filter application logs
+## 🔋 Highlights
 
-## Architecture
+- 🔒 **Private by design** — Single-user, single-container, self-hosted. Credentials are encrypted at rest, and your data never leaves your machine.
+- 🧠 **A team, not a chatbot** — 10 built-in agents, 165+ tools, and a coordinator that knows who to call. Create your own agents in the UI.
+- 🔓 **No lock-in** — Bring your own brain: OpenRouter, Anthropic, Groq, or run fully offline with [Ollama](docs/integrations/llm-providers.md) / vLLM.
+- ⏰ **Works while you sleep** — Recurring cron jobs and one-shot scheduled tasks. A nightly job even maintains your assistant's memory and personality.
+- 🧩 **Extensible** — Remote [MCP servers](docs/mcp-servers.md), a plugin system, and custom agents mean the toolset grows with you.
+- 💬 **Wherever you are** — Full-featured web UI, plus two-way [WhatsApp](docs/integrations/whatsapp.md) and [Slack](docs/integrations/slack.md) messaging (text, voice notes, and images).
 
-The system uses a **multi-agent architecture** powered by LLM tool calling:
+## 🔌 Integrations
 
-**Flow**: LLM → Agents → Tools
+| | Category | What it can do |
+|---|---|---|
+| 📧 | **Gmail · Outlook** | Send, read, search, draft, and label email |
+| 📅 | **Google Calendar · Outlook Calendar** | List and create events, attendees, online meetings |
+| 📁 | **OneDrive · Nextcloud** | List, search, read, and download files |
+| 📝 | **Notion · OneNote** | Create and update pages, query databases, take notes |
+| ✅ | **Microsoft To Do** | Manage task lists and tasks |
+| 💬 | **WhatsApp · Slack** | Two-way messaging, voice notes, images |
+| 🔍 | **Brave Search · Google News** | Privacy-focused web and news search |
+| 🗺️ | **Google Navigator** | Places, directions, geocoding |
+| 📊 | **Google Ads · Yahoo Finance · Toggl** | Campaign data, quotes and financials, time tracking |
+| 🌐 | **Playwright browser** | Navigate, click, type, screenshot, extract — with vision |
+| 🎙️ | **Whisper · Mistral OCR** | Transcribe voice messages, read PDFs |
+| 🔌 | **MCP servers** | Connect any remote MCP server, authenticated with static headers |
 
-- **Agents** (9 total): coordinator, research, communication, writer, file_handler, planner, navigator, system, browser
-- **Tools**: 88+ callable tools mapped to service operations
-- **Services/Integrations**: Enable tools by connecting Google, Outlook, Notion, Nextcloud, WhatsApp, Brave Search, and more
+Each integration is enabled independently — connect only what you need, and the tools appear. See the [integration guides](docs/integrations/) for setup.
 
-The coordinator agent orchestrates tasks by delegating to specialist agents, each with their own set of tools. Services (integrations) are enabled independently — each service you connect expands the toolset available to agents.
+## 🚀 Quick start
 
-## Project Structure
+The one-liner above is all most people need. Prefer to see what's happening? Here are the manual paths.
 
-```
-open-assistant/
-├── .github/              # CI/CD pipelines and GitHub workflows
-│   └── workflows/        # GitHub Actions configurations
-├── docs/                 # Project documentation
-│   ├── architecture/     # System design and architecture docs
-│   ├── integrations/     # Integration guides for each service
-│   └── setup/            # Setup and configuration guides
-├── src/                  # Source code
-│   ├── agents/           # Agent definitions and registry
-│   ├── api/              # API endpoints
-│   ├── core/             # Core system components (database, tools, scheduler)
-│   ├── integrations/     # Service integrations (Gmail, Outlook, etc.)
-│   ├── models/           # Data models
-│   ├── services/         # Business logic services
-│   ├── ui/                # Web UI components
-│   └── utils/             # Utility functions and helpers
-├── config/               # Configuration files
-├── .gitignore             # Git ignore rules
-└── README.md              # This file
-```
+<details>
+<summary><b>📦 Run with Docker</b></summary>
 
-## Technology Stack
+<br />
 
-- **Language**: Python 3.11+
-- **Agent System**: Data-driven multi-agent orchestration (9 agents with 88+ tools)
-- **Browser Automation**: Playwright (Chromium)
-- **APIs**:
-  - Microsoft Graph API (Outlook, OneDrive)
-  - Google APIs (Gmail, Calendar)
-  - Notion API
-  - Nextcloud WebDAV
-  - Brave Search API
-- **Communication**:
-  - WhatsApp via whatsapp-web.js bridge (Node.js)
-  - Web UI (FastAPI backend, vanilla JavaScript frontend)
-- **Task Scheduling**: APScheduler for cron jobs and future tasks
-- **Database**: SQLite (single-user deployment)
-
-## Getting Started
-
-### Prerequisites
-
-- Docker (recommended) or Python 3.11+ with uv
-- Node.js 16+ (for WhatsApp integration)
-- API credentials for integrations (optional):
-  - Google Workspace (Gmail, Calendar)
-  - Microsoft 365 (Outlook, OneDrive)
-  - Notion
-  - Nextcloud instance
-
-### Installation
-
-#### Option 1: Docker (Recommended)
-
-**Pull from GitHub Container Registry:**
 ```bash
-# Pull the latest image
 docker pull ghcr.io/open-assistant-org/open-assistant:latest
 
-# Run the container (development/localhost)
 docker run -d \
   -p 8080:8080 \
   -v $(pwd)/data:/app/data \
@@ -153,135 +115,143 @@ docker run -d \
   --name open-assistant \
   ghcr.io/open-assistant-org/open-assistant:latest
 
-# For production with custom domain, add APP_URL and CORS_ORIGINS:
-# docker run -d \
-#   -p 8080:8080 \
-#   -v $(pwd)/data:/app/data \
-#   -v $(pwd)/logs:/app/logs \
-#   -e ENCRYPTION_KEY="your-key-here" \
-#   -e APP_URL="https://assistant.yourdomain.com" \
-#   -e CORS_ORIGINS="https://assistant.yourdomain.com" \
-#   --name open-assistant \
-#   ghcr.io/open-assistant-org/open-assistant:latest
-
 # Check health
 curl http://localhost:8080/health
 ```
 
-**Or build locally:**
+Generate an encryption key with:
+
 ```bash
-# Clone the repository
-git clone https://github.com/open-assistant-org/open-assistant
-cd open-assistant
-
-# Copy and configure settings
-cp .env.example .env
-# Edit .env with your settings:
-#   - Set ENCRYPTION_KEY (generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
-#   - Set APP_URL (e.g., https://assistant.yourdomain.com for production, or http://localhost:8080 for local)
-#   - Optional: Set CORS_ORIGINS if frontend is on different domain
-
-# Build and run with docker-compose
-docker-compose up -d
-
-# Check logs
-docker-compose logs -f
-
-# Access the application at your APP_URL (default: http://localhost:8080)
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
-#### Option 2: Local Development with uv
+> **Going to production?** Set `APP_URL` to your domain (e.g. `https://assistant.yourdomain.com`) and add `CORS_ORIGINS` with the same value.
+
+</details>
+
+<details>
+<summary><b>🛠️ Build from source with Docker Compose</b></summary>
+
+<br />
 
 ```bash
-# Clone the repository
 git clone https://github.com/open-assistant-org/open-assistant
 cd open-assistant
 
-# Install uv (if not already installed)
+cp .env.example .env
+# Edit .env — at minimum set ENCRYPTION_KEY and APP_URL
+
+docker-compose up -d
+docker-compose logs -f
+```
+
+</details>
+
+<details>
+<summary><b>💻 Local development with uv</b></summary>
+
+<br />
+
+```bash
+git clone https://github.com/open-assistant-org/open-assistant
+cd open-assistant
+
+# Install uv (if you don't have it)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Install dependencies
 uv sync
 
-# Setup configuration
 cp .env.example .env
-# Edit .env with your settings
+# Set ENCRYPTION_KEY in .env (generate one as above)
 
-# Generate encryption key
-python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-# Add the key to .env as ENCRYPTION_KEY
-
-# Install WhatsApp bridge dependencies (if using WhatsApp)
-cd src/integrations/whatsapp/bridge
-npm install
-cd ../../../..
-
-# Run the application (database initializes automatically on first start)
+# Run the app — the database initializes automatically
 uv run python -m src.main
-
-# In a separate terminal, run the WhatsApp bridge (if using WhatsApp)
-cd src/integrations/whatsapp/bridge
-npm start
 ```
 
-### Via WhatsApp
+WhatsApp integration only (optional):
 
-1. Enable WhatsApp integration in the settings UI
-2. Scan the QR code displayed in the settings to link your WhatsApp account
-3. Send messages to the linked WhatsApp number to interact with your assistant
-4. The assistant will respond to incoming messages automatically
+```bash
+cd src/integrations/whatsapp/bridge
+npm install && npm start
+```
 
-### Via Web UI
+</details>
 
-Access the web interface at `http://localhost:8080` to:
-- Manage service connections
-- View conversation history
-- Monitor task execution
-- Configure settings
+### Connect your tools
 
-## Development
+Open **Settings** in the web UI and connect services one by one — Google, Microsoft, Notion, Nextcloud, Brave Search, and more. Each connection expands the tools your agents can use. Every OAuth token and API key is encrypted before it touches disk.
 
-### Development Guidelines
+### Talk to it
 
-**📋 Documentation-First Development**: ALL features must be documented before implementation.
+- **Web UI** — chat, conversation history, artifacts, agent management, monitoring dashboard
+- **WhatsApp** — scan a QR code in Settings, then just message your assistant
+- **Slack** — invite the bot to a channel (Socket Mode works behind firewalls)
 
-**Quick Start**:
-1. Read [`docs/setup/development.md`](docs/setup/development.md) - Development environment setup
-2. Read [`CONTRIBUTING.md`](CONTRIBUTING.md) - Contribution guidelines and workflow
+## 🧠 Architecture
 
-**Workflow**: Documentation → User Approval → Implementation → Verification
+One container, three layers: a coordinator agent understands your request and delegates to specialist agents, which call the tools exposed by the integrations you've connected.
 
-**Tech Stack**:
-- Backend: Python 3.11+, FastAPI, raw sqlite3 (DatabaseManager)
-- Frontend: Vanilla JavaScript, HTML5, CSS3 (no build step)
-- Database: SQLite (single-user deployment)
-- All open-source, single Docker container deployment
+```mermaid
+flowchart LR
+    You["👤 You"] --> Ch["Web UI · WhatsApp · Slack"]
+    Ch --> C["🧭 Coordinator"]
+    C --> A1["🔍 research"]
+    C --> A2["✉️ communication"]
+    C --> A3["✍️ writer"]
+    C --> A4["🌐 browser"]
+    C --> A5["📂 file_handler<br/>+ 5 more…"]
+    A1 & A2 & A3 & A4 & A5 --> T["165+ tools"]
+    T --> I["Gmail · Outlook · Calendar · Notion<br/>Nextcloud · WhatsApp · Slack · MCP …"]
+```
 
-### Versioning
+- **Agents (10 built-in)** — coordinator, research, communication, writer, file_handler, planner, navigator, system, browser, plugin_creator. All editable in the UI; add your own at any time.
+- **Tools (165+)** — mapped to service operations, assigned to agents per your drag-and-drop layout.
+- **Integrations** — enabled independently. Connect Google and you get Gmail + Calendar tools; add Notion and the writer agent learns new tricks.
 
-This project uses tag-based versioning. Releases are tagged with semantic versioning (e.g., `v1.0.0`, `v1.1.0`).
+### Project structure
 
-### Documentation
+```
+open-assistant/
+├── src/
+│   ├── agents/          # Agent definitions & registry
+│   ├── api/             # REST API endpoints
+│   ├── core/            # Database, tools, scheduler, MCP
+│   ├── integrations/    # Gmail, Outlook, Notion, Nextcloud, WhatsApp, Slack, …
+│   ├── models/          # Data models
+│   ├── services/        # Business logic
+│   ├── ui/              # Web UI (vanilla JS — no build step)
+│   └── utils/           # Helpers
+├── docs/                # Architecture, integration & setup guides
+├── tests/               # Test suite
+└── docker-compose.yml
+```
 
-Comprehensive documentation is available in the `docs/` directory:
-- [Integration Guides](docs/integrations/)
-- [Development Setup](docs/setup/development.md)
+### Tech stack
 
-## Security
+**Python 3.11+** · FastAPI · SQLite · Vanilla JS/HTML/CSS frontend · Playwright (Chromium) · APScheduler · single Docker container
 
-- All API credentials are stored securely using environment variables or encrypted configuration
-- OAuth2 flows are used for all service integrations
-- Tokens are refreshed automatically and stored securely
-- See [Configuration Guide](docs/setup/configuration.md) for security best practices
+## 📚 Documentation
 
-## Contributing
+Full docs live at [docs.open-assistant.org](https://docs.open-assistant.org) and in the [`docs/`](docs/) directory:
 
-Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to report issues, suggest features, and submit pull requests.
+- [Install & update guide](docs/setup/install-and-update.md)
+- [Configuration reference](docs/setup/configuration.md)
+- [LLM provider setup](docs/integrations/llm-providers.md) — OpenRouter, Anthropic, Groq, Ollama, vLLM
+- [MCP servers](docs/mcp-servers.md)
+- [Slash commands](docs/commands.md) — `/clear` and friends
+- [Development setup](docs/setup/development.md)
 
-## License
+## 🤝 Contributing
 
-This project is licensed under the [BUSL-1.1 License](LICENSE).
+Contributions are welcome — bug reports, feature ideas, integrations, and docs all count. Read [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow, and [docs/setup/development.md](docs/setup/development.md) to get a dev environment running. The project follows documentation-first development: features are documented before they're implemented.
 
-## Support
+## 🔒 Security
 
-For issues, questions, or contributions, please open an issue in the repository.
+- All credentials are stored encrypted (Fernet) — never in plaintext
+- OAuth2 for every service integration, with automatic token refresh
+- Single-user by design: no multi-tenant surface to attack
+- See the [configuration guide](docs/setup/configuration.md) for security best practices
+
+## 📄 License
+
+Distributed under the [BUSL-1.1 License](LICENSE).
