@@ -61,9 +61,10 @@ Plugins are JSON files that define lightweight REST API integrations. Each plugi
 
 | Field | Type | Description |
 |---|---|---|
-| `type` | `"bearer"` \| `"header"` \| `"basic"` \| `"api_key_with_jwt"` | Auth mechanism. |
+| `type` | `"bearer"` \| `"header"` \| `"basic"` \| `"api_key_with_jwt"` \| `"query"` | Auth mechanism. |
 | `header_name` | string | Required when `type = "header"`. The HTTP header name (e.g. `X-API-Key`). |
 | `fixed_password` | string | Optional, `type = "basic"` only. Hardcodes the password — the user only provides a token/username. Example: Toggl uses `"api_token"`. |
+| `query_param_name` | string | Optional, `type = "query"` only. The query-string parameter name to send the token as (e.g. `"api_key"`). Defaults to `"api_key"`. |
 | `api_key_header` | string | `type = "api_key_with_jwt"` only. **Optional.** Header name for the static API key (e.g. `"X-apikey"`). Omit for pure JWT login flows. |
 | `token_endpoint` | string | `type = "api_key_with_jwt"` only. Path to POST credentials to (default: `"/token"`). |
 | `token_field` | string | `type = "api_key_with_jwt"` only. JSON field in the login response containing the JWT (default: `"access_token"`). |
@@ -74,6 +75,8 @@ Plugins are JSON files that define lightweight REST API integrations. Each plugi
 **`header`** — Sends `{header_name}: {token}`. User provides one secret field (token).
 
 **`basic`** — Sends `Authorization: Basic base64(username:password)`. User provides username + password. If `fixed_password` is set, only a single token field is shown.
+
+**`query`** — Appends `?{query_param_name}={token}` to every request's query string instead of sending a header. User provides one secret field (token). Use this for APIs that reject credentials sent as a header and require the key as a URL parameter (e.g. needing `?api_key=...`). The value is merged with any endpoint-defined query parameters, so it always accompanies the rest of the request.
 
 **`api_key_with_jwt`** — For APIs that use a username + password login to obtain a short-lived JWT. Covers two patterns:
 
@@ -97,7 +100,10 @@ Non-secret values needed to build request URLs (e.g. organisation name, instance
 | `sensitive` | boolean | | If `true`, stored encrypted in credentials instead of settings. Default: `false`. |
 | `placeholder` | string | | Input placeholder text. |
 
-Config field values are automatically substituted into URL paths and `base_url`:
+Config field values are automatically substituted into URL paths and `base_url` — this works
+whether the field is plain (stored in settings) or `"sensitive": true` (stored encrypted in
+credentials). Use a sensitive config field for a secret that an API expects embedded directly in
+the URL path, e.g. `/v1/{api_key}/report`:
 
 ```json
 "base_url": "https://dev.azure.com",
@@ -218,6 +224,61 @@ JSON array — no stringified `"[75205]"` workaround, and no runtime coercion.
   "header_name": "X-API-Key"
 }
 ```
+
+### API key as a query parameter
+
+Some APIs require the API key to be part of the request's query string (or path) rather than
+a header, rejecting a header-based key outright and only accepting e.g. `?api_key=...`:
+
+```json
+{
+  "id": "my_data_api",
+  "display_name": "My Data API",
+  "description": "Analytics connector that authenticates via a query-string API key.",
+  "icon": "🔧",
+  "base_url": "https://api.mydataservice.example.com",
+  "auth": {
+    "type": "query",
+    "query_param_name": "api_key"
+  },
+  "config_fields": [],
+  "endpoints": [
+    {
+      "name": "get_report",
+      "display_name": "Get Report",
+      "description": "Retrieve report data for a date range.",
+      "method": "GET",
+      "path": "/report",
+      "parameters": [
+        {
+          "name": "fields",
+          "in": "query",
+          "type": "string",
+          "description": "Comma-separated list of fields to return (e.g. 'date,spend,clicks').",
+          "required": true
+        },
+        {
+          "name": "date_preset",
+          "in": "query",
+          "type": "string",
+          "description": "Relative date range, e.g. 'last_30d' or 'this_month'.",
+          "required": false
+        }
+      ]
+    }
+  ]
+}
+```
+
+The user provides one secret field (**API Token / Secret** in Settings → Plugins), which is sent
+as `?api_key={token}` on every request — merged with the endpoint's own query parameters, so a
+call to `get_report` ends up as `/report?fields=date,spend&date_preset=last_30d&api_key=...`.
+
+If the target API instead expects the key embedded in the URL *path* (e.g. `/v1/{api_key}/report`)
+rather than the query string, don't use `auth.type = "query"` for that — model the key as a
+required `config_fields` entry with `"sensitive": true` and reference it in `path` or `base_url`
+as `{api_key}` (see [`config_fields` items](#config_fields-items) above); it's stored encrypted
+just like any other credential.
 
 ### Basic auth with fixed password (Toggl-style)
 

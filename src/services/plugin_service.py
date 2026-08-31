@@ -224,9 +224,19 @@ class PluginService(BaseService):
         # Credentials are stored as {"credential_type": ..., "credential_data": {...}, ...}
         creds = raw_creds.get("credential_data", raw_creds)
 
-        # Build auth headers (may perform an async JWT fetch for api_key_with_jwt)
+        # Sensitive config field values (e.g. a secret meant to be interpolated into the
+        # URL path rather than sent as a header) live in credentials, not settings — merge
+        # them in alongside the non-sensitive ones so {field_key} placeholders in base_url
+        # and path resolve either way.
+        url_values: Dict[str, Any] = dict(config_values)
+        for field in defn.config_fields:
+            if field.sensitive and field.key in creds:
+                url_values[field.key] = creds[field.key]
+
+        # Build auth headers/query params (may perform an async JWT fetch for api_key_with_jwt)
         headers: Dict[str, str] = {"Content-Type": "application/json"}
-        headers.update(await self._resolve_auth_headers(plugin_id, defn, creds, defn.base_url))
+        auth_headers, auth_query_params = await self._resolve_auth(plugin_id, defn, creds, defn.base_url)
+        headers.update(auth_headers)
 
         # Resolve base URL (may contain {config_field} placeholders)
         base_url = defn.base_url.rstrip("/")
@@ -235,13 +245,13 @@ class PluginService(BaseService):
             base_url = config_values["site_url"].rstrip("/")
         else:
             try:
-                base_url = base_url.format(**config_values)
+                base_url = base_url.format(**url_values)
             except KeyError:
                 pass  # unresolved placeholders stay as-is
 
-        # Build path params from endpoint parameters + config values
-        path_params: Dict[str, Any] = {**config_values}
-        query_params: Dict[str, Any] = {}
+        # Build path params from endpoint parameters + config values (sensitive included)
+        path_params: Dict[str, Any] = dict(url_values)
+        query_params: Dict[str, Any] = dict(auth_query_params)
         body_params: Dict[str, Any] = {}
         header_params: Dict[str, str] = {}
 
@@ -327,9 +337,8 @@ class PluginService(BaseService):
                 # Token was rejected — evict the stale cache entry and retry once
                 self._jwt_cache.pop(plugin_id, None)
                 retry_headers: Dict[str, str] = {"Content-Type": "application/json"}
-                retry_headers.update(
-                    await self._resolve_auth_headers(plugin_id, defn, creds, defn.base_url)
-                )
+                retry_auth_headers, _ = await self._resolve_auth(plugin_id, defn, creds, defn.base_url)
+                retry_headers.update(retry_auth_headers)
                 if use_ado_patch_content_type:
                     retry_headers["Content-Type"] = "application/json-patch+json"
                 retry_headers.update(header_params)
@@ -357,20 +366,29 @@ class PluginService(BaseService):
     # Auth
     # ------------------------------------------------------------------
 
-    async def _resolve_auth_headers(
+    async def _resolve_auth(
         self,
         plugin_id: str,
         defn: PluginDefinition,
         creds: Dict[str, Any],
         base_url: str,
-    ) -> Dict[str, str]:
-        """Dispatch to the correct auth header builder (sync or async)."""
+    ) -> Tuple[Dict[str, str], Dict[str, str]]:
+        """Dispatch to the correct auth builder (sync or async).
+
+        Returns ``(headers, query_params)`` — most auth types only populate
+        headers; ``type="query"`` (for APIs that require the API key as a
+        query/path parameter rather than a header) only populates
+        query_params.
+        """
         if defn.auth.type == "api_key_with_jwt":
-            return await self._build_api_key_with_jwt_headers(plugin_id, defn.auth, creds, base_url)
-        return self._build_auth_headers(defn.auth, creds)
+            headers = await self._build_api_key_with_jwt_headers(plugin_id, defn.auth, creds, base_url)
+            return headers, {}
+        if defn.auth.type == "query":
+            return {}, self._build_auth_query_params(defn.auth, creds)
+        return self._build_auth_headers(defn.auth, creds), {}
 
     def _build_auth_headers(self, auth: PluginAuth, credentials: Dict[str, Any]) -> Dict[str, str]:
-        """Build HTTP authentication headers for the three simple auth types."""
+        """Build HTTP authentication headers for the three simple header-based auth types."""
         auth_type = auth.type
 
         if auth_type == "bearer":
@@ -395,6 +413,16 @@ class PluginService(BaseService):
             return {"Authorization": f"Basic {encoded}"}
 
         return {}
+
+    def _build_auth_query_params(
+        self, auth: PluginAuth, credentials: Dict[str, Any]
+    ) -> Dict[str, str]:
+        """Build the query-string parameter for type="query" auth (e.g. an api_key param)."""
+        token = credentials.get("token", "")
+        if not token:
+            return {}
+        param_name = auth.query_param_name or "api_key"
+        return {param_name: token}
 
     async def _build_api_key_with_jwt_headers(
         self,
@@ -568,7 +596,7 @@ class PluginService(BaseService):
         cred_data: Dict[str, str] = {}
         auth_type = defn.auth.type
 
-        if auth_type == "bearer" or auth_type == "header":
+        if auth_type in ("bearer", "header", "query"):
             if request.token:
                 cred_data["token"] = request.token
         elif auth_type == "basic":
@@ -702,9 +730,14 @@ class PluginService(BaseService):
                 pass
 
         try:
-            headers = await self._resolve_auth_headers(plugin_id, defn, creds, base_url)
+            headers, query_params = await self._resolve_auth(plugin_id, defn, creds, base_url)
             async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.head(base_url, headers=headers, follow_redirects=True)
+                response = await client.head(
+                    base_url,
+                    headers=headers,
+                    params=query_params or None,
+                    follow_redirects=True,
+                )
             # HEAD returning 4xx may still mean the server is reachable
             if response.status_code < 500:
                 return {"success": True, "message": f"Connected ({response.status_code})"}
@@ -773,6 +806,10 @@ class PluginService(BaseService):
             fields = ["token (API key / Bearer token)"]
         elif auth_type == "header":
             fields = [f"token (sent as {defn.auth.header_name or 'X-API-Key'} header)"]
+        elif auth_type == "query":
+            fields = [
+                f"token (sent as the '{defn.auth.query_param_name or 'api_key'}' query parameter)"
+            ]
         elif auth_type == "basic":
             if defn.auth.fixed_password is not None:
                 fields = ["token (used as username; password is hardcoded)"]

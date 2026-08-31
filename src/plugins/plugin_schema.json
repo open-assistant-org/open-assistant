@@ -39,12 +39,16 @@
       "properties": {
         "type": {
           "type": "string",
-          "enum": ["bearer", "header", "basic", "api_key_with_jwt"],
-          "description": "Authentication mechanism. 'bearer' → Authorization: Bearer {token}. 'header' → {header_name}: {token}. 'basic' → Authorization: Basic base64(username:password). 'api_key_with_jwt' → static {api_key_header} + JWT obtained via POST {token_endpoint}."
+          "enum": ["bearer", "header", "basic", "api_key_with_jwt", "query"],
+          "description": "Authentication mechanism. 'bearer' → Authorization: Bearer {token}. 'header' → {header_name}: {token}. 'basic' → Authorization: Basic base64(username:password). 'api_key_with_jwt' → static {api_key_header} + JWT obtained via POST {token_endpoint}. 'query' → {query_param_name}={token} appended to the query string of every request."
         },
         "header_name": {
           "type": "string",
           "description": "Required when type is 'header'. The HTTP header name to use."
+        },
+        "query_param_name": {
+          "type": "string",
+          "description": "Optional, for type 'query'. The query-string parameter name to send the token as (e.g. 'api_key'). Defaults to 'api_key'."
         },
         "fixed_password": {
           "type": "string",

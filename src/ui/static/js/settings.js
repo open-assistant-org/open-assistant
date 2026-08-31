@@ -2194,12 +2194,13 @@ function createPluginCard(plugin) {
         bearer: 'Bearer Token',
         header: 'API Key Header',
         basic: 'Basic Auth',
-        api_key_with_jwt: 'API Key + JWT'
+        api_key_with_jwt: 'API Key + JWT',
+        query: 'API Key (Query Param)'
     }[plugin.auth_type] || plugin.auth_type;
 
     // Build credential fields based on auth type
     let credentialFields = '';
-    if (plugin.auth_type === 'bearer' || plugin.auth_type === 'header') {
+    if (plugin.auth_type === 'bearer' || plugin.auth_type === 'header' || plugin.auth_type === 'query') {
         credentialFields = `
             <div class="form-group">
                 <label class="form-label">API Token / Secret</label>
@@ -2267,7 +2268,8 @@ function createPluginCard(plugin) {
             </div>`;
     }
 
-    // Build non-sensitive config fields
+    // Build config fields: plain text for non-sensitive, masked password input for sensitive
+    // (e.g. a secret meant to be embedded in the URL path/base_url rather than sent as a header).
     let configFieldsHtml = '';
     for (const field of (plugin.config_fields || [])) {
         if (!field.sensitive) {
@@ -2277,6 +2279,19 @@ function createPluginCard(plugin) {
                     <input type="text" id="plugin-config-${plugin.id}-${field.key}" class="form-input"
                         placeholder="${field.placeholder || ''}"
                         data-config-key="${field.key}">
+                    ${field.description ? `<div class="form-hint">${field.description}</div>` : ''}
+                </div>`;
+        } else {
+            const inputId = `plugin-config-${plugin.id}-${field.key}`;
+            configFieldsHtml += `
+                <div class="form-group">
+                    <label class="form-label">${field.display_name}${field.required ? ' <span style="color:#ff4444">*</span>' : ''}</label>
+                    <div class="input-group">
+                        <input type="password" id="${inputId}" class="form-input masked-input"
+                            placeholder="${field.placeholder || ''}" data-config-key="${field.key}"
+                            value="${plugin.has_credentials ? '***MASKED***' : ''}">
+                        <button type="button" onclick="toggleMasked('${inputId}')" class="btn-icon">👁️</button>
+                    </div>
                     ${field.description ? `<div class="form-hint">${field.description}</div>` : ''}
                 </div>`;
         }
@@ -2382,11 +2397,11 @@ async function savePluginCredentials(pluginId) {
         body.password = passwordInput.value;
     }
 
-    // Collect non-sensitive config fields
+    // Collect config field values (plain + sensitive, skipping unchanged masked secrets)
     const card = document.getElementById(`plugin-card-${pluginId}`);
     if (card) {
         card.querySelectorAll('[data-config-key]').forEach(input => {
-            if (input.value) {
+            if (input.value && input.value !== '***MASKED***') {
                 body.config[input.dataset.configKey] = input.value;
             }
         });

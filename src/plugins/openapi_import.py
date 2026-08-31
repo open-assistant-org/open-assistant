@@ -128,9 +128,11 @@ def _auth(spec: Dict[str, Any], warnings: List[str]) -> Dict[str, Any]:
             return {"type": "bearer"}
         if stype == "apikey":
             location = (scheme.get("in") or "").lower()
-            header_name = scheme.get("name") or "X-API-Key"
+            param_name = scheme.get("name") or "X-API-Key"
             if location == "header":
-                return {"type": "header", "header_name": header_name}
+                return {"type": "header", "header_name": param_name}
+            if location == "query":
+                return {"type": "query", "query_param_name": param_name}
             warnings.append(
                 f"Security scheme {name!r} sends an API key in '{location}', which the plugin "
                 "schema can't represent as auth; defaulted to bearer — adjust manually."
