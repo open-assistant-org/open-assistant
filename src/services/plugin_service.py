@@ -235,7 +235,9 @@ class PluginService(BaseService):
 
         # Build auth headers/query params (may perform an async JWT fetch for api_key_with_jwt)
         headers: Dict[str, str] = {"Content-Type": "application/json"}
-        auth_headers, auth_query_params = await self._resolve_auth(plugin_id, defn, creds, defn.base_url)
+        auth_headers, auth_query_params = await self._resolve_auth(
+            plugin_id, defn, creds, defn.base_url
+        )
         headers.update(auth_headers)
 
         # Resolve base URL (may contain {config_field} placeholders)
@@ -337,7 +339,9 @@ class PluginService(BaseService):
                 # Token was rejected — evict the stale cache entry and retry once
                 self._jwt_cache.pop(plugin_id, None)
                 retry_headers: Dict[str, str] = {"Content-Type": "application/json"}
-                retry_auth_headers, _ = await self._resolve_auth(plugin_id, defn, creds, defn.base_url)
+                retry_auth_headers, _ = await self._resolve_auth(
+                    plugin_id, defn, creds, defn.base_url
+                )
                 retry_headers.update(retry_auth_headers)
                 if use_ado_patch_content_type:
                     retry_headers["Content-Type"] = "application/json-patch+json"
@@ -381,7 +385,9 @@ class PluginService(BaseService):
         query_params.
         """
         if defn.auth.type == "api_key_with_jwt":
-            headers = await self._build_api_key_with_jwt_headers(plugin_id, defn.auth, creds, base_url)
+            headers = await self._build_api_key_with_jwt_headers(
+                plugin_id, defn.auth, creds, base_url
+            )
             return headers, {}
         if defn.auth.type == "query":
             return {}, self._build_auth_query_params(defn.auth, creds)

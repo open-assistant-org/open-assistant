@@ -625,9 +625,7 @@ class TestExecuteEndpointSensitiveConfigInPath:
                 "description": "API key embedded in the URL path.",
                 "base_url": "https://api.example.com",
                 "auth": {"type": "header", "header_name": "X-Unused"},
-                "config_fields": [
-                    {"key": "api_key", "display_name": "API Key", "sensitive": True}
-                ],
+                "config_fields": [{"key": "api_key", "display_name": "API Key", "sensitive": True}],
                 "endpoints": [
                     {
                         "name": "get_report",
