@@ -178,6 +178,57 @@ class TestBuildAuthHeaders:
 
 
 # ---------------------------------------------------------------------------
+# _build_auth_query_params / _resolve_auth — type="query"
+# ---------------------------------------------------------------------------
+
+
+class TestBuildAuthQueryParams:
+    def setup_method(self):
+        self.svc = _make_plugin_service()
+
+    def test_default_param_name(self):
+        auth = PluginAuth(type="query")
+        qp = self.svc._build_auth_query_params(auth, {"token": "tok123"})
+        assert qp == {"api_key": "tok123"}
+
+    def test_custom_param_name(self):
+        auth = PluginAuth(type="query", query_param_name="apiKey")
+        qp = self.svc._build_auth_query_params(auth, {"token": "tok123"})
+        assert qp == {"apiKey": "tok123"}
+
+    def test_missing_token_yields_no_param(self):
+        auth = PluginAuth(type="query")
+        qp = self.svc._build_auth_query_params(auth, {})
+        assert qp == {}
+
+    @pytest.mark.asyncio
+    async def test_resolve_auth_dispatches_to_query(self):
+        defn = PluginDefinition.model_validate(
+            {
+                "id": "query_auth_svc",
+                "display_name": "Query Auth Service",
+                "description": "Test query-param-auth plugin.",
+                "base_url": "https://api.example.com",
+                "auth": {"type": "query", "query_param_name": "api_key"},
+                "endpoints": [
+                    {
+                        "name": "get_facebook_data",
+                        "display_name": "Get Facebook Data",
+                        "description": "Get data.",
+                        "method": "GET",
+                        "path": "/facebook",
+                    }
+                ],
+            }
+        )
+        headers, query_params = await self.svc._resolve_auth(
+            "query_auth_svc", defn, {"token": "secret"}, defn.base_url
+        )
+        assert headers == {}
+        assert query_params == {"api_key": "secret"}
+
+
+# ---------------------------------------------------------------------------
 # _get_jwt — caching and fetching
 # ---------------------------------------------------------------------------
 
@@ -407,8 +458,8 @@ class TestExecuteEndpoint401Retry:
             patch("src.services.plugin_service.httpx.AsyncClient", return_value=mock_client),
             patch.object(
                 self.svc,
-                "_resolve_auth_headers",
-                AsyncMock(side_effect=[headers_v1, headers_v2]),
+                "_resolve_auth",
+                AsyncMock(side_effect=[(headers_v1, {}), (headers_v2, {})]),
             ),
         ):
             result = await self.svc._execute_endpoint("my_service", "list_items", {})
@@ -441,8 +492,8 @@ class TestExecuteEndpoint401Retry:
             patch("src.services.plugin_service.httpx.AsyncClient", return_value=mock_client),
             patch.object(
                 self.svc,
-                "_resolve_auth_headers",
-                AsyncMock(return_value={"Authorization": "Access_Token tok"}),
+                "_resolve_auth",
+                AsyncMock(return_value=({"Authorization": "Access_Token tok"}, {})),
             ),
         ):
             with pytest.raises(real_httpx.HTTPStatusError):
@@ -490,3 +541,124 @@ class TestExecuteEndpoint401Retry:
                 await self.svc._execute_endpoint("bearer_svc", "get_data", {})
 
         assert mock_client.request.call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# _execute_endpoint — end-to-end wiring for type="query" auth
+# ---------------------------------------------------------------------------
+
+
+class TestExecuteEndpointQueryAuth:
+    def setup_method(self):
+        self.svc = _make_plugin_service()
+        self.defn = PluginDefinition.model_validate(
+            {
+                "id": "query_auth_svc",
+                "display_name": "Query Auth Service",
+                "description": "Test query-param-auth plugin.",
+                "base_url": "https://api.example.com",
+                "auth": {"type": "query", "query_param_name": "api_key"},
+                "endpoints": [
+                    {
+                        "name": "get_facebook_data",
+                        "display_name": "Get Facebook Data",
+                        "description": "Get data.",
+                        "method": "GET",
+                        "path": "/facebook",
+                        "parameters": [
+                            {
+                                "name": "fields",
+                                "in": "query",
+                                "type": "string",
+                                "description": "Fields to return.",
+                                "required": True,
+                            }
+                        ],
+                    }
+                ],
+            }
+        )
+        self.svc._definitions["query_auth_svc"] = self.defn
+        self.svc.credentials_repo.get.side_effect = lambda key: (
+            {"credential_data": {"token": "SECRET123"}} if key == "plugin_query_auth_svc" else None
+        )
+
+    @pytest.mark.asyncio
+    async def test_api_key_sent_as_query_param_not_header(self):
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.content = b'{"data": []}'
+        resp.json.return_value = {"data": []}
+        resp.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.request = AsyncMock(return_value=resp)
+
+        with patch("src.services.plugin_service.httpx.AsyncClient", return_value=mock_client):
+            result = await self.svc._execute_endpoint(
+                "query_auth_svc", "get_facebook_data", {"fields": "date,spend"}
+            )
+
+        assert result == {"data": []}
+        _, call_kwargs = mock_client.request.call_args
+        # The secret must travel as a query param, merged with the endpoint's own params.
+        assert call_kwargs["params"] == {"api_key": "SECRET123", "fields": "date,spend"}
+        # ...and must NOT leak into the headers.
+        assert "api_key" not in call_kwargs["headers"]
+        assert "SECRET123" not in call_kwargs["headers"].values()
+
+
+# ---------------------------------------------------------------------------
+# _execute_endpoint — sensitive config_fields substitute into path/base_url
+# ---------------------------------------------------------------------------
+
+
+class TestExecuteEndpointSensitiveConfigInPath:
+    def setup_method(self):
+        self.svc = _make_plugin_service()
+        self.defn = PluginDefinition.model_validate(
+            {
+                "id": "path_key_svc",
+                "display_name": "Path Key Service",
+                "description": "API key embedded in the URL path.",
+                "base_url": "https://api.example.com",
+                "auth": {"type": "header", "header_name": "X-Unused"},
+                "config_fields": [{"key": "api_key", "display_name": "API Key", "sensitive": True}],
+                "endpoints": [
+                    {
+                        "name": "get_report",
+                        "display_name": "Get Report",
+                        "description": "Get report.",
+                        "method": "GET",
+                        "path": "/v1/{api_key}/report",
+                    }
+                ],
+            }
+        )
+        self.svc._definitions["path_key_svc"] = self.defn
+        self.svc.credentials_repo.get.side_effect = lambda key: (
+            {"credential_data": {"token": "unused", "api_key": "PATHSECRET"}}
+            if key == "plugin_path_key_svc"
+            else None
+        )
+
+    @pytest.mark.asyncio
+    async def test_sensitive_config_field_substituted_into_path(self):
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.content = b"{}"
+        resp.json.return_value = {}
+        resp.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.request = AsyncMock(return_value=resp)
+
+        with patch("src.services.plugin_service.httpx.AsyncClient", return_value=mock_client):
+            await self.svc._execute_endpoint("path_key_svc", "get_report", {})
+
+        _, call_kwargs = mock_client.request.call_args
+        assert call_kwargs["url"] == "https://api.example.com/v1/PATHSECRET/report"

@@ -86,11 +86,14 @@ class PluginEndpoint(BaseModel):
 class PluginAuth(BaseModel):
     """Authentication configuration for a plugin."""
 
-    type: Literal["bearer", "header", "basic", "api_key_with_jwt"]
+    type: Literal["bearer", "header", "basic", "api_key_with_jwt", "query"]
     # For type="header": the HTTP header name to send the token as
     header_name: Optional[str] = None
     # For type="basic" with a fixed password (e.g. Toggl uses "api_token" as password)
     fixed_password: Optional[str] = None
+    # For type="query": the query-string parameter name to send the token as
+    # (e.g. "api_key"). Defaults to "api_key" when unset.
+    query_param_name: Optional[str] = None
     # For type="api_key_with_jwt": static API key header (e.g. "X-apikey")
     api_key_header: Optional[str] = None
     # For type="api_key_with_jwt": path to POST credentials to (e.g. "/token")
