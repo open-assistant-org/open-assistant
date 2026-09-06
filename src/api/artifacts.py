@@ -243,7 +243,8 @@ async def unlock_artifact(
     if not verify_secret(body.passphrase, stored):
         return JSONResponse({"success": False}, status_code=401)
 
-    cookie_path = str(PurePosixPath(request.url.path).parent) + "/"
+    prefix = request.headers.get("x-forwarded-prefix", "").rstrip("/")
+    cookie_path = f"{prefix}{PurePosixPath(request.url.path).parent}"
 
     response = JSONResponse({"success": True})
     response.set_cookie(
