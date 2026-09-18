@@ -129,6 +129,9 @@ class SettingDefinitionResponse(BaseModel):
     placeholder: Optional[str] = Field(None, description="Placeholder text")
     help_url: Optional[str] = Field(None, description="Documentation URL")
     ui_widget: str = Field(..., description="UI widget type")
+    depends_on: Optional[Dict[str, Any]] = Field(
+        None, description="Only show this setting when the referenced setting equals a value"
+    )
 
 
 class SettingWithDefinitionResponse(BaseModel):

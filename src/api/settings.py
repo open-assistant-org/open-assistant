@@ -237,6 +237,7 @@ async def get_category_settings(
                     placeholder=definition.placeholder,
                     help_url=definition.help_url,
                     ui_widget=definition.ui_widget,
+                    depends_on=definition.depends_on,
                 ),
             )
         )
@@ -280,6 +281,7 @@ async def get_definitions() -> SettingDefinitionsResponse:
                 placeholder=definition.placeholder,
                 help_url=definition.help_url,
                 ui_widget=definition.ui_widget,
+                depends_on=definition.depends_on,
             )
         )
 

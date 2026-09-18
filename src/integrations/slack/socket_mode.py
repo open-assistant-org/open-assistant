@@ -246,11 +246,31 @@ class SlackSocketModeHandler:
         if settings_truthy(self.settings_service.get_setting("slack.mention_only")):
             bot_user_id = self._get_bot_user_id()
             mention_token = f"<@{bot_user_id}>" if bot_user_id else None
-            if not mention_token or mention_token not in text:
-                logger.debug(
-                    f"[Slack Socket Mode] mention_only: ignoring non-mention from {user_id}"
-                )
+            is_mention = bool(mention_token and mention_token in text)
+
+            if not is_mention:
+                if (
+                    settings_truthy(
+                        self.settings_service.get_setting("slack.thread_ingest_all_messages")
+                    )
+                    and thread_ts
+                    and self.event_loop
+                    and not self.event_loop.is_closed()
+                ):
+                    logger.debug(
+                        f"[Slack Socket Mode] mention_only: ingesting non-mention thread "
+                        f"message from {user_id} without replying"
+                    )
+                    asyncio.run_coroutine_threadsafe(
+                        self._ingest_thread_message(channel_id, user_id, text, thread_ts),
+                        self.event_loop,
+                    )
+                else:
+                    logger.debug(
+                        f"[Slack Socket Mode] mention_only: ignoring non-mention from {user_id}"
+                    )
                 return
+
             text = text.replace(mention_token, "").strip()
 
         # Process message in background using the main event loop
@@ -272,6 +292,60 @@ class SlackSocketModeHandler:
             self.event_loop,
         )
 
+    def _resolve_thread_scope_ts(self, thread_ts: Optional[str]) -> Optional[str]:
+        """
+        Resolve the thread timestamp that should scope a conversation, or
+        None to keep the existing channel-wide conversation.
+
+        A thread is scoped when "Reply in Thread" is on, or when "Reply
+        Only on Mention" and "Ingest All Thread Messages" are both on —
+        the latter needs thread-scoped conversations too, since it records
+        non-mention messages under the same identity the eventual
+        @mention reply will use.
+        """
+        thread_replies = settings_truthy(self.settings_service.get_setting("slack.thread_replies"))
+        thread_ingest_all = settings_truthy(
+            self.settings_service.get_setting("slack.mention_only")
+        ) and settings_truthy(self.settings_service.get_setting("slack.thread_ingest_all_messages"))
+        use_thread_scope = thread_replies or thread_ingest_all
+        return thread_ts if (use_thread_scope and thread_ts) else None
+
+    async def _ingest_thread_message(
+        self, channel_id: str, user_id: str, text: str, thread_ts: str
+    ) -> None:
+        """
+        Passively record a non-mention thread message into that thread's
+        conversation history, without triggering a reply.
+
+        Lets other thread participants — including other bots/agents —
+        post in the same Slack thread and have their messages available as
+        context the next time this bot is @mentioned there.
+        """
+        if not text or not text.strip():
+            return
+
+        reply_thread_ts = self._resolve_thread_scope_ts(thread_ts)
+        if not reply_thread_ts:
+            return
+        contact_identifier = f"{channel_id}:{reply_thread_ts}"
+
+        try:
+            await self.message_handler.ingest_passive_message(
+                message=text,
+                channel="slack",
+                contact_identifier=contact_identifier,
+                metadata={
+                    "source": "slack_socket_mode",
+                    "channel": channel_id,
+                    "user": user_id,
+                    "thread_ts": reply_thread_ts,
+                    "passive": True,
+                },
+                max_idle_seconds=SLACK_NEW_CHAT_IDLE_SECONDS,
+            )
+        except Exception as e:
+            logger.error(f"[Slack Socket Mode] Failed to ingest thread message: {e}", exc_info=True)
+
     async def _process_and_reply(
         self,
         channel_id: str,
@@ -292,8 +366,7 @@ class SlackSocketModeHandler:
         # the thread instead of being shared channel-wide.  With it off the
         # identifier stays the bare channel_id, preserving the existing
         # channel-wide conversation behaviour.
-        thread_replies = settings_truthy(self.settings_service.get_setting("slack.thread_replies"))
-        reply_thread_ts = thread_ts if (thread_replies and thread_ts) else None
+        reply_thread_ts = self._resolve_thread_scope_ts(thread_ts)
         contact_identifier = f"{channel_id}:{reply_thread_ts}" if reply_thread_ts else channel_id
 
         try:

@@ -492,6 +492,44 @@ class MessageHandler:
             "stuck_detected": result["stuck_detected"],
         }
 
+    async def ingest_passive_message(
+        self,
+        message: str,
+        channel: str,
+        contact_identifier: str,
+        metadata: Optional[Dict[str, Any]] = None,
+        max_idle_seconds: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """
+        Record a message into a conversation's history without running the
+        LLM loop or producing a reply.
+
+        Used for passively ingesting messages a channel chose not to
+        respond to (e.g. Slack thread messages that don't @mention the bot
+        when "Reply Only on Mention" is on) so they still become available
+        as context the next time that conversation is actually handled —
+        letting other participants, including other agents, post in the
+        same thread.
+
+        Returns:
+            Dictionary with the conversation_id the message was recorded into.
+        """
+        conversation = self.conversation_service.create_or_get_conversation(
+            channel=channel,
+            contact_identifier=contact_identifier,
+            max_idle_seconds=max_idle_seconds,
+        )
+        conv_id = conversation["conversation_id"]
+
+        self.conversation_service.add_message(
+            conversation_id=conv_id,
+            role="user",
+            content=message,
+            metadata=metadata,
+        )
+
+        return {"conversation_id": conv_id}
+
     def _load_context(self, conversation_id: str) -> Dict[str, Any]:
         """
         Load conversation context including memory, soul, and recent messages.
