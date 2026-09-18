@@ -6,7 +6,20 @@
     box-sizing: border-box;
 }
 
+/*
+ * Theming: :root holds the dark palette (the default and the app's
+ * original identity, unchanged from before theming existed) and
+ * [data-theme="light"] overrides just the colour tokens for light mode.
+ * <html data-theme="..."> is set by static/js/theme.js before first paint,
+ * resolving the user's light/dark/system preference - see that file.
+ *
+ * New colours belong here as tokens, in BOTH blocks, never as literals in
+ * component CSS - that's what keeps light/dark in sync. See --color-info/
+ * --color-neutral below for the shape to follow.
+ */
 :root {
+    color-scheme: dark;
+
     /* Colors - Primary (Green Theme) */
     --color-primary: #00ff00;
     --color-primary-dark: #00aa00;
@@ -14,7 +27,7 @@
     /* Dimmed from the original 0.3 alpha — every hover/focus "glow" in the
        app derives from this one token, so a sleeker, less neon feel is a
        one-line change here rather than editing each box-shadow. */
-    --color-primary-glow: rgba(0, 255, 0, 0.14);
+    --color-primary-glow: color-mix(in srgb, var(--color-primary) 14%, transparent);
 
     /* Colors - Backgrounds */
     --color-bg: #0f0f0f;
@@ -24,6 +37,10 @@
     /* Colors - Text */
     --color-text: #ffffff;
     --color-text-muted: #cccccc;
+    /* Two more steps of de-emphasis below --color-text-muted, used by the
+       monitoring log stream (module name, raw payload, timestamp). */
+    --color-text-dim: #888888;
+    --color-text-dimmer: #555555;
     /* Text color for content sitting on a solid --color-primary/--color-success/
        --color-warning fill (near-black, not pure white/black) — the single
        source of truth for "readable text on a bright accent background".
@@ -32,6 +49,9 @@
 
     /* Colors - Borders */
     --color-border: #2e2e2e;
+    /* Higher-contrast border for things that need to read as an edge even
+       in dark mode (inputs, control outlines) rather than a subtle divider. */
+    --color-border-strong: #4a4a4a;
     --color-border-accent: #00ff00;
 
     /* Colors - Semantic */
@@ -41,6 +61,58 @@
     --color-warning-bg: #333300;
     --color-error: #ff0000;
     --color-error-bg: #330000;
+    --color-info: #8eb4e3;
+    --color-info-bg: #16222e;
+    --color-neutral: #a0aec0;
+    --color-neutral-bg: #23272c;
+
+    /* Dedicated to the .status-* pills (distinct from --color-success/etc,
+       which are also the brand accent in dark mode) - kept as their own
+       tokens so these badges don't inherit the neon accent. */
+    --color-status-success: #48bb78;
+    --color-status-warning: #ed8936;
+    --color-status-error: #f56565;
+    --color-status-neutral: #a0aec0;
+
+    /* Second accent hue (recipe-graph LLM-step badges, distinct from
+       --color-info's blue) - not derived from the brand green. */
+    --color-accent-purple: #c99bff;
+    --color-accent-purple-bg: rgba(168, 85, 247, 0.16);
+
+    /* Monitoring log-stream level colours (LOG_LEVEL_COLORS in
+       monitoring.html previously hardcoded these; kept pixel-identical
+       here, with light equivalents added below). */
+    --log-debug: #666666;
+    --log-info: #8eb4e3;
+    --log-warning: #f5a623;
+    --log-error: #e05252;
+    --log-critical: #ff2020;
+
+    /* Status badges (managed-instance job/service state) and inline
+       alert banners - each kept as its own bg/fg pair so dark mode's
+       existing tuned values stay pixel-identical. */
+    --badge-running-bg: #14532d;
+    --badge-running-fg: #4ade80;
+    --badge-provisioning-bg: #1e3a5f;
+    --badge-provisioning-fg: #60a5fa;
+    --badge-pending-bg: #3b3000;
+    --badge-pending-fg: #fbbf24;
+    --badge-error-bg: #4c1d1d;
+    --badge-error-fg: #f87171;
+    --badge-stopped-bg: #2d2d2d;
+    --badge-stopped-fg: #9ca3af;
+    --badge-deleted-bg: #2d2d2d;
+    --badge-deleted-fg: #6b7280;
+
+    --alert-error-bg: #4c1d1d;
+    --alert-error-border: #7f1d1d;
+    --alert-error-fg: #fca5a5;
+    --alert-success-bg: #14532d;
+    --alert-success-border: #166534;
+    --alert-success-fg: #86efac;
+    --alert-info-bg: #1e3a5f;
+    --alert-info-border: #1d4ed8;
+    --alert-info-fg: #93c5fd;
 
     /* Shadows */
     --shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
@@ -57,7 +129,9 @@
     --background-color: var(--color-bg);
     --background-darker: var(--color-bg-darker);
     --card-background: var(--color-surface);
-    --text-primary: var(--color-primary);
+    /* Fixed: this used to alias --color-primary (green) despite the name
+       suggesting body text - see the light-theme addition below. */
+    --text-primary: var(--color-text);
     --text-secondary: var(--color-text);
     --text-muted: var(--color-text-muted);
     --border-color: var(--color-border);
@@ -68,6 +142,101 @@
     --success-background: var(--color-success-bg);
     --warning-color: var(--color-warning);
     --warning-background: var(--color-warning-bg);
+}
+
+/*
+ * Light theme. Keep the green brand identity, darkened for AA contrast on
+ * white/near-white (raw #00ff00 is ~1.4:1 on white - unusable). Only colour
+ * tokens are overridden; --radius/--shadow shape stays from :root.
+ *
+ * Approx. contrast ratios (computed, WCAG AA text threshold is 4.5:1,
+ * 3:1 for large text/UI components):
+ *   --color-text on --color-surface:        17.8:1
+ *   --color-text-muted on --color-surface:   6.3:1
+ *   --color-primary on --color-surface:      5.3:1
+ *   --color-on-primary on --color-primary:   5.3:1
+ *   --color-success on --color-surface:      5.4:1
+ *   --color-warning on --color-surface:      5.0:1
+ *   --color-error on --color-surface:        6.5:1
+ *   --color-border-strong on --color-surface:4.1:1 (decorative --color-border is not AA and isn't used for content boundaries)
+ */
+:root[data-theme="light"] {
+    color-scheme: light;
+
+    --color-primary: #0a7d0a;
+    --color-primary-dark: #065f06;
+    --color-primary-gradient: linear-gradient(135deg, #0a7d0a 0%, #065f06 100%);
+    --color-primary-glow: rgba(10, 125, 10, 0.12);
+
+    /* --color-surface is the CARD background and --color-bg-darker is the
+       INPUT/<pre> well - cards sit above the page, inputs sit below it. */
+    --color-bg: #f4f6f8;
+    --color-bg-darker: #eef1f4;
+    --color-surface: #ffffff;
+
+    --color-text: #16181a;
+    --color-text-muted: #5a6169;
+    --color-text-dim: #9aa1a9;
+    --color-text-dimmer: #b0b6bd;
+    --color-on-primary: #ffffff;
+
+    --color-border: #d8dcdf;
+    --color-border-strong: #767f88;
+    --color-border-accent: #0a7d0a;
+
+    /* Success/warning are kept distinct from primary here (they're
+       identical to primary in dark) so status colour isn't confused with
+       the brand accent once accent is no longer neon. */
+    --color-success: #147a3d;
+    --color-success-bg: #e6f4ea;
+    --color-warning: #9a6400;
+    --color-warning-bg: #fdf3e3;
+    --color-error: #b3261e;
+    --color-error-bg: #fdecea;
+    --color-info: #1a5fb4;
+    --color-info-bg: #e8f0fb;
+    --color-neutral: #5a6169;
+    --color-neutral-bg: #eef1f4;
+
+    --color-status-success: #147a3d;
+    --color-status-warning: #9a6400;
+    --color-status-error: #b3261e;
+    --color-status-neutral: #5a6169;
+
+    --color-accent-purple: #8a2be2;
+    --color-accent-purple-bg: rgba(138, 43, 226, 0.12);
+
+    --log-debug: #767f88;
+    --log-info: #1a5fb4;
+    --log-warning: #9a6400;
+    --log-error: #c8382e;
+    --log-critical: #a3170f;
+
+    --badge-running-bg: #e6f4ea;
+    --badge-running-fg: #147a3d;
+    --badge-provisioning-bg: #e8f0fb;
+    --badge-provisioning-fg: #1a5fb4;
+    --badge-pending-bg: #fdf3e3;
+    --badge-pending-fg: #9a6400;
+    --badge-error-bg: #fdecea;
+    --badge-error-fg: #b3261e;
+    --badge-stopped-bg: #eef1f4;
+    --badge-stopped-fg: #5a6169;
+    --badge-deleted-bg: #eef1f4;
+    --badge-deleted-fg: #767f88;
+
+    --alert-error-bg: #fdecea;
+    --alert-error-border: #f2b8b5;
+    --alert-error-fg: #8c1d18;
+    --alert-success-bg: #e6f4ea;
+    --alert-success-border: #a6d8b8;
+    --alert-success-fg: #0f5c2e;
+    --alert-info-bg: #e8f0fb;
+    --alert-info-border: #a9c6ec;
+    --alert-info-fg: #144a8c;
+
+    --shadow: 0 4px 12px rgba(16, 24, 40, 0.08);
+    --shadow-hover: 0 8px 24px rgba(16, 24, 40, 0.14);
 }
 
 /* height:100% (not min-height:100vh) on both html and body gives every
@@ -165,14 +334,14 @@ body {
 }
 
 .nav-link:hover {
-    background: rgba(0, 255, 0, 0.06);
+    background: color-mix(in srgb, var(--color-primary) 6%, transparent);
     color: var(--color-primary);
 }
 
 .nav-link.active {
-    background: rgba(0, 255, 0, 0.12);
+    background: color-mix(in srgb, var(--color-primary) 12%, transparent);
     color: var(--color-primary);
-    border: 1px solid rgba(0, 255, 0, 0.35);
+    border: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
     box-shadow: 0 0 6px var(--color-primary-glow);
 }
 
@@ -185,7 +354,7 @@ body {
    not a destination. Desktop hides it: installing "an app" to a home
    screen is a mobile affordance, not a desktop one. */
 .pwa-install-btn {
-    background: rgba(0, 255, 0, 0.1);
+    background: color-mix(in srgb, var(--color-primary) 10%, transparent);
     border: 1px solid var(--color-primary);
     color: var(--color-primary);
 }
@@ -207,7 +376,7 @@ body {
 }
 
 .navbar-collapse-btn:hover {
-    background: rgba(0, 255, 0, 0.06);
+    background: color-mix(in srgb, var(--color-primary) 6%, transparent);
     color: var(--color-primary);
 }
 
@@ -293,13 +462,13 @@ body {
 }
 
 .btn-primary {
-    background: rgba(0, 255, 0, 0.1);
+    background: color-mix(in srgb, var(--color-primary) 10%, transparent);
     color: var(--color-primary);
     border: 1px solid var(--color-primary);
 }
 
 .btn-primary:hover:not(:disabled) {
-    background: rgba(0, 255, 0, 0.2);
+    background: color-mix(in srgb, var(--color-primary) 20%, transparent);
     box-shadow: 0 0 12px var(--color-primary-glow), 0 4px 12px rgba(0, 0, 0, 0.5);
     transform: translateY(-2px);
 }
@@ -317,25 +486,25 @@ body {
 }
 
 .btn-danger {
-    background: rgba(255, 0, 0, 0.1);
+    background: color-mix(in srgb, var(--color-error) 10%, transparent);
     color: var(--color-error);
     border: 1px solid var(--color-error);
 }
 
 .btn-danger:hover:not(:disabled) {
-    background: rgba(255, 0, 0, 0.2);
-    box-shadow: 0 0 12px rgba(255, 0, 0, 0.15);
+    background: color-mix(in srgb, var(--color-error) 20%, transparent);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--color-error) 15%, transparent);
 }
 
 .btn-success {
-    background: rgba(0, 255, 0, 0.1);
+    background: color-mix(in srgb, var(--color-primary) 10%, transparent);
     color: var(--color-success);
     border: 1px solid var(--color-success);
 }
 
 .btn-success:hover:not(:disabled) {
-    background: rgba(0, 255, 0, 0.2);
-    box-shadow: 0 0 12px rgba(0, 255, 0, 0.15);
+    background: color-mix(in srgb, var(--color-primary) 20%, transparent);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--color-primary) 15%, transparent);
 }
 
 /* Canonical *solid*-fill button (as opposed to the outline .btn-primary
@@ -635,7 +804,7 @@ body {
 }
 
 .sidebar-close-btn:hover {
-    background: rgba(0, 255, 0, 0.1);
+    background: color-mix(in srgb, var(--color-primary) 10%, transparent);
     color: var(--color-primary);
 }
 
@@ -726,7 +895,7 @@ body {
 
 .conversation-card.active {
     border-left-color: var(--color-primary);
-    background: rgba(0, 255, 0, 0.1);
+    background: color-mix(in srgb, var(--color-primary) 10%, transparent);
     box-shadow: 0 0 4px var(--color-primary-glow);
 }
 
@@ -794,7 +963,7 @@ body {
 }
 
 .conversation-message-count {
-    background: rgba(0, 255, 0, 0.2);
+    background: color-mix(in srgb, var(--color-primary) 20%, transparent);
     color: var(--color-primary);
     padding: 2px 6px;
     border-radius: 10px;
@@ -840,7 +1009,7 @@ body {
 .sidebar-toggle-btn:hover {
     color: var(--color-primary);
     border-color: var(--color-primary);
-    background: rgba(0, 255, 0, 0.08);
+    background: color-mix(in srgb, var(--color-primary) 8%, transparent);
 }
 
 .chat-header-left {
@@ -935,7 +1104,7 @@ body {
     /* Sleeker active state for a vertical rail: a left accent bar instead
        of the horizontal nav's full box outline + glow. */
     .nav-link.active {
-        background: rgba(0, 255, 0, 0.1);
+        background: color-mix(in srgb, var(--color-primary) 10%, transparent);
         border: none;
         border-left: 3px solid var(--color-primary);
         box-shadow: none;
@@ -1098,6 +1267,13 @@ body {
     margin-left: 4px;
 }
 
+/* Small inline status text (save confirmations, auth state, etc.) -
+   was inline style="color:#hex" in settings.js, which didn't react to
+   the theme switch. */
+.text-success { color: var(--color-success); }
+.text-error { color: var(--color-error); }
+.text-warning { color: var(--color-warning); }
+
 /* Setting Source Badges */
 .setting-source {
     font-size: 0.75rem;
@@ -1108,18 +1284,18 @@ body {
 }
 
 .source-db {
-    background: #e3f2fd;
-    color: #1976d2;
+    background: var(--color-info-bg);
+    color: var(--color-info);
 }
 
 .source-env {
-    background: #fff3e0;
-    color: #f57c00;
+    background: var(--color-warning-bg);
+    color: var(--color-warning);
 }
 
 .source-default {
-    background: #f5f5f5;
-    color: #616161;
+    background: var(--color-neutral-bg);
+    color: var(--color-neutral);
 }
 
 /* Form Hints and Help Links */
@@ -1201,7 +1377,7 @@ body {
 
 .toggle-input:checked + .toggle-slider {
     background: var(--color-success);
-    box-shadow: 0 0 8px rgba(0, 255, 0, 0.3);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--color-primary) 30%, transparent);
 }
 
 .toggle-input:checked + .toggle-slider::before {
@@ -1288,7 +1464,7 @@ body {
 }
 
 .integration-header:hover {
-    background: rgba(0, 255, 0, 0.05);
+    background: color-mix(in srgb, var(--color-primary) 5%, transparent);
 }
 
 .integration-title {
@@ -1331,7 +1507,7 @@ body {
 .integration-help {
     margin-bottom: 16px;
     padding: 12px;
-    background: rgba(0, 255, 0, 0.05);
+    background: color-mix(in srgb, var(--color-primary) 5%, transparent);
     border-left: 3px solid var(--color-primary);
     border-radius: 6px;
     color: var(--color-text);
@@ -1353,7 +1529,7 @@ body {
 .tools-section {
     margin: 1.5rem 0;
     padding: 1rem;
-    background: rgba(0, 255, 0, 0.03);
+    background: color-mix(in srgb, var(--color-primary) 3%, transparent);
     border: 1px solid var(--color-border);
     border-radius: 8px;
 }
@@ -1390,7 +1566,7 @@ body {
 }
 
 .tool-item:hover {
-    background: rgba(0, 255, 0, 0.05);
+    background: color-mix(in srgb, var(--color-primary) 5%, transparent);
     border-color: var(--color-primary);
 }
 
@@ -1460,7 +1636,7 @@ body {
 }
 
 .section-header:hover {
-    background: rgba(0, 255, 0, 0.05);
+    background: color-mix(in srgb, var(--color-primary) 5%, transparent);
 }
 
 .section-header .section-title {
@@ -1565,7 +1741,7 @@ body {
 }
 
 .modal-close:hover {
-    background: rgba(0, 255, 0, 0.1);
+    background: color-mix(in srgb, var(--color-primary) 10%, transparent);
     color: var(--color-primary);
 }
 
@@ -1603,7 +1779,7 @@ body {
 
 /* Info Box */
 .info-box {
-    background: rgba(0, 255, 0, 0.05);
+    background: color-mix(in srgb, var(--color-primary) 5%, transparent);
     border-left: 4px solid var(--color-primary);
     padding: 16px;
     border-radius: 4px;
@@ -1641,7 +1817,7 @@ body {
 }
 
 .audit-table thead {
-    background: rgba(0, 255, 0, 0.05);
+    background: color-mix(in srgb, var(--color-primary) 5%, transparent);
 }
 
 .audit-table th,
@@ -1657,12 +1833,12 @@ body {
 }
 
 .audit-table tbody tr:hover {
-    background: rgba(0, 255, 0, 0.05);
+    background: color-mix(in srgb, var(--color-primary) 5%, transparent);
 }
 
 /* Migration Results */
 .migration-results {
-    background: rgba(0, 255, 0, 0.05);
+    background: color-mix(in srgb, var(--color-primary) 5%, transparent);
     border-radius: 8px;
     padding: 16px;
     margin-top: 16px;
@@ -1686,7 +1862,7 @@ body {
 }
 
 .migration-results .info {
-    background: rgba(0, 255, 0, 0.1);
+    background: color-mix(in srgb, var(--color-primary) 10%, transparent);
     color: var(--color-primary);
     padding: 12px;
     border-radius: 4px;
@@ -1792,27 +1968,27 @@ body {
 }
 
 .status-success {
-    background: rgba(72, 187, 120, 0.2);
-    color: #48bb78;
-    border: 1px solid #48bb78;
+    background: color-mix(in srgb, var(--color-status-success) 20%, transparent);
+    color: var(--color-status-success);
+    border: 1px solid var(--color-status-success);
 }
 
 .status-warning {
-    background: rgba(237, 137, 54, 0.2);
-    color: #ed8936;
-    border: 1px solid #ed8936;
+    background: color-mix(in srgb, var(--color-status-warning) 20%, transparent);
+    color: var(--color-status-warning);
+    border: 1px solid var(--color-status-warning);
 }
 
 .status-error {
-    background: rgba(245, 101, 101, 0.2);
-    color: #f56565;
-    border: 1px solid #f56565;
+    background: color-mix(in srgb, var(--color-status-error) 20%, transparent);
+    color: var(--color-status-error);
+    border: 1px solid var(--color-status-error);
 }
 
 .status-info {
-    background: rgba(160, 174, 192, 0.2);
-    color: #a0aec0;
-    border: 1px solid #a0aec0;
+    background: color-mix(in srgb, var(--color-status-neutral) 20%, transparent);
+    color: var(--color-status-neutral);
+    border: 1px solid var(--color-status-neutral);
 }
 
 /* ============================================================================
@@ -1834,13 +2010,13 @@ body {
 }
 
 .integration-actions .btn-secondary {
-    background: rgba(160, 174, 192, 0.1);
-    border: 1px solid rgba(160, 174, 192, 0.3);
+    background: color-mix(in srgb, var(--color-neutral) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-neutral) 30%, transparent);
     color: var(--color-text);
 }
 
 .integration-actions .btn-secondary:hover {
-    background: rgba(160, 174, 192, 0.2);
+    background: color-mix(in srgb, var(--color-neutral) 20%, transparent);
 }
 
 /* ============================================================================
@@ -1890,7 +2066,7 @@ body {
     color: var(--color-primary);
     letter-spacing: 0.5rem;
     padding: 1rem;
-    background: rgba(0, 255, 0, 0.1);
+    background: color-mix(in srgb, var(--color-primary) 10%, transparent);
     border-radius: 0.5rem;
     margin: 1rem 0;
     user-select: all;
@@ -1899,7 +2075,7 @@ body {
 }
 
 .device-code:hover {
-    background: rgba(0, 255, 0, 0.15);
+    background: color-mix(in srgb, var(--color-primary) 15%, transparent);
 }
 
 .verification-url {
@@ -1924,13 +2100,13 @@ body {
 .open-url-btn:hover {
     background: var(--color-primary-dark);
     transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0, 255, 0, 0.3);
+    box-shadow: 0 4px 8px color-mix(in srgb, var(--color-primary) 30%, transparent);
 }
 
 .device-code-modal .btn-secondary {
     margin-top: 1rem;
-    background: rgba(160, 174, 192, 0.1);
-    border: 1px solid rgba(160, 174, 192, 0.3);
+    background: color-mix(in srgb, var(--color-neutral) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-neutral) 30%, transparent);
 }
 
 /* WhatsApp QR Code Container */
@@ -2066,7 +2242,7 @@ body {
 .meta-item {
     font-size: 0.8rem;
     color: var(--color-text-muted);
-    background: rgba(0, 255, 0, 0.1);
+    background: color-mix(in srgb, var(--color-primary) 10%, transparent);
     padding: 0.25rem 0.5rem;
     border-radius: 4px;
 }
@@ -2106,7 +2282,7 @@ body {
 }
 
 .btn-priority {
-    background: rgba(0, 255, 0, 0.1);
+    background: color-mix(in srgb, var(--color-primary) 10%, transparent);
     border: 1px solid var(--color-border);
     color: var(--color-text-muted);
     font-size: 0.65rem;
@@ -2118,7 +2294,7 @@ body {
 }
 
 .btn-priority:hover:not(:disabled) {
-    background: rgba(0, 255, 0, 0.2);
+    background: color-mix(in srgb, var(--color-primary) 20%, transparent);
     border-color: var(--color-primary);
     color: var(--color-primary);
 }
@@ -2209,7 +2385,7 @@ body {
     align-items: center;
     gap: 0.35rem;
     padding: 0.35rem 0.75rem;
-    background: rgba(0, 255, 0, 0.08);
+    background: color-mix(in srgb, var(--color-primary) 8%, transparent);
     border: 1px solid var(--color-border);
     border-radius: 999px;
     font-size: 0.85rem;
@@ -2221,7 +2397,7 @@ body {
 }
 
 .tool-chip:hover {
-    background: rgba(0, 255, 0, 0.15);
+    background: color-mix(in srgb, var(--color-primary) 15%, transparent);
     border-color: var(--color-primary);
     box-shadow: 0 0 6px var(--color-primary-glow);
 }
@@ -2260,7 +2436,7 @@ body {
 }
 
 .tool-item:hover {
-    background: rgba(0, 255, 0, 0.05);
+    background: color-mix(in srgb, var(--color-primary) 5%, transparent);
 }
 
 .tool-item input[type="checkbox"] {
@@ -2299,12 +2475,12 @@ body {
     font-weight: 500;
 }
 
-.badge-running { background: #14532d; color: #4ade80; }
-.badge-provisioning { background: #1e3a5f; color: #60a5fa; }
-.badge-pending { background: #3b3000; color: #fbbf24; }
-.badge-error { background: #4c1d1d; color: #f87171; }
-.badge-stopped { background: #2d2d2d; color: #9ca3af; }
-.badge-deleted { background: #2d2d2d; color: #6b7280; }
+.badge-running { background: var(--badge-running-bg); color: var(--badge-running-fg); }
+.badge-provisioning { background: var(--badge-provisioning-bg); color: var(--badge-provisioning-fg); }
+.badge-pending { background: var(--badge-pending-bg); color: var(--badge-pending-fg); }
+.badge-error { background: var(--badge-error-bg); color: var(--badge-error-fg); }
+.badge-stopped { background: var(--badge-stopped-bg); color: var(--badge-stopped-fg); }
+.badge-deleted { background: var(--badge-deleted-bg); color: var(--badge-deleted-fg); }
 
 .status-dot {
     width: 7px;
@@ -2459,19 +2635,19 @@ body {
 }
 
 .alert-error {
-    background: #4c1d1d;
-    border-color: #7f1d1d;
-    color: #fca5a5;
+    background: var(--alert-error-bg);
+    border-color: var(--alert-error-border);
+    color: var(--alert-error-fg);
 }
 
 .alert-success {
-    background: #14532d;
-    border-color: #166534;
-    color: #86efac;
+    background: var(--alert-success-bg);
+    border-color: var(--alert-success-border);
+    color: var(--alert-success-fg);
 }
 
 .alert-info {
-    background: #1e3a5f;
-    border-color: #1d4ed8;
-    color: #93c5fd;
+    background: var(--alert-info-bg);
+    border-color: var(--alert-info-border);
+    color: var(--alert-info-fg);
 }

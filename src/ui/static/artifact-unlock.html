@@ -12,6 +12,11 @@
          references here. -->
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%2300ff00'/%3E%3C/svg%3E">
     <style>
+        /* This page is anonymous and self-contained (see the comment above),
+           so it can't load theme.js or common.css. It follows the OS
+           preference directly via prefers-color-scheme instead of the
+           app-wide light/dark/system setting - there is no signed-in user
+           here to have a preference for. Dark values below are unchanged. */
         :root {
             --bg: #0a0a0a;
             --card: #141414;
@@ -20,6 +25,23 @@
             --text: #e5e5e5;
             --muted: #8a8a8a;
             --error: #ff5555;
+            --input-bg: #0d0d0d;
+            --on-primary: #0a0a0a;
+            color-scheme: dark;
+        }
+        @media (prefers-color-scheme: light) {
+            :root {
+                --bg: #f4f6f8;
+                --card: #ffffff;
+                --border: #d8dcdf;
+                --primary: #0a7d0a;
+                --text: #16181a;
+                --muted: #5a6169;
+                --error: #b3261e;
+                --input-bg: #eef1f4;
+                --on-primary: #ffffff;
+                color-scheme: light;
+            }
         }
         * { box-sizing: border-box; }
         body {
@@ -63,7 +85,7 @@
             padding: 12px 14px;
             border: 1px solid var(--border);
             border-radius: 8px;
-            background: #0d0d0d;
+            background: var(--input-bg);
             color: var(--text);
             font-size: 1rem;
             margin-bottom: 14px;
@@ -78,7 +100,7 @@
             border: none;
             border-radius: 8px;
             background: var(--primary);
-            color: #0a0a0a;
+            color: var(--on-primary);
             font-size: 1rem;
             font-weight: 600;
             cursor: pointer;

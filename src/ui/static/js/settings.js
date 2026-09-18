@@ -49,6 +49,7 @@ async function initializeSettings() {
         hideManagedTabs();
 
         // Load categories that are always visible
+        await loadCategory('appearance');
         await loadCategory('logging');
         await loadCategory('memory');
         await loadCategory('web_ui');
@@ -112,8 +113,8 @@ function hideManagedTabs() {
         return;
     }
 
-    // Hide LLM and Application tabs in managed mode (Advanced is always visible)
-    const tabsToHide = ['llm', 'application'];
+    // Hide the LLM tab entirely in managed mode (Advanced is always visible).
+    const tabsToHide = ['llm'];
     tabsToHide.forEach(tabName => {
         const tab = document.querySelector(`.tab[data-tab="${tabName}"]`);
         if (tab) {
@@ -122,6 +123,22 @@ function hideManagedTabs() {
         const tabContent = document.getElementById(`${tabName}-tab`);
         if (tabContent) {
             tabContent.style.display = 'none';
+        }
+    });
+
+    // The Application tab itself stays visible in managed mode, but only its
+    // server-config sections are server-managed - hide those, not the tab.
+    // Appearance is a per-browser/per-user preference, so it stays reachable.
+    const sectionsToHide = [
+        'section-application-general',
+        'section-logging',
+        'section-memory',
+        'section-web-ui'
+    ];
+    sectionsToHide.forEach(sectionId => {
+        const section = document.getElementById(sectionId);
+        if (section) {
+            section.style.display = 'none';
         }
     });
 }
@@ -215,7 +232,13 @@ async function loadCategory(category) {
         settingsState.categories[category] = response.settings;
 
         // Render settings based on category
-        if (category === 'application') {
+        if (category === 'appearance') {
+            // Appearance category (theme). Rendered separately from the
+            // rest of the Application tab so it stays visible/editable in
+            // managed mode - see hideManagedTabs().
+            document.getElementById('appearance-settings').innerHTML = renderSettingsFields(response.settings);
+            bindAppearanceControls(response.settings);
+        } else if (category === 'application') {
             // Application category contains general application settings
             document.getElementById('application-general-settings').innerHTML = renderSettingsFields(response.settings);
         } else if (category === 'logging') {
@@ -238,6 +261,33 @@ async function loadCategory(category) {
     } catch (error) {
         console.error(`Failed to load ${category} settings:`, error);
         toast.error(`Failed to load ${category} settings`);
+    }
+}
+
+// The theme picker applies instantly (no waiting for "Save Application
+// Settings"), and reconciles with whatever the DB says is current - so a
+// theme chosen on one device is picked up here on another. If the user
+// picks a theme and navigates away without saving, the next reconcile call
+// (next time this category loads) reverts the local/visual choice back to
+// the last saved DB value; that's expected, not a bug.
+function bindAppearanceControls(settings) {
+    const themeSetting = settings.find(s => s.definition.key === 'appearance.theme');
+    if (!themeSetting || !window.theme) {
+        return;
+    }
+
+    // The DB value is the source of truth - if it differs from what's
+    // currently applied (e.g. localStorage was stale, or this is a new
+    // browser), apply it now.
+    if (themeSetting.value !== window.theme.get()) {
+        window.theme.set(themeSetting.value);
+    }
+
+    const select = document.getElementById('appearance.theme');
+    if (select) {
+        select.addEventListener('change', () => {
+            window.theme.set(select.value);
+        });
     }
 }
 
@@ -376,10 +426,11 @@ function renderNumberInput(def, value) {
 
 function renderSelect(def, value) {
     const options = def.options || [];
+    const labels = def.option_labels || [];
     return `
         <select id="${def.key}" class="form-select" ${def.is_required ? 'required' : ''}>
-            ${options.map(opt => `
-                <option value="${opt}" ${value === opt ? 'selected' : ''}>${opt}</option>
+            ${options.map((opt, i) => `
+                <option value="${opt}" ${value === opt ? 'selected' : ''}>${labels[i] || opt}</option>
             `).join('')}
         </select>
     `;
@@ -540,7 +591,7 @@ async function saveCategories(categories, label) {
 // The Application tab renders the application, logging, memory and web_ui
 // categories together under one Save button.
 async function saveApplicationSettings() {
-    return saveCategories(['application', 'logging', 'memory', 'web_ui'], 'Application');
+    return saveCategories(['appearance', 'application', 'logging', 'memory', 'web_ui'], 'Application');
 }
 
 // ============================================================================
@@ -1638,8 +1689,8 @@ function createMcpAgentCard(agent, index, total) {
     const oauthAuthorized = srv.oauth_authorized === true;
     const oauthStatusHtml = authType === 'oauth2'
         ? (oauthAuthorized
-            ? '<span class="meta-item" style="color:#4caf50;">✓ Authorized</span>'
-            : '<span class="meta-item" style="color:#ff9800;">⚠ Not authorized</span>')
+            ? '<span class="meta-item text-success">✓ Authorized</span>'
+            : '<span class="meta-item text-warning">⚠ Not authorized</span>')
         : '';
 
     const footerButtons = authType === 'oauth2'
@@ -2275,7 +2326,7 @@ function createPluginCard(plugin) {
         if (!field.sensitive) {
             configFieldsHtml += `
                 <div class="form-group">
-                    <label class="form-label">${field.display_name}${field.required ? ' <span style="color:#ff4444">*</span>' : ''}</label>
+                    <label class="form-label">${field.display_name}${field.required ? ' <span class="text-error">*</span>' : ''}</label>
                     <input type="text" id="plugin-config-${plugin.id}-${field.key}" class="form-input"
                         placeholder="${field.placeholder || ''}"
                         data-config-key="${field.key}">
@@ -2285,7 +2336,7 @@ function createPluginCard(plugin) {
             const inputId = `plugin-config-${plugin.id}-${field.key}`;
             configFieldsHtml += `
                 <div class="form-group">
-                    <label class="form-label">${field.display_name}${field.required ? ' <span style="color:#ff4444">*</span>' : ''}</label>
+                    <label class="form-label">${field.display_name}${field.required ? ' <span class="text-error">*</span>' : ''}</label>
                     <div class="input-group">
                         <input type="password" id="${inputId}" class="form-input masked-input"
                             placeholder="${field.placeholder || ''}" data-config-key="${field.key}"
@@ -2410,13 +2461,13 @@ async function savePluginCredentials(pluginId) {
     try {
         await api.put(`/api/plugins/${pluginId}/credentials`, body);
         if (statusEl) {
-            statusEl.innerHTML = '<span style="color:#00cc66;">✓ Saved</span>';
+            statusEl.innerHTML = '<span class="text-success">✓ Saved</span>';
             setTimeout(() => { statusEl.innerHTML = ''; }, 3000);
         }
         toast.success('Plugin credentials saved');
     } catch (error) {
         console.error('Failed to save plugin credentials:', error);
-        if (statusEl) statusEl.innerHTML = '<span style="color:#ff4444;">✗ Save failed</span>';
+        if (statusEl) statusEl.innerHTML = '<span class="text-error">✗ Save failed</span>';
         toast.error('Failed to save credentials');
     }
 }
@@ -2428,15 +2479,15 @@ async function testPluginConnection(pluginId) {
     try {
         const result = await api.get(`/api/plugins/${pluginId}/test`);
         if (result.success) {
-            if (statusEl) statusEl.innerHTML = `<span style="color:#00cc66;">✓ ${result.message}</span>`;
+            if (statusEl) statusEl.innerHTML = `<span class="text-success">✓ ${result.message}</span>`;
             toast.success('Connection successful');
         } else {
-            if (statusEl) statusEl.innerHTML = `<span style="color:#ff4444;">✗ ${result.message}</span>`;
+            if (statusEl) statusEl.innerHTML = `<span class="text-error">✗ ${result.message}</span>`;
             toast.error(`Connection failed: ${result.message}`);
         }
     } catch (error) {
         console.error('Plugin test failed:', error);
-        if (statusEl) statusEl.innerHTML = '<span style="color:#ff4444;">✗ Test failed</span>';
+        if (statusEl) statusEl.innerHTML = '<span class="text-error">✗ Test failed</span>';
         toast.error('Connection test failed');
     }
 }

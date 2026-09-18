@@ -84,6 +84,15 @@ uv run pytest --cov=src
 Tooling configuration (line length, lint rules, test settings) lives in
 [`pyproject.toml`](pyproject.toml).
 
+### Web UI colors
+
+The web UI (`src/ui/static/`) supports light, dark, and system themes via
+CSS custom properties defined in `src/ui/static/css/common.css` (`:root`
+for dark, `:root[data-theme="light"]` for light). When adding UI, use an
+existing `var(--color-*)` token rather than a hardcoded hex/rgb value; if
+no token fits, add one to *both* blocks so it works in both themes. See the
+comment at the top of `common.css` for the full rationale.
+
 ## Submitting a Pull Request
 
 1. Push your branch to your fork and open a pull request against `main`.

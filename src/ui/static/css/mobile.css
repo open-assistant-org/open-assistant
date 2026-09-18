@@ -155,7 +155,7 @@ body.is-pwa {
 }
 
 .navbar-hamburger:hover {
-    background: rgba(0, 255, 0, 0.1);
+    background: color-mix(in srgb, var(--color-primary) 10%, transparent);
 }
 
 .navbar-hamburger span {
@@ -462,10 +462,10 @@ body.is-pwa {
 
 @keyframes pulse {
     0%, 100% {
-        box-shadow: 0 0 0 0 rgba(0, 255, 0, 0.4);
+        box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-primary) 40%, transparent);
     }
     50% {
-        box-shadow: 0 0 0 4px rgba(0, 255, 0, 0);
+        box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-primary) 0%, transparent);
     }
 }
 

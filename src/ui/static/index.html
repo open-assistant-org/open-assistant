@@ -37,6 +37,7 @@
     <link rel="apple-touch-icon" sizes="512x512" href="/static/icons/icon-512x512.png">
 
     <!-- Stylesheets -->
+    <script src="/static/js/theme.js"></script>
     <link rel="stylesheet" href="/static/css/common.css">
     <link rel="stylesheet" href="/static/css/mobile.css">
     <style>
@@ -70,7 +71,7 @@
         .chat-header-title {
             font-size: 1.05rem;
             font-weight: 600;
-            color: var(--text-primary);
+            color: var(--color-text);
         }
 
         .chat-header-actions {
@@ -98,7 +99,7 @@
         #newConversationBtn:hover {
             color: var(--primary-color);
             border-color: var(--primary-color);
-            background: rgba(0, 255, 0, 0.08);
+            background: color-mix(in srgb, var(--color-primary) 8%, transparent);
         }
 
         .chat-messages {
@@ -129,9 +130,9 @@
         }
 
         .message.user .message-content {
-            background: rgba(0, 255, 0, 0.1);
-            color: var(--text-primary);
-            border: 1px solid rgba(0, 255, 0, 0.25);
+            background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+            color: var(--color-text);
+            border: 1px solid color-mix(in srgb, var(--color-primary) 25%, transparent);
         }
 
         .message.assistant .message-content {
@@ -172,12 +173,12 @@
         #messageInput:focus {
             border-color: var(--primary-color);
             box-shadow: 0 0 8px var(--primary-glow);
-            color: var(--text-primary);
+            color: var(--color-text);
         }
 
         #sendButton {
             padding: 10px 22px;
-            background: rgba(0, 255, 0, 0.1);
+            background: color-mix(in srgb, var(--color-primary) 10%, transparent);
             color: var(--primary-color);
             border: 1px solid var(--primary-color);
             border-radius: 24px;
@@ -188,7 +189,7 @@
         }
 
         #sendButton:hover:not(:disabled) {
-            background: rgba(0, 255, 0, 0.2);
+            background: color-mix(in srgb, var(--color-primary) 20%, transparent);
             transform: translateY(-2px);
             box-shadow: 0 0 12px var(--primary-glow);
         }
@@ -259,23 +260,23 @@
             align-items: flex-start;
             gap: 8px;
             padding: 6px 10px;
-            border-left: 3px solid var(--border-color, #d1d5db);
-            background: var(--surface-color, rgba(0,0,0,0.03));
+            border-left: 3px solid var(--border-color);
+            background: color-mix(in srgb, var(--color-text) 3%, transparent);
             border-radius: 0 6px 6px 0;
             font-size: 0.82rem;
             transition: border-color 0.3s ease;
         }
 
         .tool-call-card.running {
-            border-color: #3b82f6;
+            border-color: var(--color-info);
         }
 
         .tool-call-card.done {
-            border-color: #22c55e;
+            border-color: var(--color-success);
         }
 
         .tool-call-card.failed {
-            border-color: #ef4444;
+            border-color: var(--color-error);
         }
 
         .tool-call-icon {
@@ -292,12 +293,12 @@
         .tool-call-name {
             font-family: monospace;
             font-weight: 600;
-            color: var(--text-primary, #111827);
+            color: var(--color-text);
             word-break: break-all;
         }
 
         .tool-call-args {
-            color: var(--text-muted, #6b7280);
+            color: var(--text-muted);
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -306,7 +307,7 @@
 
         .tool-call-status {
             flex-shrink: 0;
-            color: var(--text-muted, #6b7280);
+            color: var(--text-muted);
             font-size: 0.78rem;
         }
 
@@ -318,8 +319,8 @@
             display: inline-block;
             width: 10px;
             height: 10px;
-            border: 2px solid #d1d5db;
-            border-top-color: #3b82f6;
+            border: 2px solid var(--color-border);
+            border-top-color: var(--color-info);
             border-radius: 50%;
             animation: spin 0.7s linear infinite;
             vertical-align: middle;
@@ -342,7 +343,7 @@
             margin: 0.75em 0 0.3em;
             font-weight: 700;
             line-height: 1.3;
-            color: var(--text-primary);
+            color: var(--color-text);
         }
 
         .message.assistant .message-content h1 { font-size: 1.35em; border-bottom: 1px solid var(--border-color); padding-bottom: 0.2em; }
@@ -356,7 +357,7 @@
 
         .message.assistant .message-content strong {
             font-weight: 700;
-            color: var(--text-primary);
+            color: var(--color-text);
         }
 
         .message.assistant .message-content em {
@@ -365,8 +366,8 @@
 
         .message.assistant .message-content code {
             font-family: 'Courier New', Courier, monospace;
-            background: rgba(0, 255, 0, 0.08);
-            border: 1px solid rgba(0, 255, 0, 0.2);
+            background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+            border: 1px solid color-mix(in srgb, var(--color-primary) 20%, transparent);
             padding: 0.1em 0.35em;
             border-radius: 3px;
             font-size: 0.88em;
@@ -426,9 +427,9 @@
         }
 
         .message.assistant .message-content th {
-            background: rgba(0, 255, 0, 0.08);
+            background: color-mix(in srgb, var(--color-primary) 8%, transparent);
             font-weight: 600;
-            color: var(--text-primary);
+            color: var(--color-text);
         }
 
         .message.assistant .message-content tr:nth-child(even) td {
@@ -440,7 +441,7 @@
             margin: 0.5em 0;
             padding: 0.3em 0 0.3em 1em;
             color: var(--text-secondary);
-            background: rgba(0, 255, 0, 0.04);
+            background: color-mix(in srgb, var(--color-primary) 4%, transparent);
             border-radius: 0 4px 4px 0;
         }
 
@@ -489,7 +490,7 @@
 
         .attach-btn:hover:not(:disabled) {
             color: var(--primary-color);
-            background: rgba(0, 255, 0, 0.08);
+            background: color-mix(in srgb, var(--color-primary) 8%, transparent);
         }
 
         .attach-btn:disabled {
@@ -514,7 +515,7 @@
             display: flex;
             align-items: center;
             gap: 5px;
-            background: rgba(0, 255, 0, 0.1);
+            background: color-mix(in srgb, var(--color-primary) 10%, transparent);
             border: 1px solid var(--primary-color);
             border-radius: 14px;
             padding: 3px 10px 3px 8px;
@@ -567,9 +568,9 @@
         /* ── Cancel button ──────────────────────────────────────── */
         .cancel-btn {
             padding: 10px 18px;
-            background: rgba(239, 68, 68, 0.1);
-            color: #ef4444;
-            border: 1px solid #ef4444;
+            background: color-mix(in srgb, var(--color-error) 10%, transparent);
+            color: var(--color-error);
+            border: 1px solid var(--color-error);
             border-radius: 24px;
             font-size: 0.9rem;
             font-weight: 600;
@@ -630,7 +631,7 @@
         .modal-title {
             font-size: 1.15rem;
             font-weight: 700;
-            color: var(--text-primary);
+            color: var(--color-text);
             margin-bottom: 8px;
         }
 
@@ -660,14 +661,14 @@
 
         .modal-btn-secondary:hover {
             background: var(--background-color);
-            color: var(--text-primary);
+            color: var(--color-text);
         }
 
         .modal-btn-danger {
             padding: 9px 18px;
-            background: rgba(239, 68, 68, 0.12);
-            color: #ef4444;
-            border: 1px solid #ef4444;
+            background: color-mix(in srgb, var(--color-error) 12%, transparent);
+            color: var(--color-error);
+            border: 1px solid var(--color-error);
             border-radius: 8px;
             font-size: 0.9rem;
             font-weight: 600;

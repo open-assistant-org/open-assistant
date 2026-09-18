@@ -9,7 +9,10 @@
 
 // v4: components.js nav links now carry the INSTANCE_BASE_PATH prefix
 // (managed instances navigated to /settings etc. instead of /i/{slug}/settings).
-const CACHE_VERSION = 'v4';
+// v5: light/dark/system theme support - common.css now carries a
+// [data-theme="light"] override block and a new static/js/theme.js
+// resolves the theme pre-paint. Bump forces stale clients to fetch both.
+const CACHE_VERSION = 'v5';
 const CACHE_NAME = `personal-assistant-${CACHE_VERSION}`;
 
 // Derive base path from the SW's own registration scope.
@@ -23,6 +26,7 @@ const STATIC_ASSETS = [
     BASE_PATH + '/settings',
     BASE_PATH + '/monitoring',
     BASE_PATH + '/static/css/common.css',
+    BASE_PATH + '/static/js/theme.js',
     BASE_PATH + '/static/js/common.js',
     BASE_PATH + '/static/js/chat.js',
     BASE_PATH + '/static/js/settings.js',

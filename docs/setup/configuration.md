@@ -31,6 +31,7 @@ These settings are always read from environment variables and cannot be changed 
 #### Managed Settings (Database)
 All other settings can be migrated to and managed from the database:
 - Application settings (logging, environment)
+- Appearance (Settings → Application → Appearance: light/dark/system theme)
 - LLM configuration
 - Integration settings (Gmail, Outlook, Notion, etc.)
 - Web UI settings
