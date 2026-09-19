@@ -86,6 +86,9 @@ class SettingDefinition:
 
     # UI behavior
     ui_widget: str = "text"  # Widget type: text, number, select, toggle, slider, textarea, masked
+    depends_on: Optional[Dict[str, Any]] = None  # {"key": <setting key>, "value": <required value>}
+    # UI only shows this setting when the referenced setting currently equals
+    # `value`. Purely presentational — the backend does not enforce it.
 
 
 # ============================================================================
@@ -816,6 +819,18 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
         env_var_name="SLACK_MENTION_ONLY",
         display_order=8,
         ui_widget="toggle",
+    ),
+    "slack.thread_ingest_all_messages": SettingDefinition(
+        key="slack.thread_ingest_all_messages",
+        display_name="Ingest All Thread Messages",
+        description="When enabled, every message posted in a thread — not just @mentions — is recorded as context for that thread's conversation, even though only @mentions get a reply. This lets other participants, including other agents, post in the same thread and have their messages available whenever Open Assistant is next @mentioned there.",
+        value_type=SettingValueType.BOOL,
+        category=ConfigCategory.SLACK,
+        default_value=False,
+        env_var_name="SLACK_THREAD_INGEST_ALL_MESSAGES",
+        display_order=9,
+        ui_widget="toggle",
+        depends_on={"key": "slack.mention_only", "value": True},
     ),
     # ========================================================================
     # BRAVE SEARCH INTEGRATION

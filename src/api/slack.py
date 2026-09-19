@@ -27,6 +27,9 @@ from src.utils.logger import get_logger
 logger = get_logger(__name__)
 router = APIRouter(prefix="/api/slack", tags=["slack"])
 
+# Conversation idle timeout for Slack (5 hours)
+SLACK_NEW_CHAT_IDLE_SECONDS = 5 * 60 * 60
+
 # Ensure tools are registered
 initialize_all_tools()
 
@@ -182,15 +185,6 @@ async def handle_slack_event(
         logger.info(f"Ignoring message from non-allowed Slack user {user_id}")
         return {"ok": True, "message": "Ignored (not allowed)"}
 
-    # Filter to mentions only if configured
-    if settings_truthy(settings_service.get_setting("slack.mention_only")):
-        bot_user_id = slack_service.get_bot_user_id()
-        mention_token = f"<@{bot_user_id}>" if bot_user_id else None
-        if not mention_token or mention_token not in text:
-            logger.debug(f"mention_only: ignoring non-mention from {user_id}")
-            return {"ok": True}
-        text = text.replace(mention_token, "").strip()
-
     # Resolve the thread scope once, up front, so the reply target, the
     # progress-notification target and the conversation identity can never
     # disagree — and so the error handler below can still reply in-thread.
@@ -199,10 +193,49 @@ async def handle_slack_event(
     # contact identifier carries the thread_ts, so context stays inside the
     # thread instead of being shared channel-wide.  With it off the identifier
     # stays the bare channel_id, preserving the existing channel-wide
-    # conversation behaviour.
+    # conversation behaviour. "Reply Only on Mention" + "Ingest All Thread
+    # Messages" also needs thread scoping, since it records non-mention
+    # messages under the same identity the eventual @mention reply will use.
     thread_replies = settings_truthy(settings_service.get_setting("slack.thread_replies"))
-    reply_thread_ts = thread_ts if (thread_replies and thread_ts) else None
+    mention_only = settings_truthy(settings_service.get_setting("slack.mention_only"))
+    thread_ingest_all = mention_only and settings_truthy(
+        settings_service.get_setting("slack.thread_ingest_all_messages")
+    )
+    use_thread_scope = thread_replies or thread_ingest_all
+    reply_thread_ts = thread_ts if (use_thread_scope and thread_ts) else None
     contact_identifier = f"{channel_id}:{reply_thread_ts}" if reply_thread_ts else channel_id
+
+    # Filter to mentions only if configured
+    if mention_only:
+        bot_user_id = slack_service.get_bot_user_id()
+        mention_token = f"<@{bot_user_id}>" if bot_user_id else None
+        is_mention = bool(mention_token and mention_token in text)
+
+        if not is_mention:
+            if thread_ingest_all and reply_thread_ts and text.strip():
+                logger.debug(
+                    f"mention_only: ingesting non-mention thread message from "
+                    f"{user_id} without replying"
+                )
+                background_tasks.add_task(
+                    message_handler.ingest_passive_message,
+                    message=text,
+                    channel="slack",
+                    contact_identifier=contact_identifier,
+                    metadata={
+                        "source": "slack_event",
+                        "channel": channel_id,
+                        "user": user_id,
+                        "thread_ts": reply_thread_ts,
+                        "passive": True,
+                    },
+                    max_idle_seconds=SLACK_NEW_CHAT_IDLE_SECONDS,
+                )
+            else:
+                logger.debug(f"mention_only: ignoring non-mention from {user_id}")
+            return {"ok": True}
+
+        text = text.replace(mention_token, "").strip()
 
     async def process_and_reply():
         try:
@@ -211,8 +244,6 @@ async def handle_slack_event(
             if not api_key:
                 logger.error("LLM API key not configured, cannot reply to Slack message")
                 return
-
-            SLACK_NEW_CHAT_IDLE_SECONDS = 5 * 60 * 60  # 5 hours
 
             # -----------------------------------------------------------------
             # Media processing

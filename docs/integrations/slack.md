@@ -260,6 +260,26 @@ Humans talk freely in the channel; the bot only enters when called by name and a
 
 > **Note:** The conversation history shown to the AI contains only @mention messages and bot replies — human-to-human chatter is never included in the context.
 
+### Ingest All Thread Messages
+
+Only shown, and only takes effect, when **Reply Only on Mention** is enabled. Off by default.
+
+Normally, non-mention messages are silently dropped — they never reach the AI's context. With this enabled, every message posted in a thread is instead recorded into that thread's conversation history, even though the bot still only *replies* when @mentioned. The next time it is @mentioned in that thread, it sees the full conversation that happened in between.
+
+This is what lets other participants — including other bots or agents — post in the same thread and have their messages available as context, so several agents can collaborate in one Slack thread:
+
+```
+#general
+Human:      "@OpenAssistant kick off the deploy checklist"
+            └─ [thread] OpenAssistant: "Checklist started: …"
+Other Bot:  "step 1 done ✅"          (not a mention — recorded, not replied to)
+Other Bot:  "step 2 done ✅"          (not a mention — recorded, not replied to)
+Human:      "@OpenAssistant what's left?"
+            └─ [thread] OpenAssistant: "Steps 1–2 are done, step 3 (rollback plan) is still open."
+```
+
+Enabling this implicitly scopes the conversation to the thread — the same way **Reply in Thread** does — so ingested messages and @mention replies always share one conversation identity.
+
 ## How Messages Work
 
 ### Socket Mode (Default)

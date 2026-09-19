@@ -322,8 +322,19 @@ function renderField(setting) {
             fieldHtml = renderTextInput(def, value);
     }
 
+    // Some fields only make sense when another setting currently has a
+    // given value (e.g. "Ingest All Thread Messages" only applies when
+    // "Reply Only on Mention" is on). Such fields carry `depends_on` and
+    // start hidden unless that condition already holds; `applyFieldDependencies()`
+    // keeps them in sync as the user toggles the setting they depend on.
+    const dependsOn = def.depends_on;
+    const dependencyAttrs = dependsOn
+        ? ` data-depends-on-key="${dependsOn.key}" data-depends-on-value="${escapeAttr(String(dependsOn.value))}"`
+        : '';
+    const startsHidden = dependsOn && !dependencyValueMatches(dependsOn);
+
     return `
-        <div class="form-group">
+        <div class="form-group"${dependencyAttrs}${startsHidden ? ' style="display: none;"' : ''}>
             <div class="setting-header">
                 <label class="form-label" for="${def.key}">
                     ${def.display_name}
@@ -336,6 +347,28 @@ function renderField(setting) {
             ${def.help_url ? `<a href="${def.help_url}" target="_blank" class="help-link">Learn more</a>` : ''}
         </div>
     `;
+}
+
+// Whether the setting referenced by a `depends_on` clause currently holds
+// the required value. Falls back to the value the fields were rendered
+// with (settingsState.currentValues) when the field isn't in the DOM yet.
+function dependencyValueMatches(dependsOn) {
+    const el = document.getElementById(dependsOn.key);
+    const current = el ? el.checked : settingsState.currentValues[dependsOn.key];
+    return current === dependsOn.value || String(current) === String(dependsOn.value);
+}
+
+// Re-evaluate every rendered `depends_on` field against the current state
+// of the setting it depends on. Called whenever a toggle that other fields
+// depend on changes, so dependents show/hide immediately without a reload.
+function applyFieldDependencies() {
+    document.querySelectorAll('[data-depends-on-key]').forEach(group => {
+        const dependsOn = {
+            key: group.getAttribute('data-depends-on-key'),
+            value: group.getAttribute('data-depends-on-value') === 'true',
+        };
+        group.style.display = dependencyValueMatches(dependsOn) ? '' : 'none';
+    });
 }
 
 function renderTextInput(def, value) {
@@ -394,6 +427,7 @@ function renderToggle(def, value) {
                 id="${def.key}"
                 class="toggle-input"
                 ${checked ? 'checked' : ''}
+                onchange="applyFieldDependencies(); this.parentElement.querySelector('.toggle-text').textContent = this.checked ? 'Enabled' : 'Disabled';"
             >
             <span class="toggle-slider"></span>
             <span class="toggle-text">${checked ? 'Enabled' : 'Disabled'}</span>
