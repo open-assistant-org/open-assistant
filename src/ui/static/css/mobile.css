@@ -209,6 +209,11 @@ body.is-pwa {
         z-index: 999;
     }
 
+    /* Unthemed flat black shadow - softer layered elevation in light. */
+    :root[data-theme="light"] .navbar-links {
+        box-shadow: var(--shadow-hover);
+    }
+
     .navbar-links.open {
         display: flex;
     }

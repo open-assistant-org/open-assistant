@@ -27,6 +27,7 @@
             --error: #ff5555;
             --input-bg: #0d0d0d;
             --on-primary: #0a0a0a;
+            --shadow: 0 8px 40px rgba(0, 0, 0, 0.4);
             color-scheme: dark;
         }
         @media (prefers-color-scheme: light) {
@@ -40,6 +41,10 @@
                 --error: #b3261e;
                 --input-bg: #eef1f4;
                 --on-primary: #ffffff;
+                /* Softer layered elevation instead of a flat black drop
+                   shadow - matches the modern-shadow treatment used in
+                   common.css's light theme. */
+                --shadow: 0 4px 8px rgba(16, 24, 40, 0.04), 0 24px 48px rgba(16, 24, 40, 0.14);
                 color-scheme: light;
             }
         }
@@ -63,7 +68,7 @@
             width: 100%;
             max-width: 380px;
             text-align: center;
-            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4);
+            box-shadow: var(--shadow);
         }
         .gate-logo {
             width: 64px;

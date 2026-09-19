@@ -135,6 +135,10 @@
             box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4);
             overflow: hidden;
         }
+        /* Unthemed flat black shadow - softer layered elevation in light. */
+        :root[data-theme="light"] .modal-overlay .modal {
+            box-shadow: var(--shadow-xl);
+        }
         .modal-overlay .modal-header {
             padding: 20px 24px;
             font-size: 1.15rem;

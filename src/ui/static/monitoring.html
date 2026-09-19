@@ -266,6 +266,11 @@
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
         }
 
+        /* Unthemed flat black shadow - softer layered elevation in light. */
+        :root[data-theme="light"] .modal-content {
+            box-shadow: var(--shadow-hover);
+        }
+
         .modal-header {
             font-size: 1.25rem;
             font-weight: 600;

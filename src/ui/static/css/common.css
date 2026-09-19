@@ -117,6 +117,11 @@
     /* Shadows */
     --shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
     --shadow-hover: 0 8px 24px rgba(0, 0, 0, 0.7);
+    /* Large-elevation shadow (modals, the settings container) - was a
+       literal on .settings-container that never adapted for light mode;
+       given its own token so light mode isn't stuck with a flat black
+       shadow at that size. Value unchanged from what it replaces. */
+    --shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.3);
 
     /* Border radius */
     --radius: 10px;
@@ -235,8 +240,14 @@
     --alert-info-border: #a9c6ec;
     --alert-info-fg: #144a8c;
 
-    --shadow: 0 4px 12px rgba(16, 24, 40, 0.08);
-    --shadow-hover: 0 8px 24px rgba(16, 24, 40, 0.14);
+    /* Two-layer "contact + ambient" shadows (a tight, barely-visible edge
+       shadow plus a softer diffused one) rather than one flat drop shadow -
+       the more contemporary elevation look used by e.g. Linear/GitHub/
+       shadcn-style UIs, and considerably lower-opacity than dark mode's
+       shadow needs to be to read against a near-black background. */
+    --shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 4px 8px rgba(16, 24, 40, 0.06);
+    --shadow-hover: 0 2px 4px rgba(16, 24, 40, 0.05), 0 12px 24px rgba(16, 24, 40, 0.10);
+    --shadow-xl: 0 4px 8px rgba(16, 24, 40, 0.04), 0 24px 48px rgba(16, 24, 40, 0.14);
 }
 
 /* height:100% (not min-height:100vh) on both html and body gives every
@@ -469,7 +480,7 @@ body {
 
 .btn-primary:hover:not(:disabled) {
     background: color-mix(in srgb, var(--color-primary) 20%, transparent);
-    box-shadow: 0 0 12px var(--color-primary-glow), 0 4px 12px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 0 12px var(--color-primary-glow), var(--shadow);
     transform: translateY(-2px);
 }
 
@@ -1172,7 +1183,7 @@ body {
 .settings-container {
     background: var(--color-surface);
     border-radius: 16px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    box-shadow: var(--shadow-xl);
     width: 100%;
     max-width: 1200px;
     padding: 30px;

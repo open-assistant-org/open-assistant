@@ -618,6 +618,13 @@
             animation: slideUp 0.18s ease-out;
         }
 
+        /* This shadow was never themed - a flat 60% black drop shadow
+           reads fine on a dark page but harsh/dated on white. Light mode
+           gets the softer layered elevation from common.css instead. */
+        :root[data-theme="light"] .modal-card {
+            box-shadow: var(--shadow-xl);
+        }
+
         @keyframes slideUp {
             from { opacity: 0; transform: translateY(16px); }
             to   { opacity: 1; transform: translateY(0);    }
