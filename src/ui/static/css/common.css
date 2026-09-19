@@ -145,18 +145,16 @@
 }
 
 /*
- * Light theme. The dark-mode neon green (#00ff00, ~1.4:1 on white) doesn't
- * survive into light mode at all - a darkened green was tried first but
- * read as muddy/dated on white, so light mode uses a blue accent instead
- * (dark mode is untouched and keeps the green identity). Only colour
+ * Light theme. Keep the green brand identity, darkened for AA contrast on
+ * white/near-white (raw #00ff00 is ~1.4:1 on white - unusable). Only colour
  * tokens are overridden; --radius/--shadow shape stays from :root.
  *
  * Approx. contrast ratios (computed, WCAG AA text threshold is 4.5:1,
  * 3:1 for large text/UI components):
  *   --color-text on --color-surface:        17.8:1
  *   --color-text-muted on --color-surface:   6.3:1
- *   --color-primary on --color-surface:      6.3:1
- *   --color-on-primary on --color-primary:   6.3:1
+ *   --color-primary on --color-surface:      5.3:1
+ *   --color-on-primary on --color-primary:   5.3:1
  *   --color-success on --color-surface:      5.4:1
  *   --color-warning on --color-surface:      5.0:1
  *   --color-error on --color-surface:        6.5:1
@@ -165,10 +163,10 @@
 :root[data-theme="light"] {
     color-scheme: light;
 
-    --color-primary: #1a5fb4;
-    --color-primary-dark: #0f4c94;
-    --color-primary-gradient: linear-gradient(135deg, #1a5fb4 0%, #0f4c94 100%);
-    --color-primary-glow: rgba(26, 95, 180, 0.12);
+    --color-primary: #0a7d0a;
+    --color-primary-dark: #065f06;
+    --color-primary-gradient: linear-gradient(135deg, #0a7d0a 0%, #065f06 100%);
+    --color-primary-glow: rgba(10, 125, 10, 0.12);
 
     /* --color-surface is the CARD background and --color-bg-darker is the
        INPUT/<pre> well - cards sit above the page, inputs sit below it. */
@@ -184,7 +182,7 @@
 
     --color-border: #d8dcdf;
     --color-border-strong: #767f88;
-    --color-border-accent: #1a5fb4;
+    --color-border-accent: #0a7d0a;
 
     /* Success/warning are kept distinct from primary here (they're
        identical to primary in dark) so status colour isn't confused with
@@ -195,11 +193,8 @@
     --color-warning-bg: #fdf3e3;
     --color-error: #b3261e;
     --color-error-bg: #fdecea;
-    /* Kept visually distinct from --color-primary above (both used to be
-       the same #1a5fb4 by coincidence) so info badges don't read as
-       another primary button. */
-    --color-info: #0284c7;
-    --color-info-bg: #e0f2fe;
+    --color-info: #1a5fb4;
+    --color-info-bg: #e8f0fb;
     --color-neutral: #5a6169;
     --color-neutral-bg: #eef1f4;
 
