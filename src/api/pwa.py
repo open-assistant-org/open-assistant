@@ -29,7 +29,8 @@ async def get_manifest() -> JSONResponse:
         # in-app light/dark/system theme switch, so this is a fixed value
         # that reads reasonably against both the dark and light splash
         # screens - see static/js/theme.js for the runtime per-page value.
-        "theme_color": "#0a7d0a",
+        # Matches the light-mode --color-primary in common.css.
+        "theme_color": "#1a5fb4",
         "orientation": "any",
         "scope": "/",
         "icons": [
