@@ -35,6 +35,7 @@
     <link rel="apple-touch-icon" sizes="512x512" href="/static/icons/icon-512x512.png">
 
     <!-- Stylesheets -->
+    <script src="/static/js/theme.js"></script>
     <link rel="stylesheet" href="/static/css/common.css">
     <link rel="stylesheet" href="/static/css/mobile.css">
     <style>
@@ -145,8 +146,8 @@
         }
 
         .status-badge-pending {
-            background: rgba(59, 130, 246, 0.1);
-            color: #3b82f6;
+            background: var(--color-info-bg);
+            color: var(--color-info);
         }
 
         .status-badge-completed {
@@ -265,6 +266,11 @@
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
         }
 
+        /* Unthemed flat black shadow - softer layered elevation in light. */
+        :root[data-theme="light"] .modal-content {
+            box-shadow: var(--shadow-hover);
+        }
+
         .modal-header {
             font-size: 1.25rem;
             font-weight: 600;
@@ -300,7 +306,7 @@
             border: 1px solid var(--border-color);
             border-radius: 8px;
             background: var(--background-secondary);
-            color: var(--text-primary);
+            color: var(--color-text);
             font-family: monospace;
             font-size: 0.9rem;
             resize: vertical;
@@ -315,7 +321,7 @@
         .logs-terminal {
             height: 580px;
             overflow-y: auto;
-            background: #0d0d0d;
+            background: var(--color-bg-darker);
             border-radius: 8px;
             padding: 12px 16px;
             font-family: 'Courier New', Courier, monospace;
@@ -336,7 +342,7 @@
         }
 
         .log-stream-time {
-            color: #555;
+            color: var(--color-text-dimmer);
             flex-shrink: 0;
             user-select: none;
         }
@@ -348,7 +354,7 @@
         }
 
         .log-stream-module {
-            color: #888;
+            color: var(--color-text-dim);
             flex-shrink: 0;
             max-width: 180px;
             overflow: hidden;
@@ -357,14 +363,31 @@
         }
 
         .log-stream-msg {
-            color: #ccc;
+            color: var(--color-text-muted);
             flex: 1;
         }
 
         .log-stream-raw {
-            color: #888;
+            color: var(--color-text-dim);
             flex: 1;
         }
+
+        /* Log level colours - was a JS-inline style="color:#hex" per level
+           (LOG_LEVEL_COLORS), which couldn't react to a theme switch.
+           Applied as a class on .log-stream-level instead; see
+           LOG_LEVEL_CLASSES in the script below. */
+        .log-level-debug { color: var(--log-debug); }
+        .log-level-info { color: var(--log-info); }
+        .log-level-warning { color: var(--log-warning); }
+        .log-level-error { color: var(--log-error); }
+        .log-level-critical { color: var(--log-critical); }
+        /* Fallback for an unrecognised level string. */
+        .log-level-unknown { color: var(--color-text-muted); }
+
+        /* Status/placeholder lines appended into the log stream directly
+           (connecting/error banners), previously inline style="color:#hex". */
+        .log-stream-status { color: var(--color-text-dimmer); }
+        .log-stream-status.log-stream-status-error { color: var(--log-error); }
 
         .logs-status {
             font-size: 0.8rem;
@@ -502,13 +525,13 @@
         }
 
         .graph-badge--tool {
-            background: rgba(59, 130, 246, 0.14);
-            color: #7fb0ff;
+            background: var(--color-info-bg);
+            color: var(--color-info);
         }
 
         .graph-badge--llm {
-            background: rgba(168, 85, 247, 0.16);
-            color: #c99bff;
+            background: var(--color-accent-purple-bg);
+            color: var(--color-accent-purple);
         }
 
         .graph-node-detail {
@@ -530,8 +553,8 @@
         .graph-tool-name {
             font-family: 'Courier New', Courier, monospace;
             font-size: 0.85rem;
-            color: #7fb0ff;
-            background: rgba(59, 130, 246, 0.1);
+            color: var(--color-info);
+            background: var(--color-info-bg);
             padding: 4px 8px;
             border-radius: 6px;
             display: inline-block;
@@ -572,8 +595,8 @@
             font-family: 'Courier New', Courier, monospace;
             font-size: 0.82rem;
             line-height: 1.5;
-            color: #cdd6c4;
-            background: #0d0d0d;
+            color: var(--color-text-muted);
+            background: var(--color-bg-darker);
             border: 1px solid var(--border-color);
             border-radius: 8px;
             padding: 10px 12px;
@@ -591,7 +614,7 @@
             position: absolute;
             left: 0; right: 0; bottom: 0;
             height: 2.4em;
-            background: linear-gradient(transparent, #0d0d0d);
+            background: linear-gradient(transparent, var(--color-bg-darker));
         }
 
         .graph-prompt-toggle {
@@ -619,6 +642,13 @@
             font-size: 0.75rem;
             font-weight: 500;
             border: 1px solid;
+            /* --chip-color is set inline per chip (see varChip() below) -
+               was a hex + "1a" alpha-suffix string built in JS, which
+               couldn't take a var() and so couldn't react to a theme
+               switch. color-mix() derives the tint from the var() here. */
+            border-color: var(--chip-color);
+            color: var(--chip-color);
+            background: color-mix(in srgb, var(--chip-color) 10%, transparent);
         }
 
         .graph-var-chip code {
@@ -629,7 +659,10 @@
         .graph-connector {
             width: 2px;
             height: 26px;
-            background: var(--border-color);
+            /* --chip-color is only set when the connector carries a named
+               variable (see graphConnector() below); an empty connector
+               falls back to the plain border colour. */
+            background: var(--chip-color, var(--border-color));
             position: relative;
             flex-shrink: 0;
         }
@@ -656,6 +689,8 @@
             border-radius: 8px;
             background: var(--card-background);
             border: 1px solid;
+            border-color: var(--chip-color);
+            color: var(--chip-color);
         }
 
         .graph-empty {
@@ -912,7 +947,7 @@
                     </div>
                     <div class="logs-terminal" id="logsContainer">
                         <div id="logsContent">
-                            <span style="color: #555;">Open this tab to start streaming logs...</span>
+                            <span class="log-stream-status">Open this tab to start streaming logs...</span>
                         </div>
                     </div>
                 </div>
@@ -1166,19 +1201,23 @@
             placeholderCleared: false,
         };
 
-        const LOG_LEVEL_COLORS = {
-            DEBUG:    '#666',
-            INFO:     '#8eb4e3',
-            WARNING:  '#f5a623',
-            ERROR:    '#e05252',
-            CRITICAL: '#ff2020',
+        // CSS classes for log-stream-level, one per log level - see the
+        // .log-level-* rules above. Applied instead of an inline
+        // style="color:#hex" so the theme switch (light/dark/system)
+        // reaches log lines already on screen.
+        const LOG_LEVEL_CLASSES = {
+            DEBUG: 'log-level-debug',
+            INFO: 'log-level-info',
+            WARNING: 'log-level-warning',
+            ERROR: 'log-level-error',
+            CRITICAL: 'log-level-critical',
         };
 
         function initLogsTab() {
             if (logsState.eventSource) return;
 
             const content = document.getElementById('logsContent');
-            content.innerHTML = '<span style="color: #555;">Connecting to log stream...</span>';
+            content.innerHTML = '<span class="log-stream-status">Connecting to log stream...</span>';
             setLogsStatus(false);
 
             const es = new EventSource((window.INSTANCE_BASE_PATH || '') + '/api/monitoring/logs/stream');
@@ -1190,7 +1229,7 @@
                 try {
                     const data = JSON.parse(event.data);
                     if (data.error) {
-                        appendLogsMessage(`[error] ${data.error}`, '#e05252');
+                        appendLogsMessage(`[error] ${data.error}`, true);
                         return;
                     }
                     if (logsState.paused) {
@@ -1266,10 +1305,10 @@
 
             if (parsed) {
                 entry.dataset.level = parsed.level;
-                const color = LOG_LEVEL_COLORS[parsed.level] || '#ccc';
+                const levelClass = LOG_LEVEL_CLASSES[parsed.level] || 'log-level-unknown';
                 entry.innerHTML =
                     `<span class="log-stream-time">${escapeHtml(parsed.timestamp)}</span>` +
-                    `<span class="log-stream-level" style="color:${color};">[${escapeHtml(parsed.level)}]</span>` +
+                    `<span class="log-stream-level ${levelClass}">[${escapeHtml(parsed.level)}]</span>` +
                     `<span class="log-stream-module">${escapeHtml(parsed.module)}</span>` +
                     `<span class="log-stream-msg">${escapeHtml(parsed.message)}</span>`;
             } else {
@@ -1290,11 +1329,11 @@
             }
         }
 
-        function appendLogsMessage(text, color) {
+        function appendLogsMessage(text, isError) {
             const container = document.getElementById('logsContent');
             if (!container) return;
             const entry = document.createElement('div');
-            entry.style.color = color || '#888';
+            entry.className = 'log-stream-status' + (isError ? ' log-stream-status-error' : '');
             entry.style.padding = '4px 0';
             entry.textContent = text;
             container.appendChild(entry);
@@ -1803,7 +1842,11 @@
 
         function varChip(prefix, name) {
             const color = graphVarColor(name);
-            return `<span class="graph-var-chip" style="border-color:${color};color:${color};background:${color}1a">`
+            // --chip-color feeds the .graph-var-chip rule below, which
+            // derives border/text/background from it with color-mix() -
+            // was a hex + "1a" alpha-suffix string concat that couldn't
+            // take a CSS var() (blocking any theme-driven recolour).
+            return `<span class="graph-var-chip" style="--chip-color:${color}">`
                 + `${prefix} <code>${escapeHtml(name)}</code></span>`;
         }
 
@@ -1847,8 +1890,8 @@
         function graphConnector(varName) {
             if (varName) {
                 const color = graphVarColor(varName);
-                return `<div class="graph-connector" style="background:${color}">
-                    <span class="graph-connector-label" style="border-color:${color};color:${color}">passes <code>${escapeHtml(varName)}</code></span>
+                return `<div class="graph-connector" style="--chip-color:${color}">
+                    <span class="graph-connector-label" style="--chip-color:${color}">passes <code>${escapeHtml(varName)}</code></span>
                 </div>`;
             }
             return '<div class="graph-connector"></div>';

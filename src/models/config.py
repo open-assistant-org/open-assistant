@@ -19,6 +19,7 @@ class ConfigCategory(str, Enum):
     LOGGING = "logging"  # Logging configuration
     MEMORY = "memory"  # Memory management settings
     WEB_UI = "web_ui"  # Web UI configuration
+    APPEARANCE = "appearance"  # UI appearance (theme, etc.)
     LLM = "llm"  # LLM provider configuration
     GOOGLE = "google"  # Google integration (Gmail, Calendar, etc.)
     GOOGLE_NAVIGATOR = "google_navigator"  # Google Places, Directions & Geocoding
@@ -75,6 +76,10 @@ class SettingDefinition:
     min_value: Optional[float] = None  # Min for int/float
     max_value: Optional[float] = None  # Max for int/float
     options: Optional[List[str]] = None  # Valid options for dropdown
+    # Human-readable label per entry in `options`, same order/length (e.g.
+    # options=["light","dark"], option_labels=["Light","Dark"]). Falls back
+    # to the raw option value in the UI when omitted.
+    option_labels: Optional[List[str]] = None
 
     # Display
     display_order: int = 0  # Order within category
@@ -268,6 +273,22 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
         env_var_name="WEB_UI_PORT",
         display_order=2,
         ui_widget="number",
+    ),
+    # ========================================================================
+    # APPEARANCE SETTINGS
+    # ========================================================================
+    "appearance.theme": SettingDefinition(
+        key="appearance.theme",
+        display_name="Theme",
+        description="Color theme for the web interface. System follows your OS setting.",
+        value_type=SettingValueType.STRING,
+        category=ConfigCategory.APPEARANCE,
+        default_value="system",
+        options=["system", "light", "dark"],
+        option_labels=["System", "Light", "Dark"],
+        env_var_name="UI_THEME",
+        display_order=1,
+        ui_widget="select",
     ),
     # ========================================================================
     # LLM CONFIGURATION

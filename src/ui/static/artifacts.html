@@ -26,6 +26,7 @@
     <link rel="apple-touch-icon" sizes="192x192" href="/static/icons/icon-192x192.png">
 
     <!-- Stylesheets -->
+    <script src="/static/js/theme.js"></script>
     <link rel="stylesheet" href="/static/css/common.css">
     <link rel="stylesheet" href="/static/css/mobile.css">
     <style>
@@ -114,7 +115,7 @@
             transition: opacity 0.2s;
         }
         .job-action-btn:hover { opacity: 0.8; }
-        .job-action-btn.btn-neutral { background: var(--background-secondary); color: var(--text-primary); }
+        .job-action-btn.btn-neutral { background: var(--background-secondary); color: var(--color-text); }
         .job-action-btn.btn-danger { background: var(--error-color); color: #fff; }
 
         .empty-state {
@@ -133,6 +134,10 @@
             max-width: 460px;
             box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4);
             overflow: hidden;
+        }
+        /* Unthemed flat black shadow - softer layered elevation in light. */
+        :root[data-theme="light"] .modal-overlay .modal {
+            box-shadow: var(--shadow-xl);
         }
         .modal-overlay .modal-header {
             padding: 20px 24px;
@@ -156,7 +161,7 @@
             border: 1px solid var(--border-color);
             border-radius: 8px;
             background: var(--background-secondary);
-            color: var(--text-primary);
+            color: var(--color-text);
             font-size: 0.95rem;
         }
         .artifact-input:focus { outline: none; border-color: var(--primary-color); }

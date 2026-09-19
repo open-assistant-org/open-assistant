@@ -125,6 +125,9 @@ class SettingDefinitionResponse(BaseModel):
     min_value: Optional[float] = Field(None, description="Minimum value (for numbers)")
     max_value: Optional[float] = Field(None, description="Maximum value (for numbers)")
     options: Optional[List[str]] = Field(None, description="Valid options (for enums)")
+    option_labels: Optional[List[str]] = Field(
+        None, description="Human-readable label per entry in `options`, same order"
+    )
     display_order: int = Field(..., description="Display order within category")
     placeholder: Optional[str] = Field(None, description="Placeholder text")
     help_url: Optional[str] = Field(None, description="Documentation URL")

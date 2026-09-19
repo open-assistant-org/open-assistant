@@ -35,6 +35,7 @@
     <link rel="apple-touch-icon" sizes="512x512" href="/static/icons/icon-512x512.png">
 
     <!-- Stylesheets -->
+    <script src="/static/js/theme.js"></script>
     <link rel="stylesheet" href="/static/css/common.css">
     <link rel="stylesheet" href="/static/css/mobile.css">
 </head>
@@ -62,22 +63,29 @@
 
             <!-- Application Tab -->
             <div id="application-tab" class="tab-content">
+                <!-- Not gated by managed mode (see hideManagedTabs in settings.js) -
+                     appearance is a per-browser/per-user preference, not server config. -->
                 <div class="settings-section">
+                    <h3 class="section-title">Appearance</h3>
+                    <div id="appearance-settings"></div>
+                </div>
+
+                <div class="settings-section" id="section-application-general">
                     <h3 class="section-title">General</h3>
                     <div id="application-general-settings"></div>
                 </div>
 
-                <div class="settings-section">
+                <div class="settings-section" id="section-logging">
                     <h3 class="section-title">Logging</h3>
                     <div id="logging-settings"></div>
                 </div>
 
-                <div class="settings-section">
+                <div class="settings-section" id="section-memory">
                     <h3 class="section-title">Memory Management</h3>
                     <div id="memory-settings"></div>
                 </div>
 
-                <div class="settings-section">
+                <div class="settings-section" id="section-web-ui">
                     <h3 class="section-title">Web UI</h3>
                     <div id="web-ui-settings"></div>
                 </div>
