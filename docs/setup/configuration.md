@@ -152,7 +152,7 @@ The web-based Settings UI is available at `/settings` and provides tabs for:
   - **System Prompt** (default + custom instructions): Define the base behavior and add custom instructions
   - **Memory**: Text-based store for user context (name, preferences, people, places, relations)
   - **Soul**: Personality and communication style description, shaped by user feedback
-- **Integrations**: Enable/disable services (Google, Outlook, Notion, Nextcloud, WhatsApp), manage credentials, test connections
+- **Integrations**: Enable/disable services (Google, Outlook, Notion, Nextcloud, WhatsApp, Browser), manage credentials, test connections. The Browser card also manages saved logins (cookies) for the browser integration
 - **Advanced**: Audit log viewer, reset all settings
 
 ## Configuration Categories
@@ -225,6 +225,14 @@ Settings are organized into the following categories:
 - **Keys**: `whatsapp.enabled`, `whatsapp.wacli_path`, `whatsapp.phone_number`
 - **Description**: WhatsApp integration using wacli CLI tool
 
+### 11. Browser Integration
+- **Category**: `BROWSER`
+- **Keys**: `browser.enabled`, `browser.headless`, `browser.viewport_width`, `browser.viewport_height`, `browser.screenshot_quality`, `browser.user_agent`
+- **Description**: Playwright-based browsing. `browser.user_agent` overrides the browser's User-Agent (empty = built-in Chrome UA); set it to match the browser you exported saved-login cookies from
+- **Credentials**: Saved logins (cookies and localStorage) are **not** settings. They are stored encrypted in the `service_credentials` table as a `cookie_jar` credential (`service_name = browser_sessions`) and managed in **Settings → Integrations → Browser → Authenticated sessions** or via `/api/browser/sessions`. Values are write-only: never returned by the API and never shown to the LLM
+- **Note**: On a fresh install the Browser toggle can display *on* (the default) before a value is stored; switch it off and on once if browse tools report it is not enabled
+- **See**: [Browser Automation](../integrations/browser.md), [Authenticated Sessions manual](../integrations/browser-sessions.md)
+
 ## Encrypted Credentials Storage
 
 Sensitive credentials (OAuth tokens, API keys, passwords) are stored separately from general settings:
@@ -243,6 +251,12 @@ Sensitive credentials (OAuth tokens, API keys, passwords) are stored separately 
 3. **App Passwords**: For services like Nextcloud
    - Stored encrypted
    - Used for basic authentication
+
+4. **Cookie Jars** (`cookie_jar`): Saved browser logins for the Browser integration
+   - One encrypted `service_credentials` row (`browser_sessions`) holding all profiles (cookies + localStorage)
+   - Imported through a write-only API; never returned in plain text and never exposed to the LLM
+   - Rotated cookies are re-encrypted and saved back when a browser session closes (per-profile **Keep refreshed**)
+   - See [Authenticated Sessions](../integrations/browser-sessions.md)
 
 ### OAuth Credentials Setup
 

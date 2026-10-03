@@ -148,6 +148,23 @@ python -m py_compile src/agents/base.py
 
 ---
 
+## Secrets that tools consume (cookies, tokens, keys)
+
+When a tool needs a secret the user supplies (for example the browser's saved login cookies), keep the
+runtime and the LLM apart from it. `browser_sessions` (`src/integrations/browser/sessions.py`) is the
+reference implementation:
+
+- [ ] **Store it encrypted** via `CredentialsRepository` (`service_credentials`), never in `settings` or a file
+- [ ] **Inject it below the tool layer**: the service passes it to the client/browser; the tool's Pydantic request
+  model has no parameter for it
+- [ ] **Never return it in a tool result**: return a non-secret hint instead (a profile name, a boolean).
+  Add a test asserting the secret is absent from `json.dumps(result)`
+- [ ] **Write-only API**: create/replace/delete plus a metadata-only `GET`. No endpoint or error message echoes the
+  value (build parse/validation errors from field names and counts, never inputs)
+- [ ] **Mask audit entries** (`***MASKED***`) and log only counts or identifiers
+- [ ] **Scrub third-party error text** before surfacing it (known secret values replaced, first line only)
+- [ ] **Docs**: a user manual for obtaining/rotating the secret and a threat-model section
+
 ## Changing the Plugin JSON Schema or Pydantic Model
 
 When you modify `src/plugins/plugin_schema.json` or `src/models/plugin.py`, also update:

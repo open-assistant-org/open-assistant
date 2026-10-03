@@ -25,6 +25,7 @@ Interactive web browsing using Playwright with an accessibility-tree-based page 
 - Form filling and multi-step workflows
 - Accessibility tree extraction (interactive, forms, or full modes)
 - Screenshot capture for vision fallback
+- Authenticated browsing via user-supplied session profiles (cookies + localStorage) stored encrypted and injected below the tool layer; the LLM sees only a profile name, never cookie values (see [Authenticated Sessions](../integrations/browser-sessions.md))
 
 ### Cron Job Scheduling
 

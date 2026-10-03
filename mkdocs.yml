@@ -91,7 +91,10 @@ nav:
       - Microsoft: integrations/microsoft.md
       - Notion: integrations/notion.md
       - Nextcloud: integrations/nextcloud.md
-      - Browser Automation: integrations/browser.md
+      - Browser Automation:
+          - Overview: integrations/browser.md
+          - Authenticated Sessions (Manual): integrations/browser-sessions.md
+          - Session Security & Troubleshooting: integrations/browser-sessions-security.md
       - WhatsApp: integrations/whatsapp.md
       - Whisper: integrations/whisper.md
       - Mistral OCR: integrations/mistral_ocr.md
