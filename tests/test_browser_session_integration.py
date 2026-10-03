@@ -682,11 +682,10 @@ class TestSessionsApi:
         assert api.store.load_storage_state()["cookies"][0]["value"] == SECRET
 
     def test_unknown_ids_404(self, api):
-        assert (
-            api.client.patch("/api/browser/sessions/nope", json={"enabled": True}).status_code
-            == 404
-        )
-        assert api.client.delete("/api/browser/sessions/nope").status_code == 404
+        patched = api.client.patch("/api/browser/sessions/nope", json={"enabled": True})
+        deleted = api.client.delete("/api/browser/sessions/nope")
+        assert patched.status_code == 404
+        assert deleted.status_code == 404
 
     def test_delete(self, api):
         sid = _create(api).json()["session"]["id"]

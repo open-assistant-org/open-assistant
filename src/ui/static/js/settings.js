@@ -850,7 +850,7 @@ function getIntegrationDocUrl(service) {
         whatsapp: 'https://github.com/open-assistant-org/open-assistant/blob/main/docs/integrations/whatsapp.md',
         slack: 'https://github.com/open-assistant-org/open-assistant/blob/main/docs/integrations/slack.md',
         brave: 'https://brave.com/search/api/',
-        browser: 'https://github.com/open-assistant-org/open-assistant/blob/main/docs/integrations/browser-sessions.md',
+        browser: 'https://docs.open-assistant.org/integrations/browser-sessions/',
         whisper: 'https://github.com/open-assistant-org/open-assistant/blob/main/docs/integrations/whisper.md',
         mistral_ocr: 'https://docs.mistral.ai/capabilities/vision/',
         toggl: 'https://github.com/open-assistant-org/open-assistant/blob/main/docs/integrations/toggl.md',
@@ -2936,7 +2936,7 @@ function renderBrowserSessionsSkeleton() {
                 Let the browser use your own logged-in accounts. Paste a cookie export below; it is stored
                 encrypted and injected into the browser behind the scenes. The AI can use the logged-in
                 browser but never sees your cookies.
-                <a href="https://github.com/open-assistant-org/open-assistant/blob/main/docs/integrations/browser-sessions.md" target="_blank" rel="noopener">Step-by-step manual</a>
+                <a href="https://docs.open-assistant.org/integrations/browser-sessions/" target="_blank" rel="noopener">Step-by-step manual</a>
             </p>
             <div id="browser-sessions-list" class="browser-sessions-list">
                 <p class="text-muted">Loading…</p>

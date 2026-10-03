@@ -344,8 +344,10 @@ class TestStoreCrud:
 
     def test_delete_removes_row_when_last(self, store):
         pid = store.create("Personal", _parsed(_cookie()))["id"]
-        assert store.delete(pid) is True
-        assert store.delete(pid) is False
+        first = store.delete(pid)
+        second = store.delete(pid)
+        assert first is True
+        assert second is False
         assert store.credentials_repo.get(SERVICE_NAME) is None
 
 

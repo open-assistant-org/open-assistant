@@ -110,3 +110,15 @@ def test_no_stale_cookie_persistence_claim():
     """The old 'No cookie persistence' limitation must not come back unqualified."""
     for path in DOCS.rglob("*.md"):
         assert "No cookie persistence" not in _read(path), f"stale claim in {path}"
+
+
+def test_ui_doc_links_point_at_published_pages():
+    """Links to docs.open-assistant.org in the settings UI must resolve to real docs pages."""
+    site_url = re.search(r"^site_url:\s*(\S+)", _read(MKDOCS), re.M).group(1).rstrip("/")
+    js = _read(REPO_ROOT / "src" / "ui" / "static" / "js" / "settings.js")
+    links = re.findall(re.escape(site_url) + r"/([\w./-]+)", js)
+    assert links, "expected the settings UI to link to the published browser manual"
+    for path in links:
+        page = DOCS / (path.strip("/") + ".md")
+        assert page.exists(), f"settings.js links to {site_url}/{path} but {page} does not exist"
+        assert path.endswith("/"), "mkdocs publishes directory URLs (trailing slash)"
