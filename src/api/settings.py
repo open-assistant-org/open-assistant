@@ -95,6 +95,7 @@ _MANAGED_MANAGED_SERVICES = {
         "browser.viewport_width",
         "browser.viewport_height",
         "browser.screenshot_quality",
+        "browser.user_agent",
     ],
     "whisper": ["whisper.api_key", "whisper.base_url", "whisper.model"],
     "mistral_ocr": [

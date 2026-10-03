@@ -6,7 +6,7 @@ Provides three fetching modes:
 - dynamic: Full Playwright with anti-detection for JS-heavy pages
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from src.utils.logger import get_logger
 
@@ -22,17 +22,37 @@ class ContentFetcher:
 
     VALID_MODES = {"http", "stealth", "dynamic"}
 
-    def __init__(self, default_mode: str = "http", timeout: int = 30):
+    def __init__(
+        self,
+        default_mode: str = "http",
+        timeout: int = 30,
+        cookie_provider: Optional[Callable[[str], List[Dict[str, Any]]]] = None,
+    ):
         """Initialize the content fetcher.
 
         Args:
             default_mode: Default fetching mode ('http', 'stealth', 'dynamic').
             timeout: Request timeout in seconds.
+            cookie_provider: Optional callable returning the saved-session cookies
+                (Playwright shape) that apply to a URL. The cookie values go
+                straight to the fetch backend and are never returned or logged.
         """
         if default_mode not in self.VALID_MODES:
             raise ValueError(f"Invalid mode '{default_mode}'. Must be one of: {self.VALID_MODES}")
         self.default_mode = default_mode
         self.timeout = timeout
+        self.cookie_provider = cookie_provider
+
+    def _cookies_for(self, url: str) -> List[Dict[str, Any]]:
+        """Saved-session cookies for ``url``; empty on any failure (fetch anonymously)."""
+        if self.cookie_provider is None:
+            return []
+        try:
+            return self.cookie_provider(url) or []
+        except Exception as e:
+            # Log the type only: never risk echoing cookie data.
+            logger.warning("Could not load saved session cookies (%s)", type(e).__name__)
+            return []
 
     async def fetch(
         self,
@@ -94,8 +114,16 @@ class ContentFetcher:
         """Fetch using Scrapling's HTTP Fetcher with TLS impersonation."""
         from scrapling.fetchers import Fetcher
 
+        kwargs: Dict[str, Any] = {"stealthy_headers": True, "timeout": self.timeout}
+        cookies = self._cookies_for(url)
+        if cookies:
+            # curl_cffi scopes name->value cookies to the initial request's host and
+            # lets curl's own cookie engine decide per redirect hop, so they are not
+            # forwarded to other domains.
+            kwargs["cookies"] = {c["name"]: c["value"] for c in cookies}
+
         fetcher = Fetcher()
-        page = fetcher.get(url, stealthy_headers=True, timeout=self.timeout)
+        page = fetcher.get(url, **kwargs)
         return page
 
     async def _fetch_stealth(self, url: str) -> Any:
@@ -110,13 +138,16 @@ class ContentFetcher:
             ) from exc
 
         fetcher = StealthyFetcher()
-        # StealthyFetcher expects timeout in milliseconds (default 30000ms = 30s)
-        page = await fetcher.async_fetch(
-            url,
-            headless=True,
-            timeout=self.timeout * 1000,
-            disable_resources=True,
-        )
+        kwargs: Dict[str, Any] = {
+            "headless": True,
+            # StealthyFetcher expects timeout in milliseconds (default 30000ms = 30s)
+            "timeout": self.timeout * 1000,
+            "disable_resources": True,
+        }
+        cookies = self._cookies_for(url)
+        if cookies:
+            kwargs["cookies"] = cookies  # Playwright add_cookies() shape
+        page = await fetcher.async_fetch(url, **kwargs)
         return page
 
     async def _fetch_dynamic(self, url: str, wait_for: Optional[str] = None) -> Any:
@@ -137,6 +168,7 @@ class ContentFetcher:
             "timeout": self.timeout * 1000,
             "disable_resources": True,
             "wait_selector": wait_for,
+            "cookies": self._cookies_for(url) or None,  # Playwright add_cookies() shape
         }
         # Remove None values
         kwargs = {k: v for k, v in kwargs.items() if v is not None}

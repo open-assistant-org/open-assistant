@@ -22,7 +22,7 @@ Each guide below covers prerequisites, configuration, and available capabilities
 - [Google News](google_news.md) - News search
 - [Google Ads](google_ads.md) - Google Ads campaign data
 - [Google Navigator](google_navigator.md) - Places, directions, and geocoding
-- [Browser Automation](browser.md) - Web browsing with Playwright
+- [Browser Automation](browser.md) - Web browsing with Playwright, including logged-in sessions via encrypted cookies ([manual](browser-sessions.md), [security & troubleshooting](browser-sessions-security.md))
 
 ## Media & Document Processing
 

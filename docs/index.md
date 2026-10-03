@@ -28,7 +28,9 @@ Welcome to the Open Assistant documentation. This documentation covers architect
 - [Google Navigator](integrations/google_navigator.md) - Places, Directions, and Geocoding
 - [Notion](integrations/notion.md) - Note-taking and knowledge management
 - [Nextcloud](integrations/nextcloud.md) - Self-hosted file storage
-- [Browser Automation](integrations/browser.md) - Web browsing with Playwright
+- [Browser Automation](integrations/browser.md) - Web browsing with Playwright, including logged-in sessions via encrypted cookies
+  - [Authenticated Sessions (manual)](integrations/browser-sessions.md) - Step-by-step: export cookies, add, test, use
+  - [Session Security & Troubleshooting](integrations/browser-sessions-security.md) - Threat model and fixes
 - [WhatsApp Messaging](integrations/whatsapp.md) - WhatsApp integration (text, voice, images)
 - [Whisper Transcription](integrations/whisper.md) - Voice message transcription via OpenAI Whisper
 - [Mistral OCR](integrations/mistral_ocr.md) - PDF text extraction
@@ -60,6 +62,8 @@ docs/
 │   ├── notion.md                         # Notion integration
 │   ├── nextcloud.md                      # Nextcloud file storage
 │   ├── browser.md                        # Browser automation with Playwright
+│   ├── browser-sessions.md               # Browser saved logins: step-by-step manual
+│   ├── browser-sessions-security.md      # Browser saved logins: security & troubleshooting
 │   ├── whatsapp.md                       # WhatsApp messaging (text, voice, images)
 │   ├── whisper.md                        # Voice message transcription (Whisper)
 │   ├── mistral_ocr.md                    # Mistral OCR for PDF extraction

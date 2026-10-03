@@ -595,6 +595,36 @@ flowchart TD
 ### Encrypted Fields
 - `service_credentials.credential_data` - Fernet symmetric encryption
 
+#### `browser_sessions` credential (saved browser logins)
+
+Saved logins for the browser integration reuse `service_credentials`; no new table is needed. A single
+row with `service_name = 'browser_sessions'` and `credential_type = 'cookie_jar'` holds every profile. The
+decrypted `credential_data` has this shape (it exists only in memory while the browser runs):
+
+```json
+{
+  "profiles": [
+    {
+      "id": "uuid-hex",
+      "name": "Personal Gmail",
+      "enabled": true,
+      "persist_updates": true,
+      "revision": 0,
+      "cookies": [{"name": "…", "value": "…", "domain": ".example.com", "path": "/",
+                   "expires": 1893456000, "httpOnly": true, "secure": true, "sameSite": "Lax"}],
+      "origins": [{"origin": "https://example.com", "localStorage": [{"name": "…", "value": "…"}]}],
+      "created_at": "2026-01-01T00:00:00+00:00",
+      "updated_at": "2026-01-01T00:00:00+00:00"
+    }
+  ]
+}
+```
+
+- Cookies use Playwright's `storage_state` shape; `expires = -1` is a session cookie.
+- `revision` is bumped when a profile's cookies are replaced, so an older browser session cannot overwrite a fresh import when it writes rotated cookies back.
+- The row is deleted when the last profile is removed. The API exposes only metadata (name, domains, counts, expiry), never `cookies` or `origins`.
+- Cookie jars are covered by the same `ENCRYPTION_KEY` as every other credential: changing the key makes them unreadable.
+
 ### Encryption Key Management
 - Key stored in environment variable: `ENCRYPTION_KEY`
 - Generated using: `Fernet.generate_key()`

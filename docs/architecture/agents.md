@@ -186,6 +186,8 @@ Agent configurations (role, goal, backstory, tools, intent_keywords) are stored 
 - Interacts with page elements (click, type, scroll)
 - Handles forms and multi-step web workflows
 - Extracts structured data from web pages
+- Uses the user's saved logins when a result shows `authenticated_session` (the browser is already signed in); never logs in itself and never asks for passwords. If a login page appears for a site with a saved session (`session_expired_suspected`), it stops and asks the user to refresh the session
+- Treats content on logged-in sites as untrusted (prompt-injection guard) and asks for confirmation before irreversible actions
 
 ---
 

@@ -2662,3 +2662,126 @@ body {
     border-color: var(--alert-info-border);
     color: var(--alert-info-fg);
 }
+
+
+/* ============================================================================
+ * Browser integration: authenticated sessions (saved logins)
+ * ========================================================================== */
+.browser-sessions {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--color-border);
+}
+
+.browser-sessions h5 {
+    margin: 0 0 6px;
+    font-size: 1rem;
+}
+
+.browser-sessions-help {
+    margin: 0 0 12px;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+}
+
+.session-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    margin-bottom: 8px;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+}
+
+.session-row.session-disabled {
+    opacity: 0.6;
+}
+
+.session-main {
+    flex: 1 1 240px;
+    min-width: 0;
+}
+
+.session-title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.session-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+    font-size: 0.8rem;
+}
+
+.session-chip {
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border-strong);
+    font-family: 'Courier New', 'Consolas', 'Monaco', 'Menlo', 'Liberation Mono', monospace;
+    font-size: 0.75rem;
+    overflow-wrap: anywhere;
+}
+
+.session-badge {
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 0.72rem;
+    font-weight: 600;
+}
+
+.session-badge-success { background: var(--color-success-bg); color: var(--color-success); }
+.session-badge-warning { background: var(--color-warning-bg); color: var(--color-warning); }
+.session-badge-error { background: var(--color-error-bg); color: var(--color-error); }
+.session-badge-neutral { background: var(--color-neutral-bg); color: var(--color-neutral); }
+
+.session-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+
+.session-check,
+.browser-session-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.82rem;
+    cursor: pointer;
+}
+
+.browser-session-add {
+    margin-top: 12px;
+    padding: 12px;
+    border: 1px dashed var(--color-border-strong);
+    border-radius: 8px;
+}
+
+.browser-session-add summary {
+    cursor: pointer;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.browser-session-payload {
+    font-family: 'Courier New', 'Consolas', 'Monaco', 'Menlo', 'Liberation Mono', monospace;
+    font-size: 0.78rem;
+    white-space: pre;
+    overflow-wrap: normal;
+}
+
+.browser-session-add-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 12px;
+}

@@ -970,6 +970,22 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
         display_order=5,
         ui_widget="number",
     ),
+    "browser.user_agent": SettingDefinition(
+        key="browser.user_agent",
+        display_name="User Agent",
+        description=(
+            "Override the browser's User-Agent string. Leave empty for the built-in Chrome UA. "
+            "Set this to the exact UA of the browser you exported saved-session cookies from "
+            "(run navigator.userAgent in its console): some sites bind a login to its user agent."
+        ),
+        value_type=SettingValueType.STRING,
+        category=ConfigCategory.BROWSER,
+        default_value="",
+        env_var_name="BROWSER_USER_AGENT",
+        display_order=6,
+        ui_widget="text",
+        placeholder="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 ...",
+    ),
     # ========================================================================
     # GOOGLE NAVIGATOR INTEGRATION (Places, Directions, Geocoding)
     # ========================================================================

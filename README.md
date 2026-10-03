@@ -87,7 +87,7 @@ Ask for a web page, dashboard, or document and the assistant saves it as an **ar
 | 🔍 | **Brave Search · Google News** | Privacy-focused web and news search |
 | 🗺️ | **Google Navigator** | Places, directions, geocoding |
 | 📊 | **Google Ads · Yahoo Finance · Toggl** | Campaign data, quotes and financials, time tracking |
-| 🌐 | **Playwright browser** | Navigate, click, type, screenshot, extract — with vision |
+| 🌐 | **Playwright browser** | Navigate, click, type, screenshot, extract — with vision; optional logged-in sessions from encrypted, write-only cookies the AI never sees |
 | 🎙️ | **Whisper · Mistral OCR** | Transcribe voice messages, read PDFs |
 | 🔌 | **MCP servers** | Connect any remote MCP server, authenticated with static headers |
 
