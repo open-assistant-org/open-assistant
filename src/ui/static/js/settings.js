@@ -648,6 +648,11 @@ async function loadIntegrations() {
         const cards = await Promise.all(services.map(service => createIntegrationCard(service)));
         cards.forEach(card => container.appendChild(card));
 
+        // The Browser card has a saved-logins section that loads its own data.
+        if (document.getElementById('browser-sessions-list')) {
+            loadBrowserSessions();
+        }
+
     } catch (error) {
         console.error('Failed to load integrations:', error);
         toast.error('Failed to load integrations');
@@ -764,6 +769,7 @@ async function createIntegrationCard(serviceName) {
                 <div class="integration-settings">
                     ${settingsHtml}
                 </div>
+                ${serviceName === 'browser' ? renderBrowserSessionsSkeleton() : ''}
                 <div class="integration-actions">
                     ${actionButtonsHtml}
                 </div>
@@ -844,7 +850,7 @@ function getIntegrationDocUrl(service) {
         whatsapp: 'https://github.com/open-assistant-org/open-assistant/blob/main/docs/integrations/whatsapp.md',
         slack: 'https://github.com/open-assistant-org/open-assistant/blob/main/docs/integrations/slack.md',
         brave: 'https://brave.com/search/api/',
-        browser: 'https://playwright.dev/',
+        browser: 'https://github.com/open-assistant-org/open-assistant/blob/main/docs/integrations/browser-sessions.md',
         whisper: 'https://github.com/open-assistant-org/open-assistant/blob/main/docs/integrations/whisper.md',
         mistral_ocr: 'https://docs.mistral.ai/capabilities/vision/',
         toggl: 'https://github.com/open-assistant-org/open-assistant/blob/main/docs/integrations/toggl.md',
@@ -2909,5 +2915,275 @@ async function saveMcpCredentials() {
         toast.error('Failed to save credentials: ' + (error.message || 'Unknown error'));
     } finally {
         btn.disabled = false;
+    }
+}
+
+
+// ============================================================================
+// BROWSER: AUTHENTICATED SESSIONS (saved logins)
+//
+// Cookies are write-only: the API returns domains, counts and expiry, never
+// cookie names or values, and the paste box is cleared after every save.
+// ============================================================================
+
+const browserSessionsState = { sessions: [], replacingId: null };
+
+function renderBrowserSessionsSkeleton() {
+    return `
+        <div class="browser-sessions" id="browser-sessions">
+            <h5>🔐 Authenticated sessions</h5>
+            <p class="browser-sessions-help">
+                Let the browser use your own logged-in accounts. Paste a cookie export below; it is stored
+                encrypted and injected into the browser behind the scenes. The AI can use the logged-in
+                browser but never sees your cookies.
+                <a href="https://github.com/open-assistant-org/open-assistant/blob/main/docs/integrations/browser-sessions.md" target="_blank" rel="noopener">Step-by-step manual</a>
+            </p>
+            <div id="browser-sessions-list" class="browser-sessions-list">
+                <p class="text-muted">Loading…</p>
+            </div>
+            <details class="browser-session-add" id="browser-session-add">
+                <summary id="browser-session-add-summary">➕ Add a session</summary>
+                <div class="form-group">
+                    <label for="bs-name">Name</label>
+                    <input type="text" id="bs-name" class="form-input" maxlength="64" placeholder="e.g. Personal Gmail" autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label for="bs-format">Format</label>
+                    <select id="bs-format" class="form-select" onchange="onBrowserSessionFormatChange()">
+                        <option value="auto">Auto-detect</option>
+                        <option value="playwright">Playwright storage_state (JSON, includes localStorage)</option>
+                        <option value="cookie_editor">Cookie-Editor / browser extension (JSON)</option>
+                        <option value="netscape">cookies.txt (Netscape)</option>
+                        <option value="header">Raw "Cookie:" header</option>
+                    </select>
+                </div>
+                <div class="form-group" id="bs-domain-group" style="display:none;">
+                    <label for="bs-domain">Domain</label>
+                    <input type="text" id="bs-domain" class="form-input" placeholder="example.com" autocomplete="off">
+                    <small class="text-muted">Required for a raw Cookie header, which carries no domain.</small>
+                </div>
+                <div class="form-group">
+                    <label for="bs-payload">Cookie export</label>
+                    <textarea id="bs-payload" class="form-textarea browser-session-payload" rows="6"
+                        placeholder="Paste the exported cookies here…" autocomplete="off" autocapitalize="off"
+                        spellcheck="false"></textarea>
+                    <input type="file" id="bs-file" accept=".json,.txt,.cookies,text/plain,application/json"
+                        onchange="onBrowserSessionFile(this)">
+                </div>
+                <label class="browser-session-check">
+                    <input type="checkbox" id="bs-persist" checked>
+                    Keep refreshed: save cookies the site renews while the browser is in use
+                </label>
+                <div class="browser-session-add-actions">
+                    <button class="btn btn-primary" id="bs-save" onclick="saveBrowserSession()">💾 Save session</button>
+                    <button class="btn btn-secondary" id="bs-cancel" style="display:none;" onclick="resetBrowserSessionForm()">Cancel</button>
+                </div>
+            </details>
+        </div>
+    `;
+}
+
+async function loadBrowserSessions() {
+    const list = document.getElementById('browser-sessions-list');
+    if (!list) return;
+    try {
+        browserSessionsState.sessions = await api.get('/api/browser/sessions');
+        renderBrowserSessions();
+    } catch (error) {
+        list.innerHTML = '<p class="error-text">Failed to load saved sessions</p>';
+        console.error('Failed to load browser sessions:', error);
+    }
+}
+
+function browserSessionExpiry(s) {
+    if (!s.latest_expiry) {
+        return { cls: 'neutral', text: 'Session cookies (no expiry)' };
+    }
+    const latest = new Date(s.latest_expiry);
+    const days = Math.floor((latest - new Date()) / 86400000);
+    if (latest < new Date()) return { cls: 'error', text: 'Expired: re-import' };
+    if (days < 7) return { cls: 'warning', text: `Expires in ${Math.max(days, 0)} d` };
+    return { cls: 'success', text: `Valid until ${latest.toISOString().slice(0, 10)}` };
+}
+
+function renderBrowserSessions() {
+    const list = document.getElementById('browser-sessions-list');
+    if (!list) return;
+    const sessions = browserSessionsState.sessions;
+    if (!sessions.length) {
+        list.innerHTML = '<p class="text-muted">No saved sessions yet.</p>';
+        return;
+    }
+    list.innerHTML = sessions.map(s => {
+        const exp = browserSessionExpiry(s);
+        const id = escapeAttr(s.id);
+        const domains = s.domains.map(d => `<span class="session-chip">${escapeHtml(d)}</span>`).join('');
+        return `
+            <div class="session-row ${s.enabled ? '' : 'session-disabled'}">
+                <div class="session-main">
+                    <div class="session-title">
+                        <strong>${escapeHtml(s.name)}</strong>
+                        <span class="session-badge session-badge-${exp.cls}">${escapeHtml(exp.text)}</span>
+                    </div>
+                    <div class="session-meta">
+                        ${domains}
+                        <span class="text-muted">${s.cookie_count} cookie${s.cookie_count === 1 ? '' : 's'}${s.has_local_storage ? ' + localStorage' : ''}</span>
+                    </div>
+                </div>
+                <div class="session-controls">
+                    <label class="session-check"><input type="checkbox" ${s.enabled ? 'checked' : ''}
+                        onchange="updateBrowserSession('${id}', {enabled: this.checked})"> Enabled</label>
+                    <label class="session-check" title="Save cookies the site renews while the browser is in use"><input type="checkbox" ${s.persist_updates ? 'checked' : ''}
+                        onchange="updateBrowserSession('${id}', {persist_updates: this.checked})"> Keep refreshed</label>
+                    <button class="btn btn-secondary btn-sm" onclick="testBrowserSession('${id}')">🔍 Test</button>
+                    <button class="btn btn-secondary btn-sm" onclick="startReplaceBrowserSession('${id}')">♻️ Replace</button>
+                    <button class="btn btn-danger btn-sm" onclick="deleteBrowserSession('${id}')">🗑️ Delete</button>
+                </div>
+            </div>`;
+    }).join('');
+}
+
+function onBrowserSessionFormatChange() {
+    const fmt = document.getElementById('bs-format').value;
+    document.getElementById('bs-domain-group').style.display = fmt === 'header' ? 'block' : 'none';
+}
+
+function onBrowserSessionFile(input) {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    if (file.size > 2000000) {
+        toast.error('That file is larger than 2 MB');
+        input.value = '';
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+        document.getElementById('bs-payload').value = String(reader.result || '');
+        input.value = '';
+    };
+    reader.onerror = () => toast.error('Could not read the file');
+    reader.readAsText(file);
+}
+
+function resetBrowserSessionForm() {
+    browserSessionsState.replacingId = null;
+    document.getElementById('bs-name').value = '';
+    document.getElementById('bs-name').disabled = false;
+    document.getElementById('bs-payload').value = '';
+    document.getElementById('bs-domain').value = '';
+    document.getElementById('bs-format').value = 'auto';
+    document.getElementById('bs-persist').checked = true;
+    document.getElementById('bs-persist').disabled = false;
+    document.getElementById('bs-file').value = '';
+    document.getElementById('bs-save').textContent = '💾 Save session';
+    document.getElementById('bs-cancel').style.display = 'none';
+    document.getElementById('browser-session-add-summary').textContent = '➕ Add a session';
+    document.getElementById('browser-session-add').open = false;
+    onBrowserSessionFormatChange();
+}
+
+function startReplaceBrowserSession(id) {
+    const s = browserSessionsState.sessions.find(x => x.id === id);
+    if (!s) return;
+    resetBrowserSessionForm();
+    browserSessionsState.replacingId = id;
+    const name = document.getElementById('bs-name');
+    name.value = s.name;
+    name.disabled = true;
+    document.getElementById('bs-persist').checked = s.persist_updates;
+    document.getElementById('bs-persist').disabled = true;
+    document.getElementById('bs-save').textContent = '♻️ Replace cookies';
+    document.getElementById('bs-cancel').style.display = 'inline-block';
+    document.getElementById('browser-session-add-summary').textContent = `♻️ Replace cookies for “${s.name}”`;
+    const details = document.getElementById('browser-session-add');
+    details.open = true;
+    details.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+async function saveBrowserSession() {
+    const payloadEl = document.getElementById('bs-payload');
+    const payload = payloadEl.value;
+    const format = document.getElementById('bs-format').value;
+    const domain = document.getElementById('bs-domain').value.trim() || null;
+    const replacingId = browserSessionsState.replacingId;
+    const name = document.getElementById('bs-name').value.trim();
+
+    if (!replacingId && !name) {
+        toast.error('Give the session a name');
+        return;
+    }
+    if (!payload.trim()) {
+        toast.error('Paste or upload a cookie export first');
+        return;
+    }
+
+    const saveBtn = document.getElementById('bs-save');
+    saveBtn.disabled = true;
+    try {
+        let result;
+        if (replacingId) {
+            result = await api.patch(`/api/browser/sessions/${encodeURIComponent(replacingId)}`, { payload, format, domain });
+        } else {
+            result = await api.post('/api/browser/sessions', {
+                name, payload, format, domain,
+                persist_updates: document.getElementById('bs-persist').checked,
+            });
+        }
+        // Never keep the secret in the page once it is stored.
+        payloadEl.value = '';
+
+        toast.success(`${replacingId ? 'Replaced' : 'Saved'} “${result.session.name}”: ${result.session.cookie_count} cookies for ${result.session.domains.join(', ')}`);
+        (result.warnings || []).forEach(w => toast.warning(w, 9000));
+        resetBrowserSessionForm();
+        await loadBrowserSessions();
+    } catch (error) {
+        toast.error(error.message || 'Failed to save session');
+    } finally {
+        saveBtn.disabled = false;
+    }
+}
+
+async function updateBrowserSession(id, changes) {
+    try {
+        await api.patch(`/api/browser/sessions/${encodeURIComponent(id)}`, changes);
+        await loadBrowserSessions();
+    } catch (error) {
+        toast.error(error.message || 'Failed to update session');
+        await loadBrowserSessions();
+    }
+}
+
+async function testBrowserSession(id) {
+    const s = browserSessionsState.sessions.find(x => x.id === id);
+    if (!s) return;
+    const suggestion = s.domains.length ? `https://${s.domains[0]}/` : 'https://';
+    const url = window.prompt(`Open which page to test “${s.name}”? Use a page that needs the login.`, suggestion);
+    if (!url) return;
+    toast.info('Opening the page in a test browser…');
+    try {
+        const r = await api.post(`/api/browser/sessions/${encodeURIComponent(id)}/test`, { url: url.trim() });
+        if (r.redirected_to_login) {
+            toast.warning(`Landed on a login page (${r.final_url}). The session has probably expired: replace it.`, 9000);
+        } else {
+            toast.success(`Loaded “${r.title || r.final_url}” at ${r.final_url}. Check that it is the logged-in view.`, 9000);
+        }
+    } catch (error) {
+        toast.error(error.message || 'Test failed');
+    }
+}
+
+async function deleteBrowserSession(id) {
+    const s = browserSessionsState.sessions.find(x => x.id === id);
+    if (!s) return;
+    if (!window.confirm(`Delete “${s.name}”?\n\nThis only removes the cookies stored here. To fully revoke access, also log out of the site or end the session in its security settings.`)) {
+        return;
+    }
+    try {
+        await api.delete(`/api/browser/sessions/${encodeURIComponent(id)}`);
+        toast.success(`Deleted “${s.name}”`);
+        if (browserSessionsState.replacingId === id) resetBrowserSessionForm();
+        await loadBrowserSessions();
+    } catch (error) {
+        toast.error(error.message || 'Failed to delete session');
     }
 }
