@@ -1,6 +1,6 @@
 """Browser tool request models."""
 
-from typing import Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -66,3 +66,73 @@ class BrowseFetchRequest(BaseModel):
         None,
         description="CSS selector to wait for before extraction (only used with 'dynamic' mode)",
     )
+
+
+# ----------------------------------------------------------------------------
+# Authenticated sessions (cookies). Write-only: responses never carry values.
+# ----------------------------------------------------------------------------
+
+
+class BrowserSessionCreate(BaseModel):
+    """Create a saved browser login from a cookie export."""
+
+    name: str = Field(..., description="Label, e.g. 'Personal Gmail' (unique, max 64 chars)")
+    format: Literal["auto", "playwright", "cookie_editor", "netscape", "header"] = Field(
+        "auto", description="Export format; 'auto' detects it"
+    )
+    payload: str = Field(
+        ..., repr=False, description="The pasted export (cookies and optionally localStorage)"
+    )
+    domain: Optional[str] = Field(None, description="Required for the raw 'Cookie:' header format")
+    persist_updates: bool = Field(
+        True, description="Save cookies the site rotates while the browser is in use"
+    )
+
+
+class BrowserSessionUpdate(BaseModel):
+    """Change a saved login. Supplying `payload` replaces its cookies."""
+
+    name: Optional[str] = None
+    enabled: Optional[bool] = None
+    persist_updates: Optional[bool] = None
+    format: Literal["auto", "playwright", "cookie_editor", "netscape", "header"] = "auto"
+    payload: Optional[str] = Field(None, repr=False)
+    domain: Optional[str] = None
+
+
+class BrowserSessionTestRequest(BaseModel):
+    """Open a page with one saved login to check it still works."""
+
+    url: str = Field(..., description="An http(s) page that requires the login")
+
+
+class BrowserSessionMetadata(BaseModel):
+    """Non-secret summary of a saved login (no cookie names or values)."""
+
+    id: str
+    name: str
+    enabled: bool
+    persist_updates: bool
+    domains: List[str]
+    cookie_count: int
+    expired_count: int
+    earliest_expiry: Optional[str] = None
+    latest_expiry: Optional[str] = None
+    has_local_storage: bool
+    created_at: str
+    updated_at: str
+
+
+class BrowserSessionResponse(BaseModel):
+    """A saved login plus any import warnings."""
+
+    session: BrowserSessionMetadata
+    warnings: List[str] = Field(default_factory=list)
+
+
+class BrowserSessionTestResponse(BaseModel):
+    """Where a test navigation landed. No page content, no cookies."""
+
+    final_url: str
+    title: str
+    redirected_to_login: bool

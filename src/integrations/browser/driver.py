@@ -4,7 +4,8 @@ import asyncio
 import os
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
+from urllib.parse import urlsplit
 
 from src.integrations.browser.accessibility import (
     AccessibilityNode,
@@ -27,6 +28,23 @@ logger = get_logger(__name__)
 # Default idle timeout before closing a browser session (seconds)
 DEFAULT_IDLE_TIMEOUT = 300  # 5 minutes
 
+DEFAULT_USER_AGENT = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+)
+
+
+def validate_navigation_url(url: str) -> str:
+    """Return ``url`` if it is plain http(s); raise ValueError otherwise.
+
+    Blocks ``javascript:``, ``file:``, ``chrome:`` and similar schemes so the
+    model can never use a URL to read page cookies or local files.
+    """
+    parts = urlsplit((url or "").strip())
+    if parts.scheme.lower() not in ("http", "https") or not parts.hostname:
+        raise ValueError("Only absolute http:// and https:// URLs can be opened")
+    return url.strip()
+
 
 class BrowserDriver:
     """
@@ -45,12 +63,28 @@ class BrowserDriver:
         viewport_height: int = 720,
         screenshot_config: Optional[ScreenshotConfig] = None,
         idle_timeout: int = DEFAULT_IDLE_TIMEOUT,
+        storage_state: Optional[Dict[str, Any]] = None,
+        user_agent: Optional[str] = None,
+        on_close: Optional[Callable[[Optional[Dict[str, Any]]], None]] = None,
     ):
+        """
+        Args:
+            storage_state: Playwright ``storage_state`` (cookies + localStorage)
+                injected into the browser context so saved logins are active.
+                Held in memory only; never logged or returned by any method.
+            user_agent: Override for the browser User-Agent string.
+            on_close: Called with the context's final ``storage_state`` just
+                before the context is closed (any close path), so rotated
+                cookies can be persisted. Errors are logged and swallowed.
+        """
         self.headless = headless
         self.viewport_width = viewport_width
         self.viewport_height = viewport_height
         self.screenshot_config = screenshot_config or ScreenshotConfig()
         self.idle_timeout = idle_timeout
+        self._storage_state = storage_state
+        self._user_agent = user_agent or DEFAULT_USER_AGENT
+        self._on_close = on_close
 
         self._playwright = None
         self._browser = None
@@ -86,13 +120,16 @@ class BrowserDriver:
             logger.info("Using custom Chromium executable: %s", executable_path)
 
         self._browser = await self._playwright.chromium.launch(**launch_kwargs)
-        self._context = await self._browser.new_context(
-            viewport={"width": self.viewport_width, "height": self.viewport_height},
-            user_agent=(
-                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-                "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            ),
-        )
+        context_kwargs: Dict[str, Any] = {
+            "viewport": {"width": self.viewport_width, "height": self.viewport_height},
+            "user_agent": self._user_agent,
+        }
+        if self._storage_state:
+            context_kwargs["storage_state"] = self._storage_state
+            logger.info(
+                "Injecting saved session (%d cookies)", len(self._storage_state.get("cookies", []))
+            )
+        self._context = await self._browser.new_context(**context_kwargs)
         # Auto-dismiss cookie consent banners on every navigation
         await install_cookie_consent_observer(self._context)
         self._page = await self._context.new_page()
@@ -103,8 +140,29 @@ class BrowserDriver:
         """Shut down the browser and Playwright."""
         await self._close_internal()
 
+    async def export_storage_state(self) -> Optional[Dict[str, Any]]:
+        """Return the live context's ``storage_state`` (cookies + localStorage), if any.
+
+        The result contains secrets: callers must persist it encrypted and never
+        expose it to the model.
+        """
+        if not self._context:
+            return None
+        try:
+            return await self._context.storage_state()
+        except Exception as e:
+            logger.warning("Could not export browser session state (%s)", type(e).__name__)
+            return None
+
     async def _close_internal(self) -> None:
         """Internal close."""
+        if self._context and self._on_close:
+            # Hand over rotated cookies before the context disappears.
+            try:
+                self._on_close(await self.export_storage_state())
+            except Exception as e:
+                logger.warning("Session write-back failed (%s)", type(e).__name__)
+
         if self._context:
             try:
                 await self._context.close()
@@ -164,6 +222,7 @@ class BrowserDriver:
         Returns:
             Screenshot of the page after navigation.
         """
+        url = validate_navigation_url(url)
         await self._ensure_browser()
         logger.info(f"Navigating to {url}")
         await self._page.goto(url, wait_until=wait_until, timeout=30_000)

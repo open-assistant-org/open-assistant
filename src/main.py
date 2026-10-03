@@ -476,7 +476,10 @@ async def lifespan(app: FastAPI):
             app.state.slack_socket_handler.close()
         # Close browser session
         if hasattr(app.state, "browser_service"):
-            app.state.browser_service.close()
+            try:
+                await app.state.browser_service.close()
+            except Exception as e:
+                logger.warning(f"Error closing browser session: {e}")
         # Shutdown scheduler
         if hasattr(app.state, "cron_job_service"):
             app.state.cron_job_service.shutdown_scheduler()
