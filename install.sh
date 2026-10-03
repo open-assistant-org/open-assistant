@@ -46,12 +46,33 @@ warn()    { echo -e "  ${YELLOW}⚠${RESET}  $*"; }
 error()   { echo -e "  ${RED}✖${RESET}  $*" >&2; }
 step()    { echo -e "\n${BOLD}${CYAN}▶ $*${RESET}"; }
 
+# When run as `curl ... | bash`, stdin is the script itself, so prompts must
+# read from the controlling terminal instead. BASH_SOURCE[0] is empty at the
+# top level only when bash is reading the script from stdin.
+PROMPT_INPUT=/dev/stdin
+if [[ -z "${BASH_SOURCE[0]:-}" ]] && { : </dev/tty; } 2>/dev/null; then
+  PROMPT_INPUT=/dev/tty
+fi
+
+# read_input [read flags...] VAR — like `read`, but from PROMPT_INPUT, and
+# exits with a helpful message instead of silently dying on EOF.
+read_input() {
+  local var="${!#}"
+  if ! read "$@" < "$PROMPT_INPUT" && [[ -z "${!var}" ]]; then
+    echo ""
+    error "No interactive input available (stdin closed and no terminal found)."
+    error "Download the installer and run it from a terminal instead:"
+    error "  curl -fsSLo install.sh https://raw.githubusercontent.com/open-assistant-org/open-assistant/main/install.sh && bash install.sh"
+    exit 1
+  fi
+}
+
 prompt() {
   local var="$1" question="$2" default="${3:-}"
   local hint=""
   [[ -n "$default" ]] && hint=" ${DIM}[${default}]${RESET}"
   echo -ne "  ${BOLD}${YELLOW}?${RESET}  ${question}${hint}: "
-  read -r input
+  read_input -r input
   if [[ -z "$input" && -n "$default" ]]; then
     eval "$var=\"$default\""
   else
@@ -62,7 +83,7 @@ prompt() {
 prompt_secret() {
   local var="$1" question="$2"
   echo -ne "  ${BOLD}${YELLOW}?${RESET}  ${question} ${DIM}(hidden)${RESET}: "
-  read -rs input; echo ""
+  read_input -rs input; echo ""
   eval "$var=\"$input\""
 }
 
@@ -80,7 +101,7 @@ prompt_choice() {
     i=$((i + 1))
   done
   echo -ne "  ${BOLD}${YELLOW}?${RESET}  Enter number${default:+ or press Enter for default}: "
-  read -r choice
+  read_input -r choice
   if [[ -z "$choice" && -n "$default" ]]; then
     eval "$var=\"$default\""
   elif [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#opts[@]} )); then
@@ -95,7 +116,7 @@ prompt_yn() {
   local hint
   [[ "$default" == "y" ]] && hint="${GREEN}Y${RESET}/n" || hint="y/${GREEN}N${RESET}"
   echo -ne "  ${BOLD}${YELLOW}?${RESET}  ${question} [${hint}]: "
-  read -r yn
+  read_input -r yn
   [[ -z "$yn" ]] && yn="$default"
   [[ "$yn" =~ ^[Yy] ]] && eval "$var=true" || eval "$var=false"
 }
