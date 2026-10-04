@@ -311,7 +311,7 @@ async def test_ingested_bot_message_is_labelled_in_history():
 # ---------------------------------------------------------------------------
 
 
-def _webhook_call(event, settings, allowed_bots=()):
+async def _webhook_call(event, settings, allowed_bots=()):
     request = MagicMock()
     request.json = AsyncMock(return_value={"event": event})
     tasks = BackgroundTasks()
@@ -323,15 +323,14 @@ def _webhook_call(event, settings, allowed_bots=()):
     )
     slack_service.get_user_display_info.side_effect = lambda uid: {"display_name": uid}
     message_handler = MagicMock()
-    coro = handle_slack_event(request, tasks, message_handler, settings, slack_service, MagicMock())
-    return coro, tasks, message_handler
+    await handle_slack_event(request, tasks, message_handler, settings, slack_service, MagicMock())
+    return tasks, message_handler
 
 
 @pytest.mark.asyncio
 async def test_webhook_ingests_bot_message_with_speaker_label():
     event = _event("steven says 4", user="USTEVEN", bot_id="BS", bot_profile={"name": "Steven"})
-    coro, tasks, message_handler = _webhook_call(event, _settings())
-    await coro
+    tasks, message_handler = await _webhook_call(event, _settings())
 
     assert len(tasks.tasks) == 1
     assert tasks.tasks[0].func is message_handler.ingest_passive_message
@@ -342,8 +341,7 @@ async def test_webhook_ingests_bot_message_with_speaker_label():
 @pytest.mark.asyncio
 async def test_webhook_does_not_reply_to_unlisted_bot_mention():
     event = _event(MENTION, user="USTEVEN", bot_id="BS")
-    coro, tasks, message_handler = _webhook_call(event, _settings(**{"slack.reply_to_bots": True}))
-    await coro
+    tasks, message_handler = await _webhook_call(event, _settings(**{"slack.reply_to_bots": True}))
 
     assert [t.func for t in tasks.tasks] == [message_handler.ingest_passive_message]
 
@@ -351,10 +349,9 @@ async def test_webhook_does_not_reply_to_unlisted_bot_mention():
 @pytest.mark.asyncio
 async def test_webhook_replies_to_allowed_bot_mention():
     event = _event(MENTION, user="USTEVEN", bot_id="BS")
-    coro, tasks, message_handler = _webhook_call(
+    tasks, message_handler = await _webhook_call(
         event, _settings(**{"slack.reply_to_bots": True}), {"USTEVEN"}
     )
-    await coro
 
     assert len(tasks.tasks) == 1
     assert tasks.tasks[0].func is not message_handler.ingest_passive_message
