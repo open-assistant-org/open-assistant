@@ -10,6 +10,12 @@ from slack_sdk.socket_mode.request import SocketModeRequest
 from slack_sdk.socket_mode.response import SocketModeResponse
 from slack_sdk.web import WebClient
 
+from src.integrations.slack.participants import (
+    Action,
+    SlackSender,
+    format_with_speaker,
+    route_message_event,
+)
 from src.utils.logger import get_logger
 from src.utils.settings import settings_truthy
 
@@ -117,13 +123,18 @@ class SlackSocketModeHandler:
         self._thread.start()
         logger.info("Slack Socket Mode connection started")
 
+    _bot_id: Optional[str] = None
+
     def _get_bot_user_id(self) -> Optional[str]:
-        """Lazily fetch and cache the bot's Slack user ID via auth.test."""
+        """Lazily fetch and cache the bot's Slack user ID (and bot ID) via auth.test."""
         if not self._bot_user_id:
             try:
                 response = self.client.web_client.auth_test()
                 self._bot_user_id = response.get("user_id") or ""
-                logger.info(f"[Slack Socket Mode] Bot user ID: {self._bot_user_id}")
+                self._bot_id = response.get("bot_id") or None
+                logger.info(
+                    f"[Slack Socket Mode] Bot user ID: {self._bot_user_id}, bot ID: {self._bot_id}"
+                )
             except Exception as e:
                 logger.warning(f"[Slack Socket Mode] Could not fetch bot user ID: {e}")
         return self._bot_user_id or None
@@ -200,80 +211,47 @@ class SlackSocketModeHandler:
             f"user={event.get('user')}, channel={event.get('channel')}, bot_id={event.get('bot_id')}"
         )
 
-        # Only handle actual user messages
-        # Allow messages with no subtype (normal text) or file_share subtype (file uploads)
-        if event_type != "message":
-            logger.debug(f"[Slack Socket Mode] Ignoring non-message event: {event_type}")
-            return
-
-        if event_subtype is not None and event_subtype != "file_share":
-            logger.debug(f"[Slack Socket Mode] Ignoring message with subtype: {event_subtype}")
-            return
-
-        # Ignore messages from bots (including ourselves)
-        if event.get("bot_id"):
-            logger.debug(f"[Slack Socket Mode] Ignoring bot message: bot_id={event.get('bot_id')}")
-            return
-
         user_id = event.get("user", "")
         channel_id = event.get("channel", "")
         text = event.get("text", "")
         thread_ts = event.get("thread_ts") or event.get("ts", "")
         files = _extract_slack_files(event)
 
+        mention_only = settings_truthy(self.settings_service.get_setting("slack.mention_only"))
+        ingest_all = mention_only and settings_truthy(
+            self.settings_service.get_setting("slack.thread_ingest_all_messages")
+        )
+        reply_to_bots = mention_only and settings_truthy(
+            self.settings_service.get_setting("slack.reply_to_bots")
+        )
+        reply_thread_ts = self._resolve_thread_scope_ts(thread_ts)
+        contact_identifier = f"{channel_id}:{reply_thread_ts}" if reply_thread_ts else channel_id
+
+        bot_user_id = self._get_bot_user_id() if mention_only or event.get("bot_id") else None
+
+        route = route_message_event(
+            event,
+            has_files=bool(files),
+            own_user_id=bot_user_id,
+            own_bot_id=self._bot_id,
+            mention_only=mention_only,
+            ingest_all=ingest_all,
+            reply_to_bots=reply_to_bots,
+            thread_scoped=bool(reply_thread_ts),
+            conversation_key=contact_identifier,
+            is_user_allowed=self.slack_service.is_user_allowed,
+            is_bot_allowed=self.slack_service.is_bot_allowed,
+        )
+        sender = route.sender
         logger.info(
-            f"[Slack Socket Mode] Message received: user_id={user_id}, channel={channel_id}, "
-            f"text='{text[:100] if text else ''}...'"
-            f"{f', files={len(files)}' if files else ''}"
+            f"[Slack Socket Mode] Message from {sender.id if sender else user_id}"
+            f"{' (bot)' if sender and sender.is_bot else ''} in {channel_id}: "
+            f"{route.action.value} ({route.reason})"
         )
 
-        # Skip if there's no text and no files
-        if (not text or not text.strip()) and not files:
-            logger.debug("[Slack Socket Mode] Ignoring empty message with no files")
+        if route.action == Action.IGNORE:
             return
 
-        # Check if user is allowed
-        if not self.slack_service.is_user_allowed(user_id):
-            logger.warning(
-                f"[Slack Socket Mode] User {user_id} NOT in allowed list - ignoring message. "
-                f"Configure slack.allowed_user_ids to allow this user."
-            )
-            return
-
-        logger.info(f"[Slack Socket Mode] User {user_id} is allowed - processing message")
-
-        # Filter to mentions only if configured
-        if settings_truthy(self.settings_service.get_setting("slack.mention_only")):
-            bot_user_id = self._get_bot_user_id()
-            mention_token = f"<@{bot_user_id}>" if bot_user_id else None
-            is_mention = bool(mention_token and mention_token in text)
-
-            if not is_mention:
-                if (
-                    settings_truthy(
-                        self.settings_service.get_setting("slack.thread_ingest_all_messages")
-                    )
-                    and thread_ts
-                    and self.event_loop
-                    and not self.event_loop.is_closed()
-                ):
-                    logger.debug(
-                        f"[Slack Socket Mode] mention_only: ingesting non-mention thread "
-                        f"message from {user_id} without replying"
-                    )
-                    asyncio.run_coroutine_threadsafe(
-                        self._ingest_thread_message(channel_id, user_id, text, thread_ts),
-                        self.event_loop,
-                    )
-                else:
-                    logger.debug(
-                        f"[Slack Socket Mode] mention_only: ignoring non-mention from {user_id}"
-                    )
-                return
-
-            text = text.replace(mention_token, "").strip()
-
-        # Process message in background using the main event loop
         if self.event_loop is None:
             logger.error(
                 "[Slack Socket Mode] No event loop provided - cannot process message. "
@@ -285,12 +263,36 @@ class SlackSocketModeHandler:
             logger.error("[Slack Socket Mode] Event loop is closed - cannot process message")
             return
 
+        # In shared threads, label who is speaking so the model can tell
+        # participants apart; ids are included when it may @mention them back.
+        label_speakers = bool(sender and (sender.is_bot or ingest_all))
+
+        def _label(body: str) -> str:
+            if not (label_speakers and sender and body.strip()):
+                return body
+            return format_with_speaker(body, sender, self._lookup_user, reply_to_bots)
+
+        if route.action == Action.INGEST:
+            asyncio.run_coroutine_threadsafe(
+                self._ingest_thread_message(
+                    channel_id, sender.id if sender else user_id, _label(text), thread_ts, sender
+                ),
+                self.event_loop,
+            )
+            return
+
         logger.debug(f"[Slack Socket Mode] Submitting coroutine to event loop: {self.event_loop}")
 
         asyncio.run_coroutine_threadsafe(
-            self._process_and_reply(channel_id, user_id, text, files, thread_ts),
+            self._process_and_reply(
+                channel_id, sender.id if sender else user_id, _label(route.text), files, thread_ts
+            ),
             self.event_loop,
         )
+
+    def _lookup_user(self, user_id: str) -> Dict[str, Any]:
+        """Look up a Slack user's names (used to label thread participants)."""
+        return self.slack_service.get_user_display_info(user_id)
 
     def _resolve_thread_scope_ts(self, thread_ts: Optional[str]) -> Optional[str]:
         """
@@ -311,7 +313,12 @@ class SlackSocketModeHandler:
         return thread_ts if (use_thread_scope and thread_ts) else None
 
     async def _ingest_thread_message(
-        self, channel_id: str, user_id: str, text: str, thread_ts: str
+        self,
+        channel_id: str,
+        user_id: str,
+        text: str,
+        thread_ts: str,
+        sender: Optional[SlackSender] = None,
     ) -> None:
         """
         Passively record a non-mention thread message into that thread's
@@ -340,6 +347,7 @@ class SlackSocketModeHandler:
                     "user": user_id,
                     "thread_ts": reply_thread_ts,
                     "passive": True,
+                    "is_bot": bool(sender and sender.is_bot),
                 },
                 max_idle_seconds=SLACK_NEW_CHAT_IDLE_SECONDS,
             )

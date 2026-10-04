@@ -143,6 +143,30 @@ class SlackService(BaseService):
             logger.error(f"Failed to get bot user ID: {e}")
             return None
 
+    def get_own_ids(self) -> Dict[str, Optional[str]]:
+        """Get the bot's own Slack user ID and bot ID (from auth.test)."""
+        try:
+            info = self._get_client().get_bot_info()
+            return {"user_id": info.get("user_id") or None, "bot_id": info.get("bot_id") or None}
+        except Exception as e:
+            logger.error(f"Failed to get bot identity: {e}")
+            return {"user_id": None, "bot_id": None}
+
+    def get_user_display_info(self, user_id: str) -> Dict[str, Any]:
+        """Look up a Slack user's names (for labelling thread participants)."""
+        return self._get_client().get_user_info(user_id)
+
+    def is_bot_allowed(self, sender: Any) -> bool:
+        """Check if another bot may trigger a reply.
+
+        Matches ``slack.allowed_bot_ids`` on the bot's user ID (U...) or bot ID
+        (B...). Unlike the human list, an empty list allows NO bot.
+        """
+        from src.integrations.slack.participants import bot_in_allowlist, parse_id_list
+
+        allowed = parse_id_list(self.settings_repo.get("slack.allowed_bot_ids"))
+        return bot_in_allowlist(sender, allowed)
+
     def is_user_allowed(self, user_id: str) -> bool:
         """Check if a Slack user is allowed to interact with the bot."""
         allowed_ids_str = self.settings_repo.get("slack.allowed_user_ids") or ""

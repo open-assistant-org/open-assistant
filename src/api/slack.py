@@ -16,6 +16,7 @@ from src.core.dependencies import (
 from src.core.repositories.credentials import CredentialsRepository
 from src.core.repositories.settings import SettingsRepository
 from src.core.tools.definitions import initialize_all_tools
+from src.integrations.slack.participants import Action, format_with_speaker, route_message_event
 from src.models.slack import *
 from src.services.message_handler import MessageHandler
 from src.utils.settings import settings_truthy
@@ -150,40 +151,11 @@ async def handle_slack_event(
         return {"challenge": body.get("challenge", "")}
 
     event = body.get("event", {})
-    event_type = event.get("type")
-    event_subtype = event.get("subtype")
-
-    # Only handle actual user messages
-    # Allow messages with no subtype (normal text) or with file_share subtype (file uploads)
-    if event_type != "message":
-        return {"ok": True}
-    if event_subtype is not None and event_subtype != "file_share":
-        return {"ok": True}
-
-    # Ignore messages from bots (including ourselves)
-    if event.get("bot_id"):
-        return {"ok": True}
 
     user_id = event.get("user", "")
     channel_id = event.get("channel", "")
-    text = event.get("text", "")
     thread_ts = event.get("thread_ts") or event.get("ts", "")
     files = _extract_slack_files(event)
-
-    # Skip if there's no text and no files
-    if not text.strip() and not files:
-        return {"ok": True}
-
-    logger.info(
-        f"Received Slack message from {user_id} in {channel_id}: "
-        f"{text[:100] if text else '(no text)'}"
-        f"{f' [{len(files)} file(s)]' if files else ''}"
-    )
-
-    # Check if user is allowed
-    if not slack_service.is_user_allowed(user_id):
-        logger.info(f"Ignoring message from non-allowed Slack user {user_id}")
-        return {"ok": True, "message": "Ignored (not allowed)"}
 
     # Resolve the thread scope once, up front, so the reply target, the
     # progress-notification target and the conversation identity can never
@@ -201,41 +173,71 @@ async def handle_slack_event(
     thread_ingest_all = mention_only and settings_truthy(
         settings_service.get_setting("slack.thread_ingest_all_messages")
     )
+    reply_to_bots = mention_only and settings_truthy(
+        settings_service.get_setting("slack.reply_to_bots")
+    )
     use_thread_scope = thread_replies or thread_ingest_all
     reply_thread_ts = thread_ts if (use_thread_scope and thread_ts) else None
     contact_identifier = f"{channel_id}:{reply_thread_ts}" if reply_thread_ts else channel_id
 
-    # Filter to mentions only if configured
-    if mention_only:
-        bot_user_id = slack_service.get_bot_user_id()
-        mention_token = f"<@{bot_user_id}>" if bot_user_id else None
-        is_mention = bool(mention_token and mention_token in text)
+    own_ids = (
+        slack_service.get_own_ids()
+        if (mention_only or event.get("bot_id"))
+        else {"user_id": None, "bot_id": None}
+    )
 
-        if not is_mention:
-            if thread_ingest_all and reply_thread_ts and text.strip():
-                logger.debug(
-                    f"mention_only: ingesting non-mention thread message from "
-                    f"{user_id} without replying"
-                )
-                background_tasks.add_task(
-                    message_handler.ingest_passive_message,
-                    message=text,
-                    channel="slack",
-                    contact_identifier=contact_identifier,
-                    metadata={
-                        "source": "slack_event",
-                        "channel": channel_id,
-                        "user": user_id,
-                        "thread_ts": reply_thread_ts,
-                        "passive": True,
-                    },
-                    max_idle_seconds=SLACK_NEW_CHAT_IDLE_SECONDS,
-                )
-            else:
-                logger.debug(f"mention_only: ignoring non-mention from {user_id}")
-            return {"ok": True}
+    route = route_message_event(
+        event,
+        has_files=bool(files),
+        own_user_id=own_ids.get("user_id"),
+        own_bot_id=own_ids.get("bot_id"),
+        mention_only=mention_only,
+        ingest_all=thread_ingest_all,
+        reply_to_bots=reply_to_bots,
+        thread_scoped=bool(reply_thread_ts),
+        conversation_key=contact_identifier,
+        is_user_allowed=slack_service.is_user_allowed,
+        is_bot_allowed=slack_service.is_bot_allowed,
+    )
+    sender = route.sender
+    if route.action == Action.IGNORE:
+        logger.debug(f"Slack message ignored: {route.reason}")
+        return {"ok": True}
+    if sender:
+        user_id = sender.id
 
-        text = text.replace(mention_token, "").strip()
+    logger.info(
+        f"Received Slack message from {user_id} in {channel_id} ({route.action.value}): "
+        f"{(event.get('text') or '(no text)')[:100]}"
+        f"{f' [{len(files)} file(s)]' if files else ''}"
+    )
+
+    # In shared threads, label who is speaking so the model can tell
+    # participants apart; ids are included when it may @mention them back.
+    def _label(body: str) -> str:
+        if not (sender and (sender.is_bot or thread_ingest_all) and body.strip()):
+            return body
+        return format_with_speaker(body, sender, slack_service.get_user_display_info, reply_to_bots)
+
+    if route.action == Action.INGEST:
+        background_tasks.add_task(
+            message_handler.ingest_passive_message,
+            message=_label(event.get("text") or ""),
+            channel="slack",
+            contact_identifier=contact_identifier,
+            metadata={
+                "source": "slack_event",
+                "channel": channel_id,
+                "user": user_id,
+                "thread_ts": reply_thread_ts,
+                "passive": True,
+                "is_bot": bool(sender and sender.is_bot),
+            },
+            max_idle_seconds=SLACK_NEW_CHAT_IDLE_SECONDS,
+        )
+        return {"ok": True}
+
+    text = _label(route.text)
 
     async def process_and_reply():
         try:
