@@ -280,6 +280,19 @@ Human:      "@OpenAssistant what's left?"
 
 Enabling this implicitly scopes the conversation to the thread — the same way **Reply in Thread** does — so ingested messages and @mention replies always share one conversation identity.
 
+Ingested messages are labelled with their speaker (e.g. `[Steven]: step 1 done ✅`), so the AI can answer "what did Steven say?". Bot messages are recorded the same way as human ones, including messages from legacy bots and webhooks. Open Assistant's own posts are never re-ingested.
+
+> **Allow-list note:** The human **Allowed User IDs** list applies to humans only. Other bots' messages are always recorded as context when this is enabled; whether they can also trigger a *reply* is controlled by the two settings below.
+
+### Reply to Bots & Mention Participants
+
+Only shown, and only takes effect, when **Reply Only on Mention** is enabled. Off by default.
+
+By default another bot that @mentions Open Assistant is recorded (if **Ingest All Thread Messages** is on) but never answered, which rules out bot-to-bot reply loops. With this enabled, an @mention from a bot gets a reply just like one from a human — **but only from bots listed under Allowed Bot IDs**. It also adds each speaker's Slack mention to the labels (`[Steven <@U07STEVEN>]: …`), so Open Assistant can @mention other bots and humans in its replies.
+
+- **Allowed Bot IDs** (shown when this toggle is on): comma-separated Slack user IDs (`U…`) or bot IDs (`B…`). **An empty list allows no bots**, unlike the human list where empty allows everyone. You can find a bot's user ID in its Slack profile ("Copy member ID"); its bot ID appears in the `bot_id` field of events.
+- **Loop cap:** at most 3 consecutive bot-triggered replies are sent per thread. Any human message in the thread resets the count.
+
 ## How Messages Work
 
 ### Socket Mode (Default)

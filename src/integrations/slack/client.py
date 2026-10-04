@@ -166,6 +166,7 @@ class SlackClient:
                 "ok": response.get("ok", False),
                 "user": response.get("user", ""),
                 "user_id": response.get("user_id", ""),
+                "bot_id": response.get("bot_id", ""),
                 "team": response.get("team", ""),
                 "team_id": response.get("team_id", ""),
             }
