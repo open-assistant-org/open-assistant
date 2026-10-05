@@ -634,7 +634,7 @@ async function saveApplicationSettings() {
 
 async function loadIntegrations() {
     try {
-        let services = ['google', 'google_navigator', 'outlook', 'notion', 'nextcloud', 'whatsapp', 'slack', 'brave', 'browser', 'whisper', 'mistral_ocr', 'google_ads', 'google_news', 'yahoo_finance'];
+        let services = ['google', 'google_navigator', 'outlook', 'notion', 'nextcloud', 'whatsapp', 'slack', 'elevenlabs', 'brave', 'browser', 'whisper', 'mistral_ocr', 'google_ads', 'google_news', 'yahoo_finance'];
         const container = document.getElementById('integrations-list');
 
         // Filter out hidden services for managed instances
@@ -807,6 +807,7 @@ function getServiceIcon(service) {
         nextcloud: '☁️',
         whatsapp: '💬',
         slack: '📢',
+        elevenlabs: '🎧',
         brave: '🔎',
         browser: '🌐',
         whisper: '🎙️',
@@ -828,6 +829,7 @@ function getServiceDisplayName(service) {
         nextcloud: 'Nextcloud',
         whatsapp: 'WhatsApp',
         slack: 'Slack',
+        elevenlabs: 'ElevenLabs Voice',
         brave: 'Brave',
         browser: 'Browser',
         whisper: 'Whisper',
@@ -849,6 +851,7 @@ function getIntegrationDocUrl(service) {
         nextcloud: 'https://github.com/open-assistant-org/open-assistant/blob/main/docs/integrations/nextcloud.md',
         whatsapp: 'https://github.com/open-assistant-org/open-assistant/blob/main/docs/integrations/whatsapp.md',
         slack: 'https://github.com/open-assistant-org/open-assistant/blob/main/docs/integrations/slack.md',
+        elevenlabs: 'https://github.com/open-assistant-org/open-assistant/blob/main/docs/integrations/elevenlabs.md',
         brave: 'https://brave.com/search/api/',
         browser: 'https://docs.open-assistant.org/integrations/browser-sessions/',
         whisper: 'https://github.com/open-assistant-org/open-assistant/blob/main/docs/integrations/whisper.md',
@@ -1561,6 +1564,7 @@ async function testConnection(service) {
                 'nextcloud': '/api/nextcloud/test-connection',
                 'whatsapp': '/api/whatsapp/test-connection',
                 'slack': '/api/slack/test-connection',
+                'elevenlabs': '/api/elevenlabs/test-connection',
                 'brave': '/api/brave/test-connection',
                 'browser': '/api/browser/test-connection',
                 'whisper': '/api/whisper/test-connection',
@@ -2100,6 +2104,7 @@ const SERVICE_ICONS = {
     nextcloud: '☁️',
     whatsapp: '💬',
     slack: '📢',
+    elevenlabs: '🎧',
     brave: '🔎',
     browser: '🌐',
     google_news: '📰',

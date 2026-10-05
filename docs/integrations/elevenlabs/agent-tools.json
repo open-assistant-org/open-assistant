@@ -1,0 +1,52 @@
+{
+  "_comment": "Server tool definitions for the ElevenLabs agent. Replace YOUR_APP_URL, and store the tool secret as an ElevenLabs workspace secret (e.g. open_assistant_tool_secret).",
+  "tools": [
+    {
+      "type": "webhook",
+      "name": "ask_assistant",
+      "description": "Hand a task to the user's personal assistant, which can use their email, calendar, files, the web and other tools. Use it whenever the caller wants something done or looked up. Write a complete, self-contained request. Say a short filler such as 'Let me check that' BEFORE calling.",
+      "response_timeout_secs": 30,
+      "api_schema": {
+        "url": "https://YOUR_APP_URL/api/elevenlabs/tools/ask_assistant",
+        "method": "POST",
+        "request_headers": {
+          "Authorization": { "secret_id": "open_assistant_tool_secret", "prefix": "Bearer " }
+        },
+        "request_body_schema": {
+          "type": "object",
+          "required": ["request", "conversation_id"],
+          "properties": {
+            "request": {
+              "type": "string",
+              "description": "The caller's request, rephrased so it makes sense without the earlier conversation."
+            },
+            "conversation_id": {
+              "type": "string",
+              "dynamic_variable": "system__conversation_id"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "webhook",
+      "name": "check_assistant_result",
+      "description": "Collect the result of an earlier ask_assistant call that returned status 'working'. Call it with the job_id you were given, after telling the caller you are still on it.",
+      "response_timeout_secs": 30,
+      "api_schema": {
+        "url": "https://YOUR_APP_URL/api/elevenlabs/tools/check_assistant_result",
+        "method": "POST",
+        "request_headers": {
+          "Authorization": { "secret_id": "open_assistant_tool_secret", "prefix": "Bearer " }
+        },
+        "request_body_schema": {
+          "type": "object",
+          "required": ["job_id"],
+          "properties": {
+            "job_id": { "type": "string", "description": "The job_id returned by ask_assistant." }
+          }
+        }
+      }
+    }
+  ]
+}
