@@ -868,3 +868,14 @@ def get_message_handler(
         max_skills_per_request=5,
         task_repo=task_repo,
     )
+
+
+def get_elevenlabs_service(
+    settings_repo: SettingsRepository = Depends(get_settings_repo),
+    credentials_repo: CredentialsRepository = Depends(get_credentials_repo),
+    audit_repo: AuditLogRepository = Depends(get_audit_repo),
+):
+    """Get ElevenLabs voice agent service instance."""
+    from src.services.elevenlabs import ElevenLabsService
+
+    return ElevenLabsService(settings_repo, credentials_repo, audit_repo)

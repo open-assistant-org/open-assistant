@@ -884,8 +884,9 @@ class MessageHandler:
           cases.  When *reply_thread_ts* is set the update is posted inside
           that thread rather than at the channel root, keeping sub-task
           progress with the exchange that triggered it.
-        - webui / subtask / anything else: no-op — the user is watching
-          synchronously or it is an internal sub-task.
+        - elevenlabs / webui / subtask / anything else: no-op — the user is
+          watching synchronously (voice callers are kept informed by the voice
+          agent while the tool call is pending) or it is an internal sub-task.
 
         Failures are logged at DEBUG level and never propagate, so a
         misconfigured integration cannot break the wait_for_tasks flow.

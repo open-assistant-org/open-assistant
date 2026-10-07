@@ -28,6 +28,7 @@ class ConfigCategory(str, Enum):
     NEXTCLOUD = "nextcloud"  # Nextcloud integration
     WHATSAPP = "whatsapp"  # WhatsApp integration
     SLACK = "slack"  # Slack integration
+    ELEVENLABS = "elevenlabs"  # ElevenLabs voice agent channel
     BRAVE = "brave"  # Brave Search integration
     BROWSER = "browser"  # Browser integration with Playwright
     WHISPER = "whisper"  # OpenAI Whisper audio transcription
@@ -741,6 +742,83 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
         display_order=3,
         ui_widget="text",
         placeholder="data/whatsapp_session",
+    ),
+    # ========================================================================
+    # ELEVENLABS VOICE AGENT
+    # ========================================================================
+    "elevenlabs.enabled": SettingDefinition(
+        key="elevenlabs.enabled",
+        display_name="Enable ElevenLabs Voice",
+        description="Adds a Talk page (microphone icon in the navbar) for voice conversations through an ElevenLabs agent. The browser connects out to ElevenLabs; nothing connects in to this instance.",
+        value_type=SettingValueType.BOOL,
+        category=ConfigCategory.ELEVENLABS,
+        default_value=False,
+        env_var_name="ELEVENLABS_ENABLED",
+        display_order=1,
+        ui_widget="toggle",
+    ),
+    "elevenlabs.api_key": SettingDefinition(
+        key="elevenlabs.api_key",
+        display_name="API Key",
+        description="ElevenLabs API key. It stays on the server and is only used for outbound requests (starting a voice session, fetching the transcript after a call).",
+        value_type=SettingValueType.STRING,
+        category=ConfigCategory.ELEVENLABS,
+        is_sensitive=True,
+        default_value="",
+        env_var_name="ELEVENLABS_API_KEY",
+        display_order=2,
+        ui_widget="password",
+        placeholder="sk_...",
+    ),
+    "elevenlabs.agent_id": SettingDefinition(
+        key="elevenlabs.agent_id",
+        display_name="Agent ID",
+        description="ID of the ElevenLabs agent to talk to. The agent needs the two client tools described in the ElevenLabs docs page.",
+        value_type=SettingValueType.STRING,
+        category=ConfigCategory.ELEVENLABS,
+        default_value="",
+        env_var_name="ELEVENLABS_AGENT_ID",
+        display_order=3,
+        ui_widget="text",
+        placeholder="agent_...",
+    ),
+    "elevenlabs.tool_wait_seconds": SettingDefinition(
+        key="elevenlabs.tool_wait_seconds",
+        display_name="Tool Wait (seconds)",
+        description="How long a voice request waits for the assistant before answering 'still working'. The voice agent then checks back for the result.",
+        value_type=SettingValueType.INT,
+        category=ConfigCategory.ELEVENLABS,
+        default_value=20,
+        min_value=3,
+        max_value=120,
+        env_var_name="ELEVENLABS_TOOL_WAIT_SECONDS",
+        display_order=4,
+        ui_widget="number",
+    ),
+    "elevenlabs.fallback_channel": SettingDefinition(
+        key="elevenlabs.fallback_channel",
+        display_name="Fallback Channel",
+        description="Where to deliver an answer that finishes after the caller has hung up",
+        value_type=SettingValueType.STRING,
+        category=ConfigCategory.ELEVENLABS,
+        default_value="none",
+        options=["none", "slack", "whatsapp"],
+        option_labels=["None", "Slack (default channel)", "WhatsApp (owner)"],
+        env_var_name="ELEVENLABS_FALLBACK_CHANNEL",
+        display_order=5,
+        ui_widget="select",
+    ),
+    "elevenlabs.new_chat_idle_seconds": SettingDefinition(
+        key="elevenlabs.new_chat_idle_seconds",
+        display_name="New Conversation After Idle (seconds)",
+        description="Start a fresh conversation when a voice session has been idle this long",
+        value_type=SettingValueType.INT,
+        category=ConfigCategory.ELEVENLABS,
+        default_value=1800,
+        min_value=60,
+        env_var_name="ELEVENLABS_NEW_CHAT_IDLE_SECONDS",
+        display_order=6,
+        ui_widget="number",
     ),
     # ========================================================================
     # SLACK INTEGRATION

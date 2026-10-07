@@ -1,0 +1,35 @@
+{
+  "_comment": "Client tool definitions for the ElevenLabs agent (Agent > Tools > Add tool > Client). Both tools run in the Talk page of Open Assistant, so there are no URLs or secrets here. Enable 'Wait for response' on both.",
+  "tools": [
+    {
+      "type": "client",
+      "name": "ask_assistant",
+      "description": "Hand a task to the user's personal assistant, which can use their email, calendar, files, the web and other tools. Use it whenever the caller wants something done or looked up. Write a complete, self-contained request. Say a short filler such as 'Let me check that' BEFORE calling. The result has a status: 'done' (read out 'answer'; if 'question' is set, ask it and pass the reply to ask_assistant), 'working' (tell the caller you're still on it, then call check_assistant_result with the job_id) or 'error' (read out 'answer').",
+      "expects_response": true,
+      "response_timeout_secs": 45,
+      "parameters": [
+        {
+          "id": "request",
+          "type": "string",
+          "required": true,
+          "description": "The caller's request, rephrased so it makes sense without the earlier conversation."
+        }
+      ]
+    },
+    {
+      "type": "client",
+      "name": "check_assistant_result",
+      "description": "Collect the result of an earlier ask_assistant call that returned status 'working'. Tell the caller you're still on it first, then call this with the job_id you were given.",
+      "expects_response": true,
+      "response_timeout_secs": 45,
+      "parameters": [
+        {
+          "id": "job_id",
+          "type": "string",
+          "required": true,
+          "description": "The job_id returned by ask_assistant."
+        }
+      ]
+    }
+  ]
+}

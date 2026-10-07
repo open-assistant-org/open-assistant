@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Talk - Open Assistant</title>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/api/pwa/manifest.json">
+
+    <!-- Theme Colors -->
+    <meta name="theme-color" content="#00ff00">
+    <meta name="msapplication-TileColor" content="#0a0a0a">
+    <meta name="msapplication-navbutton-color" content="#00ff00">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <!-- PWA Meta Tags -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Assistant">
+    <meta name="application-name" content="Open Assistant">
+
+    <!-- Apple Touch Icons -->
+    <link rel="apple-touch-icon" href="/static/icons/icon-152x152.png">
+    <link rel="apple-touch-icon" sizes="192x192" href="/static/icons/icon-192x192.png">
+    <link rel="apple-touch-icon" sizes="512x512" href="/static/icons/icon-512x512.png">
+
+    <!-- Stylesheets -->
+    <script src="/static/js/theme.js"></script>
+    <link rel="stylesheet" href="/static/css/common.css">
+    <link rel="stylesheet" href="/static/css/mobile.css">
+    <style>
+        .talk-container {
+            background: var(--color-surface);
+            border-radius: 16px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--color-border);
+            width: 100%;
+            max-width: 720px;
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .talk-container h1 {
+            font-size: 1.75rem;
+            margin: 0;
+            align-self: flex-start;
+        }
+
+        .talk-notice {
+            width: 100%;
+            padding: 12px 16px;
+            border-radius: 10px;
+            border: 1px solid var(--color-warning);
+            background: var(--color-warning-bg);
+            color: var(--color-warning);
+            font-size: 0.9rem;
+        }
+
+        .talk-mic {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border: 2px solid var(--color-primary);
+            background: var(--color-surface);
+            color: var(--color-primary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: box-shadow 0.2s, background 0.2s, transform 0.2s;
+        }
+
+        .talk-mic:hover:not(:disabled) {
+            box-shadow: 0 0 0 8px var(--color-primary-glow);
+        }
+
+        .talk-mic:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .talk-mic svg {
+            width: 48px;
+            height: 48px;
+        }
+
+        .talk-mic.active {
+            background: var(--color-primary);
+            color: var(--color-on-primary);
+        }
+
+        .talk-mic.listening {
+            box-shadow: 0 0 0 10px var(--color-primary-glow);
+        }
+
+        .talk-mic.speaking {
+            animation: talk-pulse 1.1s ease-in-out infinite;
+        }
+
+        @keyframes talk-pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.06); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .talk-mic.speaking { animation: none; }
+        }
+
+        .talk-state {
+            font-size: 1.05rem;
+            color: var(--color-text-muted);
+            min-height: 1.5em;
+            text-align: center;
+        }
+
+        .talk-error {
+            color: var(--color-error, var(--color-warning));
+            font-size: 0.9rem;
+            text-align: center;
+            min-height: 1.2em;
+        }
+
+        .talk-transcript {
+            width: 100%;
+            max-height: 40vh;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding-top: 8px;
+        }
+
+        .talk-transcript:empty,
+        .talk-error:empty {
+            display: none;
+        }
+
+        .talk-line {
+            padding: 8px 12px;
+            border-radius: 10px;
+            max-width: 85%;
+            border: 1px solid var(--color-border);
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .talk-line.user {
+            align-self: flex-end;
+            background: var(--color-bg-darker);
+        }
+
+        .talk-line.agent {
+            align-self: flex-start;
+            border-color: var(--color-border-accent);
+        }
+
+        .talk-line.system {
+            align-self: center;
+            border: none;
+            color: var(--color-text-dim);
+            font-size: 0.85rem;
+        }
+
+        .talk-hint {
+            color: var(--color-text-dim);
+            font-size: 0.85rem;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="navbar-root"></div>
+
+    <div class="page-content">
+    <div class="main-container">
+        <div class="talk-container">
+            <h1>Talk</h1>
+
+            <div id="talkInsecure" class="talk-notice" hidden>
+                The microphone is only available on a secure origin. Open this page over
+                <code>https://</code> or via <code>http://localhost</code>.
+            </div>
+            <div id="talkNotConfigured" class="talk-notice" hidden>
+                ElevenLabs voice is not fully set up yet. Add the API key and agent ID under
+                Settings &rarr; Integrations &rarr; ElevenLabs Voice.
+            </div>
+
+            <button id="talkMic" class="talk-mic" type="button" aria-label="Start conversation" aria-pressed="false">
+                <svg aria-hidden="true"><use href="#icon-mic"></use></svg>
+            </button>
+            <div id="talkState" class="talk-state" role="status" aria-live="polite">Tap the microphone to start</div>
+            <div id="talkError" class="talk-error" role="alert"></div>
+
+            <div id="talkTranscript" class="talk-transcript" aria-label="Conversation transcript"></div>
+
+            <div class="talk-hint">
+                Your voice goes straight from this browser to ElevenLabs. ElevenLabs never
+                connects to the assistant.
+            </div>
+        </div>
+    </div>
+    </div>
+
+    <script src="/static/js/components.js"></script>
+    <script src="/static/js/common.js"></script>
+    <script src="/static/js/elevenlabs-client.iife.js"></script>
+    <script src="/static/js/talk.js"></script>
+    <script src="/static/js/pwa.js"></script>
+</body>
+</html>

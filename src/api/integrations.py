@@ -47,6 +47,12 @@ async def get_integrations_status(
             "credential": "slack",
         },
         {
+            "id": "elevenlabs",
+            "name": "ElevenLabs Voice",
+            "setting": "elevenlabs.enabled",
+            "credential": "elevenlabs",
+        },
+        {
             "id": "whisper",
             "name": "Whisper",
             "setting": "whisper.enabled",

@@ -37,6 +37,7 @@ from src.api.pwa import router as pwa_router
 from src.api.settings import router as settings_router
 from src.api.skills import router as skills_router
 from src.api.slack import router as slack_router
+from src.api.elevenlabs import router as elevenlabs_router
 from src.api.plugins import router as plugins_router
 from src.api.mcp import router as mcp_router
 from src.api.google_news import router as google_news_router
@@ -568,6 +569,7 @@ def create_app() -> FastAPI:
     app.include_router(settings_router)
     app.include_router(skills_router)
     app.include_router(slack_router)
+    app.include_router(elevenlabs_router)
     app.include_router(plugins_router)
     app.include_router(mcp_router)
     app.include_router(google_news_router)
@@ -614,6 +616,11 @@ def create_app() -> FastAPI:
     async def monitoring_page():
         """Serve the monitoring UI."""
         return FileResponse(static_dir / "monitoring.html")
+
+    @app.get("/talk")
+    async def talk_page():
+        """Serve the voice (ElevenLabs) talk UI."""
+        return FileResponse(static_dir / "talk.html")
 
     @app.get("/service-worker.js")
     async def service_worker():
