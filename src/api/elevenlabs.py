@@ -1,15 +1,19 @@
-"""ElevenLabs voice agent channel.
+"""ElevenLabs voice channel (outbound only).
 
-An ElevenLabs agent keeps the live conversation on its own fast LLM and calls
-these endpoints as *server tools* when the caller wants real work done. The
-request runs through the same ``MessageHandler`` as Slack/WhatsApp, with
-``channel="elevenlabs"`` and the ElevenLabs conversation id as the contact.
+The Talk page in the web UI opens a voice session from the browser *out* to
+ElevenLabs. The agent's client tools run in that page and call the endpoints
+below on the same origin, so no connection from ElevenLabs into this instance
+is needed. This app only makes outbound requests to ElevenLabs: a signed
+session URL before the call and the transcript after it.
+
+Like the rest of the web UI API (``/api/chat``), these endpoints rely on the
+instance being reachable only by its owner.
 """
 
-import json
-from typing import Optional
+import asyncio
+from typing import Set
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 
 from src.core.dependencies import (
     get_elevenlabs_service,
@@ -20,11 +24,18 @@ from src.core.dependencies import (
 from src.models.elevenlabs import (
     AskAssistantRequest,
     CheckResultRequest,
-    PostCallPayload,
+    EndCallRequest,
+    SessionResponse,
+    StatusResponse,
     ToolResponse,
-    WebhookAck,
 )
-from src.services.elevenlabs import CHANNEL, ElevenLabsService, VoiceJob, voice_jobs
+from src.services.elevenlabs import (
+    CHANNEL,
+    ElevenLabsError,
+    ElevenLabsService,
+    VoiceJob,
+    voice_jobs,
+)
 from src.services.message_handler import MessageHandler
 from src.utils.logger import get_logger
 
@@ -37,21 +48,17 @@ STILL_WORKING_NOTE = (
     "with this job_id."
 )
 
+# Calls whose end has already been handled (the page may report it twice: the
+# disconnect callback and the page-close beacon).
+_ended_calls: Set[str] = set()
+_background_tasks: Set["asyncio.Task[None]"] = set()
+
 
 def require_enabled(
     service: ElevenLabsService = Depends(get_elevenlabs_service),
 ) -> ElevenLabsService:
     if not service.is_enabled():
-        raise HTTPException(status_code=503, detail="ElevenLabs voice agent is not enabled")
-    return service
-
-
-def require_tool_auth(
-    authorization: Optional[str] = Header(default=None),
-    service: ElevenLabsService = Depends(require_enabled),
-) -> ElevenLabsService:
-    if not service.verify_bearer(authorization):
-        raise HTTPException(status_code=401, detail="Invalid or missing bearer token")
+        raise HTTPException(status_code=503, detail="ElevenLabs voice is not enabled")
     return service
 
 
@@ -87,15 +94,34 @@ def _build_fallback(service: ElevenLabsService, slack_service, whatsapp_service)
     return None
 
 
-@router.post("/tools/ask_assistant", response_model=ToolResponse)
+@router.get("/status", response_model=StatusResponse)
+async def status(
+    service: ElevenLabsService = Depends(get_elevenlabs_service),
+) -> StatusResponse:
+    """Whether the Talk page should be offered (the navbar polls this)."""
+    return StatusResponse(enabled=service.is_enabled(), configured=service.is_configured())
+
+
+@router.post("/session", response_model=SessionResponse)
+async def start_session(
+    service: ElevenLabsService = Depends(require_enabled),
+) -> SessionResponse:
+    """Signed URL for the browser to open a voice session (the API key stays here)."""
+    try:
+        return SessionResponse(signed_url=await service.get_signed_url())
+    except ElevenLabsError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+
+@router.post("/voice/ask", response_model=ToolResponse)
 async def ask_assistant(
     body: AskAssistantRequest,
-    service: ElevenLabsService = Depends(require_tool_auth),
+    service: ElevenLabsService = Depends(require_enabled),
     message_handler: MessageHandler = Depends(get_message_handler),
     slack_service=Depends(get_slack_service),
     whatsapp_service=Depends(get_whatsapp_service),
 ) -> ToolResponse:
-    """Hand a request to the assistant and wait briefly for the answer."""
+    """Client tool ``ask_assistant``: hand a request over and wait briefly for the answer."""
 
     async def run():
         return await message_handler.handle_message(
@@ -104,7 +130,7 @@ async def ask_assistant(
             channel=CHANNEL,
             contact_identifier=body.conversation_id,
             max_idle_seconds=service.new_chat_idle_seconds(),
-            metadata={"source": "elevenlabs_tool", "voice_conversation_id": body.conversation_id},
+            metadata={"source": "elevenlabs_talk", "voice_conversation_id": body.conversation_id},
         )
 
     job = voice_jobs.start(
@@ -117,12 +143,12 @@ async def ask_assistant(
     return _working(job)
 
 
-@router.post("/tools/check_assistant_result", response_model=ToolResponse)
+@router.post("/voice/result", response_model=ToolResponse)
 async def check_assistant_result(
     body: CheckResultRequest,
-    service: ElevenLabsService = Depends(require_tool_auth),
+    service: ElevenLabsService = Depends(require_enabled),
 ) -> ToolResponse:
-    """Collect the result of a request that was still running."""
+    """Client tool ``check_assistant_result``: collect a request that was still running."""
     job = voice_jobs.get(body.job_id)
     if job is None:
         return ToolResponse(
@@ -134,47 +160,27 @@ async def check_assistant_result(
     return _working(job)
 
 
-@router.post("/webhooks/post-call", response_model=None)
-async def post_call_webhook(
-    request: Request,
-    elevenlabs_signature: Optional[str] = Header(default=None, alias="ElevenLabs-Signature"),
+@router.post("/voice/end")
+async def end_call(
+    body: EndCallRequest,
     service: ElevenLabsService = Depends(require_enabled),
     message_handler: MessageHandler = Depends(get_message_handler),
-) -> WebhookAck:
-    """Store the call transcript so the assistant remembers the voice conversation."""
-    raw = await request.body()
-    if not service.verify_webhook_signature(elevenlabs_signature, raw):
-        raise HTTPException(status_code=401, detail="Invalid webhook signature")
+) -> dict:
+    """The Talk page reports a finished call: flush pending results, store the transcript."""
+    voice_jobs.mark_call_ended(body.conversation_id)
+    if body.conversation_id in _ended_calls:
+        return {"ok": True, "duplicate": True}
+    if len(_ended_calls) > 1000:
+        _ended_calls.clear()
+    _ended_calls.add(body.conversation_id)
 
-    try:
-        payload = PostCallPayload.model_validate(json.loads(raw))
-    except (ValueError, TypeError) as exc:
-        raise HTTPException(status_code=400, detail=f"Invalid payload: {exc}")
-
-    if payload.type != "post_call_transcription" or payload.data is None:
-        return {"ok": True, "ignored": payload.type}
-
-    conversation_id = payload.data.conversation_id
-    voice_jobs.mark_call_ended(conversation_id)
-
-    lines = []
-    for turn in payload.data.transcript:
-        text = (turn.message or "").strip()
-        if text:
-            speaker = "Voice agent" if turn.role == "agent" else "Voice caller"
-            lines.append(f"[{speaker}]: {text}")
-    if lines:
-        await message_handler.ingest_passive_message(
-            message="[Voice call transcript]\n" + "\n".join(lines),
-            channel=CHANNEL,
-            contact_identifier=conversation_id,
-            metadata={"source": "elevenlabs_post_call", "voice_conversation_id": conversation_id},
-            max_idle_seconds=service.new_chat_idle_seconds(),
-        )
-    return {"ok": True, "turns": len(lines)}
+    task = asyncio.create_task(service.ingest_transcript(message_handler, body.conversation_id))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return {"ok": True}
 
 
 @router.post("/test-connection")
 async def test_connection(service: ElevenLabsService = Depends(get_elevenlabs_service)):
-    """Report whether the channel is configured (used by the settings page)."""
-    return service.test_connection()
+    """Check the API key and agent ID (used by the settings page)."""
+    return await service.test_connection()

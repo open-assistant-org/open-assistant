@@ -617,6 +617,11 @@ def create_app() -> FastAPI:
         """Serve the monitoring UI."""
         return FileResponse(static_dir / "monitoring.html")
 
+    @app.get("/talk")
+    async def talk_page():
+        """Serve the voice (ElevenLabs) talk UI."""
+        return FileResponse(static_dir / "talk.html")
+
     @app.get("/service-worker.js")
     async def service_worker():
         """Serve the service worker from root for PWA."""

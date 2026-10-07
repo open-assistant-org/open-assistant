@@ -1,12 +1,10 @@
-"""Tests for the ElevenLabs voice agent channel."""
+"""Tests for the ElevenLabs voice channel (outbound-only Talk page)."""
 
 import asyncio
-import hashlib
-import hmac
 import json
-import time
 from unittest.mock import AsyncMock, MagicMock
 
+import httpx
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -18,23 +16,25 @@ from src.core.dependencies import (
     get_slack_service,
     get_whatsapp_service,
 )
+from src.services import elevenlabs as el
 from src.services.elevenlabs import (
     ElevenLabsService,
     VoiceJobRegistry,
     to_speech_text,
+    transcript_lines,
 )
 
-TOOL_SECRET = "tool-secret"
-WEBHOOK_SECRET = "wsec"
-AUTH = {"Authorization": f"Bearer {TOOL_SECRET}"}
+API_KEY = "sk_test_key"
+AGENT_ID = "agent_123"
+REAL_ASYNC_CLIENT = httpx.AsyncClient
 
 
 class FakeSettings:
     def __init__(self, **values):
         self.values = {
             "elevenlabs.enabled": True,
-            "elevenlabs.tool_secret": TOOL_SECRET,
-            "elevenlabs.webhook_secret": WEBHOOK_SECRET,
+            "elevenlabs.api_key": API_KEY,
+            "elevenlabs.agent_id": AGENT_ID,
             "elevenlabs.tool_wait_seconds": 3,
             "elevenlabs.fallback_channel": "none",
             "elevenlabs.new_chat_idle_seconds": 1800,
@@ -51,10 +51,27 @@ def make_service(**values) -> ElevenLabsService:
     return ElevenLabsService(FakeSettings(**values), creds)
 
 
+def mock_elevenlabs(monkeypatch, handler):
+    """Route the service's outbound httpx calls to ``handler`` (a MockTransport callback)."""
+    requests = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return handler(request)
+
+    monkeypatch.setattr(
+        el.httpx,
+        "AsyncClient",
+        lambda **kw: REAL_ASYNC_CLIENT(**{**kw, "transport": httpx.MockTransport(respond)}),
+    )
+    return requests
+
+
 @pytest.fixture(autouse=True)
-def _fresh_registry(monkeypatch):
+def _fresh_state(monkeypatch):
     registry = VoiceJobRegistry(orphan_grace=0.05)
     monkeypatch.setattr(api, "voice_jobs", registry)
+    api._ended_calls.clear()
     return registry
 
 
@@ -74,58 +91,102 @@ def slack():
 
 
 @pytest.fixture
-def make_client(handler, slack):
-    def _make(service=None):
+def make_app(handler, slack):
+    def _make(service=None) -> FastAPI:
         app = FastAPI()
         app.include_router(api.router)
         app.dependency_overrides[get_elevenlabs_service] = lambda: service or make_service()
         app.dependency_overrides[get_message_handler] = lambda: handler
         app.dependency_overrides[get_slack_service] = lambda: slack
         app.dependency_overrides[get_whatsapp_service] = lambda: MagicMock()
-        return TestClient(app)
+        return app
 
     return _make
 
 
-def sign(body: bytes, secret=WEBHOOK_SECRET, ts=None) -> str:
-    ts = str(ts if ts is not None else int(time.time()))
-    digest = hmac.new(secret.encode(), ts.encode() + b"." + body, hashlib.sha256).hexdigest()
-    return f"t={ts},v0={digest}"
+@pytest.fixture
+def make_client(make_app):
+    return lambda service=None: TestClient(make_app(service))
 
 
-# -- auth ------------------------------------------------------------------
+def async_client(app: FastAPI) -> httpx.AsyncClient:
+    return REAL_ASYNC_CLIENT(transport=httpx.ASGITransport(app=app), base_url="http://t")
+
+
+# -- status / enablement ---------------------------------------------------
+
+
+def test_status_reports_enabled_and_configured(make_client):
+    r = make_client().get("/api/elevenlabs/status")
+    assert r.json() == {"enabled": True, "configured": True}
+
+
+def test_status_when_disabled_or_unconfigured(make_client):
+    off = make_client(make_service(**{"elevenlabs.enabled": False})).get("/api/elevenlabs/status")
+    assert off.json() == {"enabled": False, "configured": True}
+    no_agent = make_client(make_service(**{"elevenlabs.agent_id": ""})).get(
+        "/api/elevenlabs/status"
+    )
+    assert no_agent.json() == {"enabled": True, "configured": False}
 
 
 @pytest.mark.parametrize(
-    "headers", [{}, {"Authorization": "Bearer nope"}, {"Authorization": TOOL_SECRET}]
+    "method,path,body",
+    [
+        ("post", "/api/elevenlabs/session", {}),
+        ("post", "/api/elevenlabs/voice/ask", {"request": "hi", "conversation_id": "x"}),
+        ("post", "/api/elevenlabs/voice/result", {"job_id": "j"}),
+        ("post", "/api/elevenlabs/voice/end", {"conversation_id": "x"}),
+    ],
 )
-def test_tool_rejects_bad_auth(make_client, headers):
-    r = make_client().post(
-        "/api/elevenlabs/tools/ask_assistant",
-        json={"request": "hi", "conversation_id": "x"},
-        headers=headers,
-    )
-    assert r.status_code == 401
-
-
-def test_tool_rejected_when_secret_not_configured(make_client):
-    client = make_client(make_service(**{"elevenlabs.tool_secret": ""}))
-    r = client.post(
-        "/api/elevenlabs/tools/ask_assistant",
-        json={"request": "hi", "conversation_id": "x"},
-        headers={"Authorization": "Bearer "},
-    )
-    assert r.status_code == 401
-
-
-def test_disabled_channel_returns_503(make_client):
+def test_endpoints_return_503_when_disabled(make_client, method, path, body):
     client = make_client(make_service(**{"elevenlabs.enabled": False}))
-    r = client.post(
-        "/api/elevenlabs/tools/ask_assistant",
-        json={"request": "hi", "conversation_id": "x"},
-        headers=AUTH,
+    assert getattr(client, method)(path, json=body).status_code == 503
+
+
+# -- session (outbound signed URL) -----------------------------------------
+
+
+def test_session_returns_signed_url_and_never_the_key(make_client, monkeypatch):
+    requests = mock_elevenlabs(
+        monkeypatch, lambda req: httpx.Response(200, json={"signed_url": "wss://x/convai?token=t"})
     )
-    assert r.status_code == 503
+    r = make_client().post("/api/elevenlabs/session", json={})
+    assert r.status_code == 200
+    assert r.json() == {"signed_url": "wss://x/convai?token=t"}
+    assert API_KEY not in r.text
+    req = requests[0]
+    assert req.headers["xi-api-key"] == API_KEY
+    assert req.url.path == "/v1/convai/conversation/get-signed-url"
+    assert req.url.params["agent_id"] == AGENT_ID
+
+
+def test_session_maps_elevenlabs_rejection_without_leaking_key(make_client, monkeypatch):
+    mock_elevenlabs(monkeypatch, lambda req: httpx.Response(401, json={"detail": "bad key"}))
+    r = make_client().post("/api/elevenlabs/session", json={})
+    assert r.status_code == 502
+    assert "rejected the API key" in r.json()["detail"]
+    assert API_KEY not in r.text
+
+
+def test_session_requires_agent_id_and_key(make_client):
+    r = make_client(make_service(**{"elevenlabs.agent_id": ""})).post(
+        "/api/elevenlabs/session", json={}
+    )
+    assert r.status_code == 502 and "agent ID" in r.json()["detail"]
+    r = make_client(make_service(**{"elevenlabs.api_key": ""})).post(
+        "/api/elevenlabs/session", json={}
+    )
+    assert r.status_code == 502 and "API key" in r.json()["detail"]
+
+
+def test_session_handles_network_failure(make_client, monkeypatch):
+    def boom(req):
+        raise httpx.ConnectError("no route")
+
+    mock_elevenlabs(monkeypatch, boom)
+    r = make_client().post("/api/elevenlabs/session", json={})
+    assert r.status_code == 502 and "Could not reach ElevenLabs" in r.json()["detail"]
 
 
 # -- ask_assistant ---------------------------------------------------------
@@ -133,9 +194,8 @@ def test_disabled_channel_returns_503(make_client):
 
 def test_ask_assistant_done(make_client, handler):
     r = make_client().post(
-        "/api/elevenlabs/tools/ask_assistant",
+        "/api/elevenlabs/voice/ask",
         json={"request": "weather?", "conversation_id": "conv_1"},
-        headers=AUTH,
     )
     assert r.status_code == 200
     body = r.json()
@@ -154,9 +214,8 @@ def test_ask_assistant_surfaces_pending_question(make_client, handler):
         "pending_input": {"question": "Which calendar?"},
     }
     r = make_client().post(
-        "/api/elevenlabs/tools/ask_assistant",
+        "/api/elevenlabs/voice/ask",
         json={"request": "book it", "conversation_id": "c"},
-        headers=AUTH,
     )
     assert r.json()["question"] == "Which calendar?"
 
@@ -164,9 +223,8 @@ def test_ask_assistant_surfaces_pending_question(make_client, handler):
 def test_ask_assistant_error_is_spoken_not_500(make_client, handler):
     handler.handle_message.side_effect = RuntimeError("boom")
     r = make_client().post(
-        "/api/elevenlabs/tools/ask_assistant",
+        "/api/elevenlabs/voice/ask",
         json={"request": "x", "conversation_id": "c"},
-        headers=AUTH,
     )
     assert r.status_code == 200
     assert r.json()["status"] == "error"
@@ -175,8 +233,6 @@ def test_ask_assistant_error_is_spoken_not_500(make_client, handler):
 
 @pytest.mark.asyncio
 async def test_slow_job_returns_working_then_done(handler, slack):
-    import httpx
-
     gate = asyncio.Event()
 
     async def slow(**_):
@@ -193,19 +249,14 @@ async def test_slow_job_returns_working_then_done(handler, slack):
     app.dependency_overrides[get_slack_service] = lambda: slack
     app.dependency_overrides[get_whatsapp_service] = lambda: MagicMock()
 
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://t") as client:
+    async with async_client(app) as client:
         ask = {"request": "long", "conversation_id": "c"}
-        first = (
-            await client.post("/api/elevenlabs/tools/ask_assistant", json=ask, headers=AUTH)
-        ).json()
+        first = (await client.post("/api/elevenlabs/voice/ask", json=ask)).json()
         assert first["status"] == "working"
         assert first["job_id"] and "check_assistant_result" in first["note"]
 
         # a second ask during the run reuses the same job
-        again = (
-            await client.post("/api/elevenlabs/tools/ask_assistant", json=ask, headers=AUTH)
-        ).json()
+        again = (await client.post("/api/elevenlabs/voice/ask", json=ask)).json()
         assert again["job_id"] == first["job_id"]
         assert handler.handle_message.await_count == 1
 
@@ -213,9 +264,8 @@ async def test_slow_job_returns_working_then_done(handler, slack):
         await asyncio.sleep(0.05)
         done = (
             await client.post(
-                "/api/elevenlabs/tools/check_assistant_result",
+                "/api/elevenlabs/voice/result",
                 json={"job_id": first["job_id"]},
-                headers=AUTH,
             )
         ).json()
         assert done == {
@@ -228,9 +278,7 @@ async def test_slow_job_returns_working_then_done(handler, slack):
 
 
 def test_check_unknown_job(make_client):
-    r = make_client().post(
-        "/api/elevenlabs/tools/check_assistant_result", json={"job_id": "nope"}, headers=AUTH
-    )
+    r = make_client().post("/api/elevenlabs/voice/result", json={"job_id": "nope"})
     assert r.json()["status"] == "error"
 
 
@@ -319,34 +367,35 @@ def test_fallback_channel_slack_builds_sender(make_client, handler, slack):
     assert api._build_fallback(make_service(), slack, MagicMock()) is None
 
 
-# -- post-call webhook -----------------------------------------------------
+# -- end of call: transcript ingestion -------------------------------------
+
+TURNS = [
+    {"role": "user", "message": "Remind me to call Sam"},
+    {"role": "agent", "message": "Done."},
+    {"role": "agent", "message": None},
+]
 
 
-def _payload(**data):
-    return json.dumps(
-        {
-            "type": "post_call_transcription",
-            "data": {
-                "conversation_id": "conv_9",
-                "transcript": [
-                    {"role": "user", "message": "Remind me to call Sam"},
-                    {"role": "agent", "message": "Done."},
-                    {"role": "agent", "message": None},
-                ],
-                **data,
-            },
-        }
-    ).encode()
+def test_transcript_lines_label_speakers_and_skip_empty():
+    assert transcript_lines(TURNS) == [
+        "[Voice caller]: Remind me to call Sam",
+        "[Voice agent]: Done.",
+    ]
 
 
-def test_webhook_ingests_transcript(make_client, handler):
-    body = _payload()
-    r = make_client().post(
-        "/api/elevenlabs/webhooks/post-call",
-        content=body,
-        headers={"ElevenLabs-Signature": sign(body)},
-    )
-    assert r.status_code == 200 and r.json()["turns"] == 2
+@pytest.mark.asyncio
+async def test_ingest_transcript_waits_until_done(handler, monkeypatch):
+    states = iter(["processing", "processing", "done"])
+
+    def respond(req):
+        return httpx.Response(200, json={"status": next(states), "transcript": TURNS})
+
+    requests = mock_elevenlabs(monkeypatch, respond)
+    stored = await make_service().ingest_transcript(handler, "conv_9", poll_seconds=0.01)
+
+    assert stored == 2 and len(requests) == 3
+    assert requests[0].url.path == "/v1/convai/conversations/conv_9"
+    assert requests[0].headers["xi-api-key"] == API_KEY
     kwargs = handler.ingest_passive_message.await_args.kwargs
     assert kwargs["channel"] == "elevenlabs"
     assert kwargs["contact_identifier"] == "conv_9"
@@ -354,35 +403,74 @@ def test_webhook_ingests_transcript(make_client, handler):
     assert "[Voice agent]: Done." in kwargs["message"]
 
 
-@pytest.mark.parametrize(
-    "header_factory",
-    [
-        lambda b: None,
-        lambda b: "garbage",
-        lambda b: sign(b, secret="wrong"),
-        lambda b: sign(b, ts=int(time.time()) - 3 * 3600),
-    ],
-)
-def test_webhook_rejects_bad_signature(make_client, handler, header_factory):
-    body = _payload()
-    headers = {}
-    header = header_factory(body)
-    if header:
-        headers["ElevenLabs-Signature"] = header
-    r = make_client().post("/api/elevenlabs/webhooks/post-call", content=body, headers=headers)
-    assert r.status_code == 401
-    handler.ingest_passive_message.assert_not_awaited()
-
-
-def test_webhook_ignores_other_event_types(make_client, handler):
-    body = json.dumps({"type": "post_call_audio", "data": None}).encode()
-    r = make_client().post(
-        "/api/elevenlabs/webhooks/post-call",
-        content=body,
-        headers={"ElevenLabs-Signature": sign(body)},
+@pytest.mark.asyncio
+async def test_ingest_transcript_gives_up_after_max_wait(handler, monkeypatch):
+    mock_elevenlabs(
+        monkeypatch,
+        lambda req: httpx.Response(200, json={"status": "processing", "transcript": TURNS}),
     )
-    assert r.json() == {"ok": True, "ignored": "post_call_audio"}
+    stored = await make_service().ingest_transcript(
+        handler, "conv_9", poll_seconds=0.01, max_wait_seconds=0.03
+    )
+    assert stored == 2  # stores what it has rather than losing the call
+
+
+@pytest.mark.asyncio
+async def test_ingest_transcript_survives_elevenlabs_errors(handler, monkeypatch):
+    mock_elevenlabs(monkeypatch, lambda req: httpx.Response(500))
+    assert await make_service().ingest_transcript(handler, "conv_9", poll_seconds=0.01) == 0
     handler.ingest_passive_message.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_ingest_transcript_skips_empty_call(handler, monkeypatch):
+    mock_elevenlabs(
+        monkeypatch, lambda req: httpx.Response(200, json={"status": "done", "transcript": []})
+    )
+    assert await make_service().ingest_transcript(handler, "c", poll_seconds=0.01) == 0
+    handler.ingest_passive_message.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_fetch_conversation_quotes_the_id(monkeypatch):
+    requests = mock_elevenlabs(monkeypatch, lambda req: httpx.Response(200, json={}))
+    await make_service().fetch_conversation("a/b?c")
+    assert "/" not in requests[0].url.raw_path.decode().split("conversations/")[1]
+
+
+@pytest.mark.asyncio
+async def test_end_call_flushes_jobs_and_ingests_once(make_app, handler, monkeypatch, _fresh_state):
+    mock_elevenlabs(
+        monkeypatch, lambda req: httpx.Response(200, json={"status": "done", "transcript": TURNS})
+    )
+    fallback = AsyncMock()
+    gate = asyncio.Event()
+
+    async def run():
+        await gate.wait()
+        return {"response": "late"}
+
+    job = _fresh_state.start("conv_9", run, fallback=fallback)
+
+    async with async_client(make_app()) as client:
+        body = {"conversation_id": "conv_9"}
+        first = await client.post("/api/elevenlabs/voice/end", json=body)
+        second = await client.post("/api/elevenlabs/voice/end", json=body)
+        assert first.json() == {"ok": True}
+        assert second.json() == {"ok": True, "duplicate": True}
+
+        gate.set()
+        await asyncio.wait_for(job.done_event.wait(), 1)
+        await asyncio.sleep(0.1)
+
+    fallback.assert_awaited_once_with("late")
+    assert handler.ingest_passive_message.await_count == 1
+
+
+@pytest.mark.parametrize("bad_id", ["../etc", "a/b", "x" * 200, "", "has space"])
+def test_end_call_rejects_malformed_conversation_ids(make_client, bad_id):
+    r = make_client().post("/api/elevenlabs/voice/end", json={"conversation_id": bad_id})
+    assert r.status_code == 422
 
 
 # -- speech text -----------------------------------------------------------
@@ -400,7 +488,23 @@ def test_speech_text_truncates_long_answers():
     assert len(out) < 200 and out.endswith("like.")
 
 
-def test_test_connection_states():
-    assert make_service(**{"elevenlabs.enabled": False}).test_connection()["status"] == "error"
-    assert make_service(**{"elevenlabs.tool_secret": ""}).test_connection()["status"] == "error"
-    assert make_service().test_connection()["status"] == "success"
+@pytest.mark.asyncio
+async def test_test_connection_states(monkeypatch):
+    off = await make_service(**{"elevenlabs.enabled": False}).test_connection()
+    assert off["status"] == "error" and "not enabled" in off["message"]
+    no_key = await make_service(**{"elevenlabs.api_key": ""}).test_connection()
+    assert no_key["status"] == "error" and "API key" in no_key["message"]
+    no_agent = await make_service(**{"elevenlabs.agent_id": ""}).test_connection()
+    assert no_agent["status"] == "error" and "Agent ID" in no_agent["message"]
+
+    mock_elevenlabs(monkeypatch, lambda req: httpx.Response(200, json={"name": "Voice Helper"}))
+    ok = await make_service().test_connection()
+    assert ok == {
+        "service_name": "elevenlabs",
+        "status": "success",
+        "message": "Connected to agent 'Voice Helper'",
+    }
+
+    mock_elevenlabs(monkeypatch, lambda req: httpx.Response(404))
+    missing = await make_service().test_connection()
+    assert missing["status"] == "error" and "could not find" in missing["message"]

@@ -16,6 +16,10 @@ const NAV_ITEMS = [
     { href: '/monitoring', label: 'Monitoring', icon: 'monitoring' },
 ];
 
+// Offered only while the ElevenLabs voice channel is enabled (see syncTalkLink).
+const TALK_ITEM = { href: '/talk', label: 'Talk', icon: 'mic' };
+const TALK_CACHE_KEY = 'oa-voice-enabled';
+
 // These links are built at runtime, so the managed platform's sub_filter
 // (which only rewrites href/src/action attributes in the HTML it serves)
 // can never prefix them — prefix here instead, like every other
@@ -33,6 +37,7 @@ const ICON_SPRITE = `
     <symbol id="icon-artifacts" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M1 3h22v5H1z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><line x1="10" y1="13" x2="14" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
     <symbol id="icon-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82A1.65 1.65 0 0 0 3 13.09H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="icon-monitoring" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="icon-mic" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M5 11a7 7 0 0 0 14 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="12" y1="18" x2="12" y2="22" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="8" y1="22" x2="16" y2="22" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
     <symbol id="icon-close" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
     <symbol id="icon-menu" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="3" y1="12" x2="21" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="3" y1="18" x2="21" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
     <symbol id="icon-alert" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="12" y1="9" x2="12" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="12" y1="17" x2="12.01" y2="17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
@@ -50,15 +55,62 @@ function injectIconSprite() {
     document.body.prepend(wrapper);
 }
 
+function navLinkHtml(item) {
+    return `
+        <a href="${INSTANCE_BASE}${item.href}" class="nav-link" title="${item.label}">
+            <svg class="nav-link-icon" aria-hidden="true"><use href="#icon-${item.icon}"></use></svg>
+            <span class="nav-link-label">${item.label}</span>
+        </a>`;
+}
+
+function cachedTalkEnabled() {
+    try {
+        return sessionStorage.getItem(TALK_CACHE_KEY) === '1';
+    } catch (e) {
+        return false; // storage blocked — the fetch below still decides
+    }
+}
+
+// Show the Talk (microphone) link only when ElevenLabs voice is enabled.
+async function syncTalkLink() {
+    let enabled = false;
+    try {
+        const response = await fetch(`${INSTANCE_BASE}/api/elevenlabs/status`);
+        if (!response.ok) return;
+        enabled = !!(await response.json()).enabled;
+    } catch (e) {
+        return; // offline or older server — leave the navbar as rendered
+    }
+    try {
+        sessionStorage.setItem(TALK_CACHE_KEY, enabled ? '1' : '0');
+    } catch (e) {
+        // Ignore — only costs a brief flicker on the next page.
+    }
+
+    const container = document.querySelector('.navbar-links');
+    if (!container) return;
+    const existing = container.querySelector('a[href$="/talk"]');
+    if (enabled && !existing) {
+        const first = container.querySelector('a');
+        const holder = document.createElement('div');
+        holder.innerHTML = navLinkHtml(TALK_ITEM).trim();
+        first.after(holder.firstElementChild);
+    } else if (!enabled && existing) {
+        existing.remove();
+    }
+    if (typeof setActiveNavLink === 'function') setActiveNavLink();
+}
+
 function renderNavbar() {
     const root = document.getElementById('navbar-root');
     if (!root) return;
 
-    const links = NAV_ITEMS.map(item => `
-        <a href="${INSTANCE_BASE}${item.href}" class="nav-link" title="${item.label}">
-            <svg class="nav-link-icon" aria-hidden="true"><use href="#icon-${item.icon}"></use></svg>
-            <span class="nav-link-label">${item.label}</span>
-        </a>`).join('');
+    // The last known voice status is cached so the Talk link doesn't pop in
+    // after every full-page navigation; syncTalkLink() corrects it afterwards.
+    const items = cachedTalkEnabled()
+        ? [NAV_ITEMS[0], TALK_ITEM, ...NAV_ITEMS.slice(1)]
+        : NAV_ITEMS;
+    const links = items.map(navLinkHtml).join('');
 
     // Collapsed by default — an explicit '0' is the only way to get the
     // expanded rail, so a first-time visitor (or one with storage blocked)
@@ -118,4 +170,5 @@ function initNavbarCollapse() {
 document.addEventListener('DOMContentLoaded', () => {
     injectIconSprite();
     renderNavbar();
+    syncTalkLink();
 });

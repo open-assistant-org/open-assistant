@@ -1,24 +1,26 @@
-"""ElevenLabs voice agent channel.
+"""ElevenLabs voice channel.
 
-The voice agent (a fast LLM running inside ElevenLabs) hands real work to the
-assistant through server tools. This module holds the pieces that make that
-safe and usable for voice: secret handling, request signature verification,
-speech-friendly text, and a small in-memory job registry so a request that
-outlasts a tool timeout can be collected on a follow-up call (or delivered to
-Slack/WhatsApp if the caller already hung up).
+The browser "Talk" page opens a voice session *out* to ElevenLabs. The agent's
+client tools run in that page and call back into this app on the same origin,
+so nothing needs to reach this instance from the internet. This module holds
+what the server side needs: outbound calls to ElevenLabs (signed session URL,
+call transcript), speech-friendly text, and a small in-memory job registry so
+a request that outlasts a tool call can be collected on a follow-up call (or
+delivered to Slack/WhatsApp if the caller already hung up).
 
 The job registry is process-local, which matches the single-process
 deployment (one uvicorn worker under supervisord).
 """
 
 import asyncio
-import hashlib
-import hmac
 import re
 import time
+import urllib.parse
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable, Dict, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional
+
+import httpx
 
 from src.core.repositories.audit import AuditLogRepository
 from src.core.repositories.credentials import CredentialsRepository
@@ -29,10 +31,17 @@ from src.utils.logger import get_logger
 logger = get_logger(__name__)
 
 CHANNEL = "elevenlabs"
-WEBHOOK_TOLERANCE_SECONDS = 30 * 60
+API_BASE = "https://api.elevenlabs.io"
+HTTP_TIMEOUT_SECONDS = 15
+TRANSCRIPT_POLL_SECONDS = 5
+TRANSCRIPT_MAX_WAIT_SECONDS = 90
 ORPHAN_GRACE_SECONDS = 60
 JOB_RETENTION_SECONDS = 15 * 60
 MAX_SPOKEN_CHARS = 1200
+
+
+class ElevenLabsError(Exception):
+    """An outbound ElevenLabs request failed (message is safe to show the user)."""
 
 
 class ElevenLabsService(BaseService):
@@ -78,65 +87,129 @@ class ElevenLabsService(BaseService):
     def fallback_channel(self) -> str:
         return (self.settings_repo.get("elevenlabs.fallback_channel") or "none").lower()
 
-    # -- verification -------------------------------------------------------
+    def api_key(self) -> Optional[str]:
+        return self._get_sensitive_setting("elevenlabs.api_key")
 
-    def verify_bearer(self, authorization: Optional[str]) -> bool:
-        """Constant-time check of ``Authorization: Bearer <tool_secret>``."""
-        secret = self._get_sensitive_setting("elevenlabs.tool_secret")
-        if not secret or not authorization:
-            return False
-        scheme, _, token = authorization.partition(" ")
-        if scheme.lower() != "bearer" or not token:
-            return False
-        return hmac.compare_digest(token.strip().encode(), secret.encode())
+    def agent_id(self) -> str:
+        return (self.settings_repo.get("elevenlabs.agent_id") or "").strip()
 
-    def verify_webhook_signature(
-        self, header: Optional[str], body: bytes, now: Optional[float] = None
-    ) -> bool:
-        """Verify ``ElevenLabs-Signature: t=<ts>,v0=<hmac_sha256(ts.body)>``."""
-        secret = self._get_sensitive_setting("elevenlabs.webhook_secret")
-        if not secret or not header:
-            return False
-        parts = dict(p.split("=", 1) for p in header.split(",") if "=" in p)
-        timestamp, signature = parts.get("t"), parts.get("v0")
-        if not timestamp or not signature or not timestamp.isdigit():
-            return False
-        if (
-            abs((now if now is not None else time.time()) - int(timestamp))
-            > WEBHOOK_TOLERANCE_SECONDS
-        ):
-            return False
-        expected = hmac.new(
-            secret.encode(), f"{timestamp}.".encode() + body, hashlib.sha256
-        ).hexdigest()
-        return hmac.compare_digest(expected, signature)
+    def is_configured(self) -> bool:
+        return bool(self.api_key() and self.agent_id())
 
-    def test_connection(self) -> Dict[str, Any]:
-        if not self.is_enabled():
-            return {
-                "service_name": CHANNEL,
-                "status": "error",
-                "message": "ElevenLabs voice agent is not enabled",
-            }
-        missing = [
-            name
-            for name in ("tool_secret", "webhook_secret")
-            if not self._get_sensitive_setting(f"elevenlabs.{name}")
-        ]
-        if "tool_secret" in missing:
-            return {
-                "service_name": CHANNEL,
-                "status": "error",
-                "message": "Tool secret not configured. Set 'elevenlabs.tool_secret'.",
-            }
-        note = (
-            " (post-call webhook secret not set; transcripts will be rejected)" if missing else ""
+    # -- outbound requests --------------------------------------------------
+
+    async def _get(
+        self,
+        path: str,
+        params: Optional[Dict[str, str]] = None,
+        transport: Optional[httpx.AsyncBaseTransport] = None,
+    ) -> Dict[str, Any]:
+        key = self.api_key()
+        if not key:
+            raise ElevenLabsError("ElevenLabs API key is not configured")
+        try:
+            async with httpx.AsyncClient(
+                base_url=API_BASE, timeout=HTTP_TIMEOUT_SECONDS, transport=transport
+            ) as client:
+                response = await client.get(path, params=params, headers={"xi-api-key": key})
+        except httpx.HTTPError as exc:
+            raise ElevenLabsError(f"Could not reach ElevenLabs: {type(exc).__name__}") from exc
+        if response.status_code in (401, 403):
+            raise ElevenLabsError("ElevenLabs rejected the API key")
+        if response.status_code == 404:
+            raise ElevenLabsError("ElevenLabs could not find that agent or conversation")
+        if response.status_code >= 400:
+            raise ElevenLabsError(f"ElevenLabs returned HTTP {response.status_code}")
+        return response.json()
+
+    async def get_signed_url(self, transport: Optional[httpx.AsyncBaseTransport] = None) -> str:
+        """Short-lived WebSocket URL the browser uses to start a voice session.
+
+        Lets the agent stay private and keeps the API key off the client.
+        """
+        agent_id = self.agent_id()
+        if not agent_id:
+            raise ElevenLabsError("ElevenLabs agent ID is not configured")
+        data = await self._get(
+            "/v1/convai/conversation/get-signed-url", {"agent_id": agent_id}, transport
         )
-        return {
-            "service_name": CHANNEL,
-            "status": "success",
-            "message": "Voice tools are ready to be called by ElevenLabs" + note,
-        }
+        url = data.get("signed_url")
+        if not url:
+            raise ElevenLabsError("ElevenLabs did not return a session URL")
+        return url
+
+    async def fetch_conversation(
+        self, conversation_id: str, transport: Optional[httpx.AsyncBaseTransport] = None
+    ) -> Dict[str, Any]:
+        quoted = urllib.parse.quote(conversation_id, safe="")
+        return await self._get(f"/v1/convai/conversations/{quoted}", None, transport)
+
+    async def ingest_transcript(
+        self,
+        message_handler: Any,
+        conversation_id: str,
+        transport: Optional[httpx.AsyncBaseTransport] = None,
+        poll_seconds: float = TRANSCRIPT_POLL_SECONDS,
+        max_wait_seconds: float = TRANSCRIPT_MAX_WAIT_SECONDS,
+    ) -> int:
+        """Pull a finished call's transcript and store it in the voice conversation.
+
+        ElevenLabs finalises the transcript a little after the call ends, so
+        poll until its status is "done". Returns the number of turns stored.
+        """
+        deadline = time.monotonic() + max_wait_seconds
+        while True:
+            try:
+                data = await self.fetch_conversation(conversation_id, transport)
+            except ElevenLabsError as exc:
+                logger.warning(f"Voice transcript fetch failed for {conversation_id}: {exc}")
+                return 0
+            if data.get("status") == "done" or time.monotonic() >= deadline:
+                break
+            await asyncio.sleep(poll_seconds)
+
+        lines = transcript_lines(data.get("transcript") or [])
+        if not lines:
+            return 0
+        await message_handler.ingest_passive_message(
+            message="[Voice call transcript]\n" + "\n".join(lines),
+            channel=CHANNEL,
+            contact_identifier=conversation_id,
+            metadata={"source": "elevenlabs_transcript", "voice_conversation_id": conversation_id},
+            max_idle_seconds=self.new_chat_idle_seconds(),
+        )
+        return len(lines)
+
+    async def test_connection(
+        self, transport: Optional[httpx.AsyncBaseTransport] = None
+    ) -> Dict[str, Any]:
+        def result(status: str, message: str) -> Dict[str, Any]:
+            return {"service_name": CHANNEL, "status": status, "message": message}
+
+        if not self.is_enabled():
+            return result("error", "ElevenLabs voice is not enabled")
+        if not self.api_key():
+            return result("error", "API key not configured. Set 'elevenlabs.api_key'.")
+        if not self.agent_id():
+            return result("error", "Agent ID not configured. Set 'elevenlabs.agent_id'.")
+        try:
+            agent = await self._get(
+                f"/v1/convai/agents/{urllib.parse.quote(self.agent_id(), safe='')}", None, transport
+            )
+        except ElevenLabsError as exc:
+            return result("error", str(exc))
+        return result("success", f"Connected to agent '{agent.get('name') or self.agent_id()}'")
+
+
+def transcript_lines(turns: List[Dict[str, Any]]) -> List[str]:
+    """Label transcript turns by speaker, dropping empty ones."""
+    lines = []
+    for turn in turns:
+        text = (turn.get("message") or "").strip()
+        if text:
+            speaker = "Voice agent" if turn.get("role") == "agent" else "Voice caller"
+            lines.append(f"[{speaker}]: {text}")
+    return lines
 
 
 # -- speech text -----------------------------------------------------------

@@ -14,7 +14,8 @@
 // resolves the theme pre-paint. Bump forces stale clients to fetch both.
 // v6: Browser integration card gained the "Authenticated sessions" section
 // (settings.js + common.css). Bump forces stale clients to fetch both.
-const CACHE_VERSION = 'v6';
+// v7: navbar gained the optional Talk link (components.js) and the Talk page.
+const CACHE_VERSION = 'v7';
 const CACHE_NAME = `personal-assistant-${CACHE_VERSION}`;
 
 // Derive base path from the SW's own registration scope.

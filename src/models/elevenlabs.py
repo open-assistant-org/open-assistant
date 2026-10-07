@@ -1,23 +1,27 @@
-"""Request/response models for the ElevenLabs voice agent channel."""
+"""Request/response models for the ElevenLabs voice channel."""
 
-from typing import Any, Dict, List, Literal, Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
 
 class AskAssistantRequest(BaseModel):
-    """Body of the ``ask_assistant`` server tool."""
+    """Body of the ``ask_assistant`` client tool."""
 
     request: str = Field(..., min_length=1, description="Self-contained request to hand over")
     conversation_id: str = Field(
-        ..., min_length=1, description="ElevenLabs conversation id ({{system__conversation_id}})"
+        ..., min_length=1, description="ElevenLabs conversation id of the running call"
     )
 
 
 class CheckResultRequest(BaseModel):
-    """Body of the ``check_assistant_result`` server tool."""
+    """Body of the ``check_assistant_result`` client tool."""
 
     job_id: str = Field(..., min_length=1)
+
+
+class EndCallRequest(BaseModel):
+    conversation_id: str = Field(..., pattern=r"^[A-Za-z0-9_-]{1,128}$")
 
 
 class ToolResponse(BaseModel):
@@ -32,22 +36,10 @@ class ToolResponse(BaseModel):
     note: Optional[str] = None
 
 
-class TranscriptTurn(BaseModel):
-    role: str
-    message: Optional[str] = None
+class StatusResponse(BaseModel):
+    enabled: bool
+    configured: bool
 
 
-class PostCallData(BaseModel):
-    conversation_id: str
-    transcript: List[TranscriptTurn] = Field(default_factory=list)
-
-
-class PostCallPayload(BaseModel):
-    """ElevenLabs post-call webhook payload (only the fields we use)."""
-
-    type: str
-    data: Optional[PostCallData] = None
-    model_config = {"extra": "allow"}
-
-
-WebhookAck = Dict[str, Any]
+class SessionResponse(BaseModel):
+    signed_url: str
