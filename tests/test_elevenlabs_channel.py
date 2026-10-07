@@ -92,12 +92,13 @@ def slack():
 @pytest.fixture
 def make_app(handler, slack):
     def _make(service=None) -> FastAPI:
+        whatsapp = MagicMock()
         app = FastAPI()
         app.include_router(api.router)
         app.dependency_overrides[get_elevenlabs_service] = lambda: service or make_service()
         app.dependency_overrides[get_message_handler] = lambda: handler
         app.dependency_overrides[get_slack_service] = lambda: slack
-        app.dependency_overrides[get_whatsapp_service] = MagicMock
+        app.dependency_overrides[get_whatsapp_service] = lambda: whatsapp
         return app
 
     return _make
@@ -239,6 +240,7 @@ async def test_slow_job_returns_working_then_done(handler, slack):
         return {"response": "finally"}
 
     handler.handle_message.side_effect = slow
+    whatsapp = MagicMock()
     app = FastAPI()
     app.include_router(api.router)
     app.dependency_overrides[get_elevenlabs_service] = lambda: make_service(
@@ -246,7 +248,7 @@ async def test_slow_job_returns_working_then_done(handler, slack):
     )
     app.dependency_overrides[get_message_handler] = lambda: handler
     app.dependency_overrides[get_slack_service] = lambda: slack
-    app.dependency_overrides[get_whatsapp_service] = MagicMock
+    app.dependency_overrides[get_whatsapp_service] = lambda: whatsapp
 
     async with async_client(app) as client:
         ask = {"request": "long", "conversation_id": "c"}
