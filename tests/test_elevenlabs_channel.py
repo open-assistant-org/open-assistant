@@ -1,7 +1,6 @@
 """Tests for the ElevenLabs voice channel (outbound-only Talk page)."""
 
 import asyncio
-import json
 from unittest.mock import AsyncMock, MagicMock
 
 import httpx
@@ -98,7 +97,7 @@ def make_app(handler, slack):
         app.dependency_overrides[get_elevenlabs_service] = lambda: service or make_service()
         app.dependency_overrides[get_message_handler] = lambda: handler
         app.dependency_overrides[get_slack_service] = lambda: slack
-        app.dependency_overrides[get_whatsapp_service] = lambda: MagicMock()
+        app.dependency_overrides[get_whatsapp_service] = MagicMock
         return app
 
     return _make
@@ -247,7 +246,7 @@ async def test_slow_job_returns_working_then_done(handler, slack):
     )
     app.dependency_overrides[get_message_handler] = lambda: handler
     app.dependency_overrides[get_slack_service] = lambda: slack
-    app.dependency_overrides[get_whatsapp_service] = lambda: MagicMock()
+    app.dependency_overrides[get_whatsapp_service] = MagicMock
 
     async with async_client(app) as client:
         ask = {"request": "long", "conversation_id": "c"}
