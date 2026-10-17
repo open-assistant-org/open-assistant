@@ -28,6 +28,13 @@ from src.services.plan_helpers import (
 from src.services.async_task_dispatcher import AsyncTaskDispatcher
 from src.services.planner import Planner, PlanTracker
 from src.services.settings import SettingsService
+from src.services.tool_trace import (
+    RECALL_TOOL_DEF,
+    RECALL_TOOL_NAME,
+    TRACE_KEY,
+    build_tool_trace,
+    expand_history,
+)
 from src.utils.json_utils import try_repair_json
 from src.utils.logger import get_logger
 
@@ -376,6 +383,13 @@ class MessageHandler:
                 f"skills={len(selected_skills)}, pinned={pinned_skill})"
             )
 
+        # Re-insert tool results from recent turns so follow-ups needn't re-fetch them.
+        history_messages, recall_index = self._prepare_tool_replay(
+            context.get("recent_messages", []), system_prompt, channel
+        )
+        if recall_index and not any(t["function"]["name"] == RECALL_TOOL_NAME for t in tools):
+            tools = [*tools, RECALL_TOOL_DEF]
+
         # Step 9: Execute conversation loop
         try:
             result = await self._execute_conversation_loop(
@@ -385,6 +399,8 @@ class MessageHandler:
                 conversation_id=conv_id,
                 tools=tools,
                 recent_messages=context.get("recent_messages", []),
+                history_messages=history_messages,
+                recall_index=recall_index,
                 image_base64=image_base64,
                 image_mimetype=image_mimetype,
                 plan=plan,
@@ -457,6 +473,8 @@ class MessageHandler:
         if "plan_steps_total" in result:
             response_metadata["plan_steps_completed"] = result["plan_steps_completed"]
             response_metadata["plan_steps_total"] = result["plan_steps_total"]
+        if result.get(TRACE_KEY):
+            response_metadata[TRACE_KEY] = result[TRACE_KEY]
 
         self.conversation_service.add_message(
             conversation_id=conv_id,
@@ -563,6 +581,7 @@ class MessageHandler:
                 # System messages (long-term summaries) are injected separately by
                 # _build_system_prompt so we exclude them here and pass them alongside.
                 include_system_message=False,
+                include_message_meta=True,
             )
             recent_messages = [
                 m for m in ctx.get("messages", []) if m.get("role") in ("user", "assistant")
@@ -587,6 +606,67 @@ class MessageHandler:
             "recent_messages": recent_messages,
             "long_term_summaries": long_term_summaries,
         }
+
+    def _cfg_int(self, key: str, default: int) -> int:
+        """Read an int setting, falling back to *default* on anything unusable."""
+        try:
+            value = self.settings_service.get_config_with_fallback(key, default)
+            if isinstance(value, bool):
+                return default
+            return int(value) if isinstance(value, (int, float, str)) else default
+        except (TypeError, ValueError):
+            return default
+
+    def _cfg_bool(self, key: str, default: bool) -> bool:
+        value = self.settings_service.get_config_with_fallback(key, default)
+        if isinstance(value, str):
+            return value.strip().lower() in ("1", "true", "yes", "on")
+        return value if isinstance(value, bool) else default
+
+    def _prepare_tool_replay(
+        self,
+        recent_messages: List[Dict[str, Any]],
+        system_prompt: str,
+        channel: str,
+    ) -> Tuple[Optional[List[Dict[str, Any]]], Dict[str, str]]:
+        """Build history messages with recent tool results re-inserted.
+
+        Returns ``(history_messages, recall_index)``. ``history_messages`` is None
+        when the feature is off or there is nothing to replay, in which case the
+        caller builds plain-text history exactly as before.
+        """
+        if channel == "subtask" or not recent_messages:
+            return None, {}
+        if not self._cfg_bool("llm.tool_context_replay", True):
+            return None, {}
+        if not any(
+            isinstance(m.get("metadata"), dict) and m["metadata"].get(TRACE_KEY)
+            for m in recent_messages
+        ):
+            return None, {}
+        try:
+            budget = self._cfg_int("llm.history_tool_trace_max_chars", 24000)
+            try:
+                # Never let replayed tool output push the prompt past the context budget.
+                used = (
+                    len(system_prompt) + sum(len(m.get("content") or "") for m in recent_messages)
+                ) // 4
+                budget = min(budget, max(0, self.memory_service._get_max_tokens() - used) * 4)
+            except (TypeError, ValueError, AttributeError):
+                pass
+            history, recall_index, stats = expand_history(
+                recent_messages,
+                full_turns=self._cfg_int("llm.history_tool_turns", 1),
+                trace_budget_chars=budget,
+            )
+        except Exception as e:
+            logger.warning(f"Tool trace replay failed, using plain history: {e}")
+            return None, {}
+        logger.info(
+            f"Tool replay: {stats['full_turns']} full turn(s), {stats['digest_turns']} digest "
+            f"turn(s), ~{stats['chars'] // 4} tokens added (budget {budget} chars)"
+        )
+        return history, recall_index
 
     def _select_skills(self, message: str, conversation_id: Optional[str] = None) -> List[Skill]:
         """
@@ -928,6 +1008,12 @@ class MessageHandler:
         conversation_id: str,
         tools: List[Dict[str, Any]],
         recent_messages: Optional[List[Dict[str, Any]]] = None,
+        # History with tool traces re-inserted (see _prepare_tool_replay); when given
+        # it replaces the plain-text conversion of recent_messages.
+        history_messages: Optional[List[Dict[str, Any]]] = None,
+        # ref -> stored result for tool calls summarised in history; served by the
+        # recall_tool_result tool.
+        recall_index: Optional[Dict[str, str]] = None,
         image_base64: Optional[str] = None,
         image_mimetype: Optional[str] = None,
         plan: Optional[PlanTracker] = None,
@@ -944,6 +1030,7 @@ class MessageHandler:
         resume_tools_executed: Optional[List[str]] = None,
         resume_tool_call_history: Optional[deque] = None,
         resume_plan_nudge_count: int = 0,
+        resume_trace_start: int = 0,
         # Optional callback for streaming progress events to the caller
         event_callback: Optional[Callable[[dict], Awaitable[None]]] = None,
     ) -> Dict[str, Any]:
@@ -971,6 +1058,7 @@ class MessageHandler:
             )
             iteration = resume_iteration
             plan_nudge_count = resume_plan_nudge_count
+            trace_start = resume_trace_start
             stuck_detected = False
             # Image handling only applies to fresh starts; on resume the media
             # model is irrelevant (and raw image data is already stripped), but
@@ -983,7 +1071,10 @@ class MessageHandler:
             # Include prior conversation history for context
             # recent_messages includes the current user message (stored in step 2)
             added_count = 0
-            if recent_messages:
+            if history_messages is not None:
+                messages.extend(history_messages)
+                added_count = len(history_messages)
+            elif recent_messages:
                 for msg in recent_messages:
                     role = msg.get("role")
                     content = msg.get("content", "")
@@ -1075,12 +1166,25 @@ class MessageHandler:
                 if model_for_media != llm_client.config.model:
                     logger.info(f"Using media model {model_for_media} for image processing")
 
+            # Everything appended to `messages` from here on belongs to this turn.
+            trace_start = len(messages)
+
             # Track tool calls for stuck detection
             tool_call_history = deque(maxlen=10)
             tools_executed = []
             iteration = 0
             stuck_detected = False
             plan_nudge_count = 0
+
+        def _turn_trace() -> List[Dict[str, Any]]:
+            # Sub-task results already reach the parent turn; don't store them twice.
+            if channel == "subtask":
+                return []
+            return build_tool_trace(
+                messages,
+                trace_start,
+                self._cfg_int("llm.history_tool_result_max_chars", 8000),
+            )
 
         max_plan_nudges = 3
         max_validation_nudges = 2
@@ -1201,7 +1305,12 @@ class MessageHandler:
                             else None
                         ) or final_response
                         return self._build_result(
-                            final_response, tools_executed, iteration, stuck_detected, plan
+                            final_response,
+                            tools_executed,
+                            iteration,
+                            stuck_detected,
+                            plan,
+                            _turn_trace(),
                         )
                     else:
                         pending = [s for s in plan.steps if s.status in ("pending", "in_progress")]
@@ -1327,7 +1436,7 @@ class MessageHandler:
 
                 logger.debug(f"Conversation complete in {iteration} iterations")
                 return self._build_result(
-                    final_response, tools_executed, iteration, stuck_detected, plan
+                    final_response, tools_executed, iteration, stuck_detected, plan, _turn_trace()
                 )
 
             # LLM wants to call tools - add its message to conversation.
@@ -1384,6 +1493,30 @@ class MessageHandler:
                         )
                         tools_executed.append(tool_name)
                         continue
+
+                # ----------------------------------------------------------
+                # Handle recall_tool_result: serve a stored earlier tool result
+                # ----------------------------------------------------------
+                if tool_name == RECALL_TOOL_NAME:
+                    ref = str(arguments.get("ref", ""))
+                    stored = (recall_index or {}).get(ref)
+                    content = (
+                        {"ref": ref, "result": stored}
+                        if stored is not None
+                        else {
+                            "error": f"Unknown ref '{ref}'. Use a ref from the earlier "
+                            "tool-call notes, or call the original tool again."
+                        }
+                    )
+                    tool_results.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tool_call_id,
+                            "content": json.dumps(content),
+                        }
+                    )
+                    tools_executed.append(tool_name)
+                    continue
 
                 # ----------------------------------------------------------
                 # Handle ask_user: suspend execution and return to caller
@@ -1727,6 +1860,7 @@ class MessageHandler:
                     "plan": plan.to_dict() if plan else None,
                     "tool_call_history": list(tool_call_history),
                     "plan_nudge_count": plan_nudge_count,
+                    "trace_start": trace_start,
                     "ask_user_tool_call_id": ask_user_pending["tool_call_id"],
                 }
                 question = ask_user_pending["arguments"].get("question", "")
@@ -1805,7 +1939,9 @@ class MessageHandler:
                     else None
                 ) or ""
 
-                return self._build_result(final_response, tools_executed, iteration, True, plan)
+                return self._build_result(
+                    final_response, tools_executed, iteration, True, plan, _turn_trace()
+                )
 
         # Max iterations reached - nudge LLM to wrap up
         logger.warning(f"Max iterations ({effective_max_iterations}) reached")
@@ -1838,7 +1974,9 @@ class MessageHandler:
             final_response_obj.choices[0].message.content if final_response_obj.choices else None
         ) or ""
 
-        return self._build_result(final_response, tools_executed, iteration, False, plan)
+        return self._build_result(
+            final_response, tools_executed, iteration, False, plan, _turn_trace()
+        )
 
     @staticmethod
     def _build_result(
@@ -1847,6 +1985,7 @@ class MessageHandler:
         iterations: int,
         stuck_detected: bool,
         plan: Optional[PlanTracker] = None,
+        tool_trace: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """Build the standard result dict, including plan metadata when available."""
         result: Dict[str, Any] = {
@@ -1855,6 +1994,8 @@ class MessageHandler:
             "iterations": iterations,
             "stuck_detected": stuck_detected,
         }
+        if tool_trace:
+            result[TRACE_KEY] = tool_trace
         if plan and plan.total > 1:
             result["plan_steps_completed"] = plan.completed_count
             result["plan_steps_total"] = plan.total
@@ -2104,6 +2245,7 @@ class MessageHandler:
             resume_tools_executed=tools_executed,
             resume_tool_call_history=tool_call_history,
             resume_plan_nudge_count=plan_nudge_count,
+            resume_trace_start=suspended_state.get("trace_start", 0),
             event_callback=event_callback,
         )
 
@@ -2144,6 +2286,8 @@ class MessageHandler:
         if "plan_steps_total" in result:
             response_metadata["plan_steps_completed"] = result["plan_steps_completed"]
             response_metadata["plan_steps_total"] = result["plan_steps_total"]
+        if result.get(TRACE_KEY):
+            response_metadata[TRACE_KEY] = result[TRACE_KEY]
 
         self.conversation_service.add_message(
             conversation_id=conv_id,
