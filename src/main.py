@@ -129,6 +129,20 @@ async def lifespan(app: FastAPI):
 
         set_log_timezone(settings_service.get_config_with_fallback("user.timezone", "UTC"))
 
+        # Report errors to Sentry when a DSN is configured (pushed by the platform
+        # via /managed/settings, or SENTRY_DSN). Default integrations capture
+        # logger.error/exception calls and unhandled request exceptions.
+        sentry_dsn = settings_service.get_config_with_fallback("logging.sentry_dsn")
+        if sentry_dsn:
+            import sentry_sdk
+
+            sentry_sdk.init(
+                dsn=sentry_dsn,
+                release=__version__,
+                environment=config.general.environment,
+            )
+            logger.info("Sentry error reporting enabled")
+
         # Create integration services for cron jobs
         from src.services.google import GoogleService
         from src.services.google_ads import GoogleAdsService
