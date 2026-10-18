@@ -708,6 +708,7 @@ def get_memory_service(
     prompts_repo: PromptsRepository = Depends(get_prompts_repo),
     settings_repo: SettingsRepository = Depends(get_settings_repo),
     db: DatabaseManager = Depends(get_db_manager),
+    credentials_repo: CredentialsRepository = Depends(get_credentials_repo),
 ):
     """
     Get memory service instance.
@@ -719,6 +720,7 @@ def get_memory_service(
         prompts_repo: Prompts repository (injected)
         settings_repo: Settings repository (injected)
         db: Database manager (injected)
+        credentials_repo: Credentials repository (injected)
 
     Returns:
         MemoryService instance
@@ -735,6 +737,7 @@ def get_memory_service(
         settings_repo=settings_repo,
         db_manager=db,
         llm_client=None,
+        credentials_repo=credentials_repo,
     )
 
 

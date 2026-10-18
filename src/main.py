@@ -268,6 +268,7 @@ async def lifespan(app: FastAPI):
             settings_repo=settings_repo,
             db_manager=db_manager,
             llm_client=None,  # Will create on demand
+            credentials_repo=credentials_repo,
         )
 
         conversation_service = ConversationService(conversation_repo, message_repo, memory_service)
