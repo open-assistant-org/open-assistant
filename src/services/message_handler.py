@@ -637,7 +637,7 @@ class MessageHandler:
         """
         if channel == "subtask" or not recent_messages:
             return None, {}
-        if not self._cfg_bool("llm.tool_context_replay", True):
+        if not self._cfg_bool("llm.tool_context_replay", False):
             return None, {}
         if not any(
             isinstance(m.get("metadata"), dict) and m["metadata"].get(TRACE_KEY)
@@ -652,8 +652,8 @@ class MessageHandler:
                     len(system_prompt) + sum(len(m.get("content") or "") for m in recent_messages)
                 ) // 4
                 budget = min(budget, max(0, self.memory_service._get_max_tokens() - used) * 4)
-            except (TypeError, ValueError, AttributeError):
-                pass
+            except (TypeError, ValueError, AttributeError) as e:
+                logger.debug(f"Context budget unavailable, using the plain char budget: {e}")
             history, recall_index, stats = expand_history(
                 recent_messages,
                 full_turns=self._cfg_int("llm.history_tool_turns", 1),

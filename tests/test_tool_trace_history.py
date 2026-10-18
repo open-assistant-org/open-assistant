@@ -243,7 +243,7 @@ class TestExpandHistory:
 def _handler(config=None):
     """A MessageHandler without __init__, with just what the paths under test use."""
     h = object.__new__(MessageHandler)
-    values = dict(config or {})
+    values = {"llm.tool_context_replay": True, **(config or {})}
     h.settings_service = MagicMock()
     h.settings_service.get_config_with_fallback.side_effect = lambda key, default=None: values.get(
         key, default
@@ -457,6 +457,11 @@ class TestPrepareToolReplay:
         h = _handler({"llm.tool_context_replay": False})
         assert h._prepare_tool_replay(_history([[_entry()]]), "sys", "webui") == (None, {})
 
+    def test_off_when_setting_is_absent(self):
+        h = _handler()
+        h.settings_service.get_config_with_fallback.side_effect = lambda key, default=None: default
+        assert h._prepare_tool_replay(_history([[_entry()]]), "sys", "webui") == (None, {})
+
     def test_subtask_channel_returns_none(self):
         h = _handler()
         assert h._prepare_tool_replay(_history([[_entry()]]), "sys", "subtask") == (None, {})
@@ -486,8 +491,8 @@ class TestPrepareToolReplay:
         h = _handler()
         h.settings_service.get_config_with_fallback.side_effect = None
         h.settings_service.get_config_with_fallback.return_value = MagicMock()
-        history, _ = h._prepare_tool_replay(_history([[_entry()]]), "sys", "webui")
-        assert any(m.get("tool_calls") for m in history)
+        # An unusable toggle value falls back to the (off) default.
+        assert h._prepare_tool_replay(_history([[_entry()]]), "sys", "webui") == (None, {})
 
 
 # ---------------------------------------------------------------------------
@@ -499,7 +504,7 @@ class TestSettingDefinitions:
     def test_toggle_and_limits_are_registered_under_llm(self):
         toggle = SETTING_DEFINITIONS["llm.tool_context_replay"]
         assert toggle.category == ConfigCategory.LLM
-        assert toggle.ui_widget == "toggle" and toggle.default_value is True
+        assert toggle.ui_widget == "toggle" and toggle.default_value is False
 
         for key, default in [
             ("llm.history_tool_turns", 1),

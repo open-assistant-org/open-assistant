@@ -452,12 +452,13 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
             "to follow-up messages, so the assistant doesn't have to fetch them again. "
             "The most recent result is re-sent in full; older ones as a short note the "
             "assistant can expand on demand. This adds tokens to each request (typically "
-            "1-3K, capped by the limits below). Disable to send only the plain text of past "
-            "messages."
+            "1-3K, capped by the limits below). Off by default: past messages are sent as "
+            "plain text only. Results are stored either way, so enabling this later also "
+            "works for existing conversations."
         ),
         value_type=SettingValueType.BOOL,
         category=ConfigCategory.LLM,
-        default_value=True,
+        default_value=False,
         env_var_name="LLM_TOOL_CONTEXT_REPLAY",
         display_order=16,
         ui_widget="toggle",
