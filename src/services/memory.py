@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 from src.core.database import DatabaseManager
 from src.core.llm_client import SINGLE_MODEL_PROVIDERS, LLMClient, get_llm_client
 from src.core.repositories.conversation import ConversationRepository
+from src.core.repositories.credentials import CredentialsRepository
 from src.core.repositories.memory import MemoryRepository
 from src.core.repositories.message import MessageRepository
 from src.core.repositories.prompts import PromptsRepository
@@ -32,6 +33,7 @@ class MemoryService:
         llm_client: Optional[LLMClient] = None,
         max_tokens: Optional[int] = None,
         summarization_threshold: Optional[int] = None,
+        credentials_repo: Optional[CredentialsRepository] = None,
     ):
         """
         Initialize memory service.
@@ -46,6 +48,8 @@ class MemoryService:
             llm_client: LLM client for summarization (created if not provided)
             max_tokens: Maximum tokens for context (uses setting or ENV if not provided)
             summarization_threshold: Message threshold for summarization (uses setting or ENV if not provided)
+            credentials_repo: Credentials repository holding the encrypted LLM API key
+                (created on demand from db_manager if not provided)
         """
         self.message_repo = message_repo
         self.memory_repo = memory_repo
@@ -54,6 +58,7 @@ class MemoryService:
         self.settings_repo = settings_repo
         self.db_manager = db_manager
         self.llm_client = llm_client
+        self.credentials_repo = credentials_repo
 
         # Configuration from parameters or environment (with fallback)
         # Note: These can be configured in the Settings UI or via ENV variables
@@ -87,10 +92,32 @@ class MemoryService:
             return int(db_value)
         return int(os.getenv("LLM_CONTEXT_MAX_MESSAGES", "20"))
 
+    def _get_api_key(self) -> Optional[str]:
+        """Resolve the LLM API key: encrypted credentials → settings table → ENV.
+
+        The Settings UI stores ``llm.api_key`` encrypted in service_credentials
+        (it is a sensitive setting), never in the settings table, so the
+        credentials lookup must come first to match ``get_config_with_fallback``.
+        """
+        try:
+            if self.credentials_repo is None:
+                self.credentials_repo = CredentialsRepository(self.db_manager)
+            cred = self.credentials_repo.get("llm")
+        except Exception as e:
+            logger.warning(f"Could not read LLM credentials: {e}")
+            cred = None
+        if cred:
+            data = cred.get("credential_data", {})
+            # "value" is the legacy credential_data key (see get_config_with_fallback)
+            api_key = data.get("api_key") or data.get("value")
+            if api_key:
+                return api_key
+        return self.settings_repo.get("llm.api_key") or os.getenv("LLM_API_KEY")
+
     def _get_llm_client(self) -> LLMClient:
         """Get or create the main-model LLM client, reading config from settings first."""
         if self.llm_client is None:
-            api_key = self.settings_repo.get("llm.api_key") or os.getenv("LLM_API_KEY")
+            api_key = self._get_api_key()
             if not api_key:
                 raise ValueError("LLM_API_KEY not configured")
             provider = self.settings_repo.get("llm.provider") or os.getenv(
@@ -111,7 +138,7 @@ class MemoryService:
         Falls back to the main model if no worker model is configured.
         Not cached — called rarely, and the setting can change at runtime.
         """
-        api_key = self.settings_repo.get("llm.api_key") or os.getenv("LLM_API_KEY")
+        api_key = self._get_api_key()
         if not api_key:
             return self._get_llm_client()
         provider = self.settings_repo.get("llm.provider") or os.getenv("LLM_PROVIDER", "openrouter")
