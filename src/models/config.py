@@ -213,6 +213,15 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
         display_order=3,
         ui_widget="select",
     ),
+    "logging.sentry_dsn": SettingDefinition(
+        key="logging.sentry_dsn",
+        display_name="Sentry DSN",
+        description="If set, errors are reported to this Sentry project (applied on restart)",
+        value_type=SettingValueType.STRING,
+        category=ConfigCategory.LOGGING,
+        env_var_name="SENTRY_DSN",
+        display_order=4,
+    ),
     # ========================================================================
     # MEMORY MANAGEMENT SETTINGS
     # ========================================================================
