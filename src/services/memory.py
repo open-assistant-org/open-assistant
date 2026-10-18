@@ -137,6 +137,7 @@ class MemoryService:
         model: str,
         max_tokens: Optional[int] = None,
         include_system_message: bool = True,
+        include_message_meta: bool = False,
     ) -> Dict[str, Any]:
         """
         Get conversation context within token limits.
@@ -146,6 +147,8 @@ class MemoryService:
             model: Model name for token counting
             max_tokens: Maximum tokens (defaults to MEMORY_MAX_TOKENS)
             include_system_message: Whether to include system message
+            include_message_meta: Add ``message_id`` and ``metadata`` to each stored
+                message dict (not for sending to an LLM as-is)
 
         Returns:
             Dictionary with messages, memories, and metadata
@@ -167,6 +170,7 @@ class MemoryService:
                 model=model,
                 max_tokens=max_tokens,
                 include_system_message=include_system_message,
+                include_message_meta=include_message_meta,
             )
 
         # Default: summarization strategy
@@ -193,7 +197,7 @@ class MemoryService:
 
         # Add recent messages
         context_messages.extend(
-            [{"role": msg["role"], "content": msg["content"]} for msg in messages]
+            self._context_message(msg, include_message_meta) for msg in messages
         )
 
         # Calculate total tokens
@@ -213,6 +217,15 @@ class MemoryService:
             "facts_count": len(facts),
         }
 
+    @staticmethod
+    def _context_message(msg: Dict[str, Any], include_meta: bool) -> Dict[str, Any]:
+        """Reduce a stored message to its context form."""
+        out: Dict[str, Any] = {"role": msg["role"], "content": msg["content"]}
+        if include_meta:
+            out["message_id"] = msg.get("message_id")
+            out["metadata"] = msg.get("metadata")
+        return out
+
     def _get_context_last_messages(
         self,
         conversation_id: str,
@@ -221,6 +234,7 @@ class MemoryService:
         model: str,
         max_tokens: int,
         include_system_message: bool,
+        include_message_meta: bool = False,
     ) -> Dict[str, Any]:
         """
         Build context using the 'last_messages' strategy: keep only the most recent
@@ -246,7 +260,7 @@ class MemoryService:
         fitting_messages: List[Dict[str, str]] = []
         current_tokens = 0
         for msg in reversed(recent_messages):
-            msg_dict = {"role": msg["role"], "content": msg["content"]}
+            msg_dict = self._context_message(msg, include_message_meta)
             msg_tokens = count_message_tokens([msg_dict], model)
             if current_tokens + msg_tokens > available_tokens:
                 break

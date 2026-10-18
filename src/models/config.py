@@ -453,6 +453,74 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
         display_order=14,
         ui_widget="toggle",
     ),
+    "llm.tool_context_replay": SettingDefinition(
+        key="llm.tool_context_replay",
+        display_name="Remember Tool Results Between Turns",
+        description=(
+            "Keep the results of tool calls (e.g. an email that was just fetched) available "
+            "to follow-up messages, so the assistant doesn't have to fetch them again. "
+            "The most recent result is re-sent in full; older ones as a short note the "
+            "assistant can expand on demand. This adds tokens to each request (typically "
+            "1-3K, capped by the limits below). Off by default: past messages are sent as "
+            "plain text only. Results are stored either way, so enabling this later also "
+            "works for existing conversations."
+        ),
+        value_type=SettingValueType.BOOL,
+        category=ConfigCategory.LLM,
+        default_value=False,
+        env_var_name="LLM_TOOL_CONTEXT_REPLAY",
+        display_order=16,
+        ui_widget="toggle",
+    ),
+    "llm.history_tool_turns": SettingDefinition(
+        key="llm.history_tool_turns",
+        display_name="Tool Results Replayed In Full",
+        description=(
+            "How many recent turns have their tool results re-sent in full when "
+            "'Remember Tool Results Between Turns' is on. Older turns get a short note."
+        ),
+        value_type=SettingValueType.INT,
+        category=ConfigCategory.LLM,
+        default_value=1,
+        min_value=1,
+        max_value=10,
+        env_var_name="LLM_HISTORY_TOOL_TURNS",
+        display_order=17,
+        ui_widget="number",
+    ),
+    "llm.history_tool_result_max_chars": SettingDefinition(
+        key="llm.history_tool_result_max_chars",
+        display_name="Max Stored Chars Per Tool Result",
+        description=(
+            "Each tool result kept for later turns is truncated to this many characters "
+            "(~4 chars = 1 token)."
+        ),
+        value_type=SettingValueType.INT,
+        category=ConfigCategory.LLM,
+        default_value=8000,
+        min_value=1000,
+        max_value=100000,
+        env_var_name="LLM_HISTORY_TOOL_RESULT_MAX_CHARS",
+        display_order=18,
+        ui_widget="number",
+    ),
+    "llm.history_tool_trace_max_chars": SettingDefinition(
+        key="llm.history_tool_trace_max_chars",
+        display_name="Max Replayed Tool Chars",
+        description=(
+            "Upper bound on the characters of tool results re-sent on each turn "
+            "(~4 chars = 1 token; the default 24000 is about 6K tokens). Results that "
+            "don't fit are replaced by a short note."
+        ),
+        value_type=SettingValueType.INT,
+        category=ConfigCategory.LLM,
+        default_value=24000,
+        min_value=4000,
+        max_value=400000,
+        env_var_name="LLM_HISTORY_TOOL_TRACE_MAX_CHARS",
+        display_order=19,
+        ui_widget="number",
+    ),
     "llm.media_model": SettingDefinition(
         key="llm.media_model",
         display_name="Media Model",
