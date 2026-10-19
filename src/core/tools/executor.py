@@ -123,6 +123,29 @@ class ToolExecutor:
         payload = f"{tool_name}:{json.dumps(arguments, sort_keys=True)}"
         return hashlib.sha256(payload.encode()).hexdigest()[:16]
 
+    @staticmethod
+    def _unwrap_nested_arguments(
+        tool: Any, tool_name: str, arguments: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Undo the ``{"tool_name": ..., "arguments": {...}}`` envelope some LLMs emit.
+
+        Models occasionally mimic the step format used by batch/loop/cron tools and
+        nest the real arguments under an ``arguments`` key. Unwrap it unless the
+        tool itself declares an ``arguments`` parameter.
+        """
+        if not isinstance(arguments, dict) or not isinstance(arguments.get("arguments"), dict):
+            return arguments
+        if not set(arguments) <= {"tool_name", "arguments"}:
+            return arguments
+        if arguments.get("tool_name", tool_name) != tool_name:
+            return arguments
+        parameters = getattr(getattr(tool, "schema", None), "parameters", None)
+        properties = parameters.get("properties") if isinstance(parameters, dict) else None
+        if isinstance(properties, dict) and "arguments" in properties:
+            return arguments
+        logger.warning(f"Unwrapping nested 'arguments' envelope for tool: {tool_name}")
+        return arguments["arguments"]
+
     async def execute_tool(
         self,
         tool_name: str,
@@ -163,6 +186,8 @@ class ToolExecutor:
                 iteration=iteration,
             )
             return error_result
+
+        arguments = self._unwrap_nested_arguments(tool, tool_name, arguments)
 
         # Dedup check — same (tool, args) within _DEDUP_WINDOW seconds returns cached result
         dedup_key = self._make_dedup_key(tool_name, arguments)
