@@ -1,5 +1,6 @@
 """Outlook service for email, calendar, and OneDrive operations."""
 
+import html
 import re
 import threading
 from datetime import datetime, timedelta, timezone
@@ -738,8 +739,16 @@ class OutlookService(BaseService):
         client = self._get_client()
         return client.get_page(page_id, include_content=include_content)
 
-    def create_page(self, section_id: str, title: str, content: str) -> Dict[str, Any]:
-        """Create a new OneNote page."""
+    def create_page(
+        self, section_id: str, title: str, content: str, content_type: str = "html"
+    ) -> Dict[str, Any]:
+        """Create a new OneNote page.
+
+        OneNote only accepts HTML, so plain-text content is escaped and its
+        line breaks converted to ``<br>`` before it is sent.
+        """
+        if content_type.strip().lower() == "text":
+            content = html.escape(content).replace("\r\n", "\n").replace("\n", "<br>")
         client = self._get_client()
         return client.create_page(section_id=section_id, title=title, content=content)
 
