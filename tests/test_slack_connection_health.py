@@ -48,7 +48,9 @@ def test_reconnect_after_reported_outage_warns_and_resets(caplog):
 def test_watchdog_reports_a_sustained_outage_once(monkeypatch, caplog):
     handler = _handler()
     handler._down_since = 100.0
-    monkeypatch.setattr(socket_mode.time, "monotonic", lambda: 100.0 + socket_mode.UNHEALTHY_AFTER_SECONDS + 1)
+    monkeypatch.setattr(
+        socket_mode.time, "monotonic", lambda: 100.0 + socket_mode.UNHEALTHY_AFTER_SECONDS + 1
+    )
 
     class _Stop:
         """Event stub: run two watchdog iterations, then stop."""

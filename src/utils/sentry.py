@@ -36,7 +36,9 @@ def instance_domain(app_url: Optional[str]) -> Optional[str]:
     return host
 
 
-def drop_transient_slack_errors(event: Dict[str, Any], hint: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def drop_transient_slack_errors(
+    event: Dict[str, Any], hint: Dict[str, Any]
+) -> Optional[Dict[str, Any]]:
     """``before_send`` hook: drop reconnect noise from slack_sdk's socket clients.
 
     The records still reach Sentry as breadcrumbs on any later event.
