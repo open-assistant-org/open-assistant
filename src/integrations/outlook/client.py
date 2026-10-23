@@ -1,5 +1,6 @@
 """Outlook/Microsoft Graph API client for mail, calendar, and OneDrive."""
 
+import time
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote
 
@@ -8,6 +9,12 @@ import requests
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+# Graph throttles OneNote per user; retry briefly before giving up.
+THROTTLE_STATUS_CODES = (429, 503)
+THROTTLE_MAX_RETRIES = 3
+THROTTLE_BASE_DELAY = 1.0
+THROTTLE_MAX_DELAY = 30.0
 
 
 class OutlookClient:
@@ -44,6 +51,31 @@ class OutlookClient:
         # Keep alphanumeric, hyphen, underscore, and tilde as-is
         # Only encode special characters like =, +, / etc.
         return quote(id_value, safe="-_.~")
+
+    def _get_with_retry(self, url: str, **kwargs) -> requests.Response:
+        """
+        GET a URL, retrying when Graph throttles the request.
+
+        Honours the ``Retry-After`` header on 429/503 responses and falls back
+        to exponential backoff. The last response is returned once retries are
+        exhausted so callers can handle it as usual.
+        """
+        for attempt in range(THROTTLE_MAX_RETRIES + 1):
+            response = requests.get(url, headers=self.headers, **kwargs)
+            if response.status_code not in THROTTLE_STATUS_CODES or attempt == THROTTLE_MAX_RETRIES:
+                return response
+
+            try:
+                delay = float(response.headers.get("Retry-After", ""))
+            except (TypeError, ValueError):
+                delay = THROTTLE_BASE_DELAY * (2**attempt)
+            delay = min(max(delay, 0.0), THROTTLE_MAX_DELAY)
+            logger.warning(
+                f"Graph API returned {response.status_code}; retrying in {delay:.1f}s "
+                f"(attempt {attempt + 1}/{THROTTLE_MAX_RETRIES})"
+            )
+            time.sleep(delay)
+        return response
 
     def _resolve_todo_list_id(self, list_id_or_name: str) -> str:
         """
@@ -781,14 +813,19 @@ class OutlookClient:
                 "id,title,createdDateTime,lastModifiedDateTime,parentSection,parentNotebook"
             )
 
-            response = requests.get(url, headers=self.headers, params=params)
+            response = self._get_with_retry(url, params=params)
             response.raise_for_status()
 
             pages = response.json().get("value", [])
 
             if include_content:
                 for page in pages:
-                    page["content"] = self.get_page_content(page["id"])
+                    try:
+                        page["content"] = self.get_page_content(page["id"])
+                    except requests.RequestException as e:
+                        # One unreadable page should not fail the whole listing.
+                        logger.warning(f"Skipping content for page {page['id']}: {e}")
+                        page["content"] = None
 
             logger.info(f"Retrieved {len(pages)} OneNote pages")
             return pages
@@ -801,7 +838,7 @@ class OutlookClient:
         """Get page metadata and optionally content."""
         try:
             url = f"{self.graph_url}/me/onenote/pages/{self._encode_id(page_id)}"
-            response = requests.get(url, headers=self.headers)
+            response = self._get_with_retry(url)
             if response.status_code == 404:
                 logger.warning(f"OneNote page not found: {page_id}")
                 return {
@@ -826,7 +863,7 @@ class OutlookClient:
         try:
             url = f"{self.graph_url}/me/onenote/pages/{self._encode_id(page_id)}/content"
 
-            response = requests.get(url, headers=self.headers)
+            response = self._get_with_retry(url)
             if response.status_code == 404:
                 logger.warning(f"OneNote page content not found: {page_id}")
                 return {
