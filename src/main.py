@@ -134,12 +134,13 @@ async def lifespan(app: FastAPI):
         # logger.error/exception calls and unhandled request exceptions.
         sentry_dsn = settings_service.get_config_with_fallback("logging.sentry_dsn")
         if sentry_dsn:
-            import sentry_sdk
+            from src.utils.sentry import init_sentry
 
-            sentry_sdk.init(
+            init_sentry(
                 dsn=sentry_dsn,
                 release=__version__,
                 environment=config.general.environment,
+                app_url=config.general.app_url,
             )
             logger.info("Sentry error reporting enabled")
 
