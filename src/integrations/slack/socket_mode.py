@@ -3,9 +3,13 @@
 import asyncio
 import base64
 import threading
+import time
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-from slack_sdk.socket_mode import SocketModeClient
+# websocket-client based transport: same API as the dependency-free builtin
+# client, but sturdier on dropped sockets (the builtin one surfaced a steady
+# stream of BrokenPipeError reconnects).
+from slack_sdk.socket_mode.websocket_client import SocketModeClient
 from slack_sdk.socket_mode.request import SocketModeRequest
 from slack_sdk.socket_mode.response import SocketModeResponse
 from slack_sdk.web import WebClient
@@ -29,6 +33,11 @@ logger = get_logger(__name__)
 
 # Conversation idle timeout for Slack (5 hours)
 SLACK_NEW_CHAT_IDLE_SECONDS = 5 * 60 * 60
+
+# How often the watchdog checks the connection, and how long it may stay down
+# before we report an error (individual reconnects are routine and only logged).
+HEALTH_CHECK_INTERVAL_SECONDS = 30
+UNHEALTHY_AFTER_SECONDS = 5 * 60
 
 
 def _extract_slack_files(event: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -96,6 +105,8 @@ class SlackSocketModeHandler:
         self.client = SocketModeClient(
             app_token=app_token,
             web_client=WebClient(token=bot_token),
+            on_open_listeners=[self._on_ws_open],
+            on_close_listeners=[self._on_ws_close],
         )
 
         # Register event listener
@@ -105,6 +116,15 @@ class SlackSocketModeHandler:
         self._thread: Optional[threading.Thread] = None
         self._running = False
         self._bot_user_id: Optional[str] = None
+
+        # Connection health: lifetime of the active websocket, and when we last
+        # had none (None while connected). Reported errors are rate-limited to one
+        # per outage.
+        self._active_ws: Any = None
+        self._connected_at: Optional[float] = None
+        self._down_since: Optional[float] = None
+        self._outage_reported = False
+        self._stop_event = threading.Event()
 
         logger.info(
             f"[Slack Socket Mode] Handler initialized (app_token={'configured' if app_token else 'MISSING'}, "
@@ -119,9 +139,54 @@ class SlackSocketModeHandler:
             return
 
         self._running = True
+        self._stop_event.clear()
+        self._down_since = time.monotonic()
         self._thread = threading.Thread(target=self._run_client, daemon=True)
         self._thread.start()
+        threading.Thread(target=self._watch_health, daemon=True).start()
         logger.info("Slack Socket Mode connection started")
+
+    def _on_ws_open(self, ws: Any) -> None:
+        self._active_ws = ws
+        self._connected_at = time.monotonic()
+        if self._down_since is not None:
+            down_for = time.monotonic() - self._down_since
+            self._down_since = None
+            if self._outage_reported:
+                logger.warning(f"[Slack Socket Mode] Connection restored after {down_for:.0f}s")
+            else:
+                logger.info(f"[Slack Socket Mode] Connected (was down {down_for:.0f}s)")
+            self._outage_reported = False
+
+    def _on_ws_close(self, ws: Any) -> None:
+        # The client opens the replacement socket before closing the old one, so
+        # only the active socket closing means we are actually disconnected.
+        if ws is not self._active_ws:
+            return
+        lifetime = time.monotonic() - self._connected_at if self._connected_at else 0.0
+        self._active_ws = None
+        self._connected_at = None
+        self._down_since = time.monotonic()
+        logger.info(f"[Slack Socket Mode] Connection closed after {lifetime:.0f}s")
+
+    def _watch_health(self) -> None:
+        """Report one error per outage that outlasts UNHEALTHY_AFTER_SECONDS.
+
+        Reconnect churn is logged below ERROR level (and slack_sdk's own
+        per-attempt errors are filtered out of Sentry), so this is the signal
+        that the bot really is unreachable.
+        """
+        while not self._stop_event.wait(HEALTH_CHECK_INTERVAL_SECONDS):
+            down_since = self._down_since
+            if down_since is None or self._outage_reported:
+                continue
+            down_for = time.monotonic() - down_since
+            if down_for >= UNHEALTHY_AFTER_SECONDS:
+                self._outage_reported = True
+                logger.error(
+                    f"[Slack Socket Mode] No healthy connection for {down_for:.0f}s; "
+                    "the bot is not receiving Slack events"
+                )
 
     _bot_id: Optional[str] = None
 
@@ -154,6 +219,7 @@ class SlackSocketModeHandler:
     def close(self) -> None:
         """Close the Socket Mode connection."""
         self._running = False
+        self._stop_event.set()
         try:
             self.client.close()
             logger.info("Slack Socket Mode connection closed")
