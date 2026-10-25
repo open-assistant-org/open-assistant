@@ -4,7 +4,8 @@ import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Optional
 
-from jose import JWTError, jwt
+import jwt
+from jwt import InvalidTokenError
 
 ALGORITHM = "HS256"
 _STATE_TTL_SECONDS = 300  # 5 minutes
@@ -57,7 +58,7 @@ def verify_oauth_state(state: str) -> bool:
     try:
         payload = jwt.decode(state, get_jwt_secret(), algorithms=[ALGORITHM])
         return payload.get("purpose") == "oauth_state"
-    except JWTError:
+    except InvalidTokenError:
         return False
 
 
@@ -97,7 +98,7 @@ def verify_artifact_token(token: str) -> Optional[str]:
         if payload.get("purpose") != "artifact_link":
             return None
         return payload.get("artifact_id")
-    except JWTError:
+    except InvalidTokenError:
         return None
 
 
@@ -138,5 +139,5 @@ def verify_artifact_unlock_token(token: str, artifact_id: str) -> bool:
             payload.get("purpose") == "artifact_unlock"
             and payload.get("artifact_id") == artifact_id
         )
-    except JWTError:
+    except InvalidTokenError:
         return False
