@@ -9,7 +9,7 @@
   "dependencies": {
     "whatsapp-web.js": "1.34.7",
     "express": "^5.2.1",
-    "body-parser": "^2.3.0",
+    "body-parser": "^2.4.0",
     "qrcode-terminal": "^0.12.0",
     "node-fetch": "^2.7.0"
   },
