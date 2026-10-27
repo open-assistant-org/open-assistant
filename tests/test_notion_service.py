@@ -58,13 +58,3 @@ def test_query_database_accepts_tool_schema_filter_argument() -> None:
     service.query_database(database_id="db1", filter=filter_)
 
     assert client.query_database.call_args.kwargs["filter_dict"] == filter_
-
-
-def test_query_database_accepts_tool_schema_filter_argument() -> None:
-    """The executor calls query_database(**arguments) with the schema's `filter` key."""
-    service, client = _make_service()
-    filter_ = {"property": "State", "status": {"equals": "Done"}}
-
-    service.query_database(database_id="db1", filter=filter_)
-
-    assert client.query_database.call_args.kwargs["filter_dict"] == filter_
