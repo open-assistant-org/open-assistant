@@ -22,6 +22,10 @@ _TRANSIENT_ERRORS = {
     "SSLError",
     "gaierror",
 }
+# The websocket-client library logs every dropped connection at ERROR before
+# slack_sdk reconnects on its own.
+_WEBSOCKET_LOGGER = "websocket"
+_WEBSOCKET_DROP_MARKER = "Connection to remote host was lost"
 _ON_ERROR_RE = re.compile(r"on_error invoked .*?error: (\w+)")
 
 
@@ -43,6 +47,10 @@ def drop_transient_slack_errors(
 
     The records still reach Sentry as breadcrumbs on any later event.
     """
+    if event.get("logger") == _WEBSOCKET_LOGGER:
+        message = (event.get("logentry") or {}).get("formatted") or event.get("message") or ""
+        if _WEBSOCKET_DROP_MARKER in message:
+            return None
     if str(event.get("logger") or "").startswith(_SLACK_SOCKET_LOGGER_PREFIX):
         message = (event.get("logentry") or {}).get("formatted") or event.get("message") or ""
         match = _ON_ERROR_RE.search(message)

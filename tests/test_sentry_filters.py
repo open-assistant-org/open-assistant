@@ -56,3 +56,13 @@ def test_same_error_from_other_logger_is_kept():
 def test_event_without_logger_is_kept():
     event = {"message": "something broke"}
     assert drop_transient_slack_errors(event, {}) is event
+
+
+def test_websocket_dropped_connection_is_dropped():
+    event = _slack_event("websocket", "Connection to remote host was lost. - goodbye")
+    assert drop_transient_slack_errors(event, {}) is None
+
+
+def test_other_websocket_error_is_kept():
+    event = _slack_event("websocket", "handshake status 500 Internal Server Error")
+    assert drop_transient_slack_errors(event, {}) is event

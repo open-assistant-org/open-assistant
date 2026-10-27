@@ -87,6 +87,13 @@ def calculate(expression: str) -> Dict[str, Any]:
             "expression": expression,
             "error": str(e),
         }
+    except SyntaxError as e:
+        # Unparseable input (typically from the LLM) is reported back, not an app error.
+        logger.debug(f"Calculator could not parse {expression!r}: {e}")
+        return {
+            "expression": expression,
+            "error": f"Invalid expression: {str(e)}",
+        }
     except Exception as e:
         logger.error(f"Calculator error: {e}")
         return {
