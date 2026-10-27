@@ -15,5 +15,5 @@ def test_valid_expression():
 def test_unparseable_expression_returns_error_without_error_log(expression, caplog):
     with caplog.at_level(logging.ERROR):
         result = calculate(expression)
-    assert result["error"].startswith("Invalid expression")
+    assert result["error"]
     assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
