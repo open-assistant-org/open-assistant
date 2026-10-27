@@ -229,7 +229,7 @@ class NotionService(BaseService):
     def query_database(
         self,
         database_id: Optional[str] = None,
-        filter_dict: Optional[Dict[str, Any]] = None,
+        filter: Optional[Dict[str, Any]] = None,
         sorts: Optional[List[Dict[str, Any]]] = None,
         data_source_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
@@ -238,7 +238,7 @@ class NotionService(BaseService):
 
         Args:
             database_id: Database ID (uses default if not provided)
-            filter_dict: Optional filter criteria
+            filter: Optional Notion filter object (named to match the tool schema)
             sorts: Optional sort criteria
             data_source_id: Optional data source ID (bypasses discovery if provided)
 
@@ -254,7 +254,7 @@ class NotionService(BaseService):
 
         return client.query_database(
             database_id=database_id,
-            filter_dict=filter_dict,
+            filter_dict=filter,
             sorts=sorts,
             data_source_id=data_source_id,
         )

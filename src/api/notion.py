@@ -302,7 +302,7 @@ async def query_database(
     try:
         entries = notion_service.query_database(
             database_id=request.database_id,
-            filter_dict=request.filter,
+            filter=request.filter,
             sorts=request.sorts,
             data_source_id=request.data_source_id,
         )

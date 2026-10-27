@@ -48,3 +48,13 @@ def test_create_note_without_properties_sets_only_title() -> None:
     sent = client.create_page.call_args.kwargs["properties"]
     assert list(sent.keys()) == ["Name"]
     assert sent["Name"]["title"][0]["text"]["content"] == "Quick note"
+
+
+def test_query_database_accepts_tool_schema_filter_argument() -> None:
+    """The executor calls query_database(**arguments) with the schema's `filter` key."""
+    service, client = _make_service()
+    filter_ = {"property": "State", "status": {"equals": "Done"}}
+
+    service.query_database(database_id="db1", filter=filter_)
+
+    assert client.query_database.call_args.kwargs["filter_dict"] == filter_
