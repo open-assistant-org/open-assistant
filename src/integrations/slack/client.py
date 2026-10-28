@@ -6,6 +6,7 @@ import requests
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
+from src.integrations.slack.formatting import markdown_to_mrkdwn
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -35,7 +36,7 @@ class SlackClient:
 
         Args:
             channel: Channel ID or name
-            text: Message text
+            text: Message text (Markdown is converted to Slack mrkdwn)
             thread_ts: Optional thread timestamp to reply in a thread
 
         Returns:
@@ -43,7 +44,7 @@ class SlackClient:
         """
         try:
             logger.info(f"Sending Slack message to channel {channel}")
-            kwargs: Dict[str, Any] = {"channel": channel, "text": text}
+            kwargs: Dict[str, Any] = {"channel": channel, "text": markdown_to_mrkdwn(text)}
             if thread_ts:
                 kwargs["thread_ts"] = thread_ts
 

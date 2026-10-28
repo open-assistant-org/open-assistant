@@ -310,6 +310,10 @@ By default another bot that @mentions Open Assistant is recorded (if **Ingest Al
 3. The bot processes the message through Open Assistant's message handler
 4. The response is sent back to the same channel — as a threaded reply when **Reply in Thread** is enabled, otherwise at the channel root
 
+### Formatting
+
+Slack doesn't render standard Markdown, so every outgoing message is converted to Slack's mrkdwn first: `**bold**` becomes `*bold*`, headings become bold lines, `[text](url)` becomes a clickable link, bullets become `•`, and tables are wrapped in a code block so their columns stay aligned. Code blocks and Slack mentions are left untouched.
+
 ## Troubleshooting
 
 ### Bot doesn't respond to messages
