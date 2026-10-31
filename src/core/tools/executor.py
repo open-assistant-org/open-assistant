@@ -1070,6 +1070,7 @@ class ToolExecutor:
         whatsapp_service = self.services.get("whatsapp")
         slack_service = self.services.get("slack")
 
+        auto_channel = channel is None
         if channel is None:
             # Auto-detect: prefer whatsapp if enabled, otherwise fall back to slack
             wa_on = whatsapp_service and settings_truthy(
@@ -1078,7 +1079,10 @@ class ToolExecutor:
             sl_on = slack_service and settings_truthy(
                 slack_service.settings_repo.get("slack.enabled")
             )
-            if wa_on:
+            if wa_on and sl_on and self._whatsapp_outage_active():
+                # Known WhatsApp outage: don't wait on a send that will fail.
+                channel = "slack"
+            elif wa_on:
                 channel = "whatsapp"
             elif sl_on:
                 channel = "slack"
@@ -1112,7 +1116,15 @@ class ToolExecutor:
                         "Set it in settings or use channel='slack'."
                     ),
                 }
-            return whatsapp_service.send_message_to_owner(message=message)
+            try:
+                return whatsapp_service.send_message_to_owner(message=message)
+            except Exception as e:
+                if not auto_channel:
+                    raise
+                fallback = self._notify_owner_via_slack_fallback(slack_service, message, e)
+                if fallback is None:
+                    raise
+                return fallback
 
         elif channel == "slack":
             if not slack_service:
@@ -1145,6 +1157,40 @@ class ToolExecutor:
                 "success": False,
                 "error": f"Unknown channel '{channel}'. Supported values: 'whatsapp', 'slack'.",
             }
+
+    @staticmethod
+    def _whatsapp_outage_active() -> bool:
+        from src.services.whatsapp_health import get_whatsapp_health_monitor
+
+        monitor = get_whatsapp_health_monitor()
+        return bool(monitor and monitor.outage_active)
+
+    @staticmethod
+    def _notify_owner_via_slack_fallback(
+        slack_service: Any, message: str, whatsapp_error: Exception
+    ) -> Optional[Dict[str, Any]]:
+        """Deliver a notify_owner message on Slack after WhatsApp failed.
+
+        Returns None when Slack isn't usable, so the caller re-raises the
+        original WhatsApp error.
+        """
+        if not slack_service:
+            return None
+        repo = slack_service.settings_repo
+        if not settings_truthy(repo.get("slack.enabled")) or not repo.get("slack.default_channel"):
+            return None
+        logger.warning(f"notify_owner: WhatsApp failed ({whatsapp_error}); falling back to Slack")
+        result = slack_service.send_message_to_default_channel(message=message)
+        response: Dict[str, Any] = dict(result) if isinstance(result, dict) else {"result": result}
+        response.update(
+            {
+                "success": response.get("success", True),
+                "channel": "slack",
+                "fallback_from": "whatsapp",
+                "whatsapp_error": str(whatsapp_error),
+            }
+        )
+        return response
 
     async def _handle_batch_tool(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
         """

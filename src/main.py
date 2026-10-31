@@ -166,6 +166,18 @@ async def lifespan(app: FastAPI):
         nextcloud_service = NextcloudService(settings_repo, credentials_repo, audit_repo)
         whatsapp_service = WhatsAppService(settings_repo, credentials_repo, audit_repo)
         slack_service = SlackService(settings_repo, credentials_repo, audit_repo)
+
+        # Watchdog for the WhatsApp bridge: restarts it when it breaks and
+        # alerts the owner on Slack if a restart doesn't fix it.
+        from src.services.whatsapp_health import (
+            WhatsAppHealthMonitor,
+            set_whatsapp_health_monitor,
+        )
+
+        whatsapp_health_monitor = WhatsAppHealthMonitor(settings_repo, slack_service)
+        set_whatsapp_health_monitor(whatsapp_health_monitor)
+        whatsapp_health_monitor.start()
+        app.state.whatsapp_health_monitor = whatsapp_health_monitor
         brave_service = BraveService(settings_repo, credentials_repo, audit_repo)
         browser_service = BrowserService(settings_repo, credentials_repo, audit_repo)
         google_news_service = GoogleNewsService(settings_repo, credentials_repo, audit_repo)
@@ -487,6 +499,8 @@ async def lifespan(app: FastAPI):
         logger.error(f"Error during startup: {e}", exc_info=True)
         raise
     finally:
+        if hasattr(app.state, "whatsapp_health_monitor"):
+            app.state.whatsapp_health_monitor.stop()
         # Close Slack Socket Mode connection
         if hasattr(app.state, "slack_socket_handler"):
             app.state.slack_socket_handler.close()

@@ -100,6 +100,30 @@ class WhatsAppClient:
             logger.error(f"Failed to configure webhook: {e}")
             raise
 
+    def get_health(self) -> Dict[str, Any]:
+        """
+        Get the bridge's health, including a live probe of the WhatsApp Web
+        connection (``ready``) and its lifecycle ``state``.
+
+        Raises:
+            requests.RequestException: If the bridge is unreachable
+        """
+        # The bridge probes WhatsApp Web with a 10s timeout, so allow a bit more.
+        response = requests.get(f"{self.bridge_url}/health", timeout=15)
+        response.raise_for_status()
+        return response.json()
+
+    def restart(self) -> Dict[str, Any]:
+        """
+        Ask the bridge to exit so its process supervisor starts a fresh one.
+
+        Raises:
+            requests.RequestException: If the bridge is unreachable
+        """
+        response = requests.post(f"{self.bridge_url}/restart", timeout=5)
+        response.raise_for_status()
+        return response.json()
+
     def test_connection(self) -> bool:
         """
         Test connection to WhatsApp bridge.

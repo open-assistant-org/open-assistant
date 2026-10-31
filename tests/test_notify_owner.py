@@ -129,6 +129,60 @@ class TestNotifyOwnerAutoDetect:
 # ---------------------------------------------------------------------------
 
 
+class TestNotifyOwnerWhatsAppFallback:
+    """WhatsApp broken: auto-detected sends fall back to Slack."""
+
+    def _setup(self, executor):
+        wa = _service({"whatsapp.enabled": True, "whatsapp.phone_number": "+1"})
+        wa.send_message_to_owner.side_effect = RuntimeError("503 not ready")
+        sl = _service(
+            {"slack.enabled": True, "slack.default_channel": "C"},
+            send_return={"success": True},
+        )
+        executor.services["whatsapp"] = wa
+        executor.services["slack"] = sl
+        return wa, sl
+
+    def test_auto_falls_back_to_slack_when_whatsapp_send_fails(self, executor):
+        wa, sl = self._setup(executor)
+
+        result = executor._handle_notify_owner({"message": "hi"})
+
+        assert result["success"] is True
+        assert result["fallback_from"] == "whatsapp"
+        assert "503" in result["whatsapp_error"]
+        sl.send_message_to_default_channel.assert_called_once_with(message="hi")
+
+    def test_explicit_whatsapp_does_not_fall_back(self, executor):
+        wa, sl = self._setup(executor)
+
+        with pytest.raises(RuntimeError):
+            executor._handle_notify_owner({"message": "hi", "channel": "whatsapp"})
+        sl.send_message_to_default_channel.assert_not_called()
+
+    def test_reraises_when_slack_unavailable(self, executor):
+        wa = _service({"whatsapp.enabled": True, "whatsapp.phone_number": "+1"})
+        wa.send_message_to_owner.side_effect = RuntimeError("503 not ready")
+        executor.services["whatsapp"] = wa
+        executor.services["slack"] = _service({"slack.enabled": False})
+
+        with pytest.raises(RuntimeError):
+            executor._handle_notify_owner({"message": "hi"})
+
+    def test_known_outage_skips_whatsapp(self, executor, monkeypatch):
+        from src.services import whatsapp_health
+
+        wa, sl = self._setup(executor)
+        monitor = MagicMock(outage_active=True)
+        monkeypatch.setattr(whatsapp_health, "_monitor", monitor)
+
+        result = executor._handle_notify_owner({"message": "hi"})
+
+        assert result == {"success": True}
+        wa.send_message_to_owner.assert_not_called()
+        sl.send_message_to_default_channel.assert_called_once_with(message="hi")
+
+
 class TestNotifyOwnerExplicitChannel:
     def test_explicit_whatsapp_sends(self, executor):
         wa = _service(
