@@ -87,10 +87,83 @@ let isReady = false;
 let qrCodeData = null;
 let webhookUrl = WEBHOOK_URL; // Auto-configure from environment
 
+// Lifecycle state, exposed via /status and /health so the Python side can
+// tell "still starting" apart from "broken" and decide whether a restart helps.
+//   initializing → (qr →) authenticated → ready
+//   ready → disconnected | auth_failure | init_failed
+let state = 'initializing';
+let stateReason = null;
+let stateSince = Date.now();
+
+function setState(newState, reason = null) {
+    state = newState;
+    stateReason = reason;
+    stateSince = Date.now();
+    isReady = newState === 'ready';
+}
+
+/**
+ * Ask WhatsApp Web for its real connection state. `isReady` only flips on
+ * client events, so a dead Chromium page or a silently dropped session would
+ * otherwise still look healthy. Times out so a hung page can't hang /health.
+ */
+async function probeConnection(timeoutMs = 10000) {
+    if (!isReady) {
+        return { connected: false, wa_state: null };
+    }
+    try {
+        const waState = await Promise.race([
+            client.getState(),
+            new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('getState timed out')), timeoutMs)
+            ),
+        ]);
+        return { connected: waState === 'CONNECTED', wa_state: waState };
+    } catch (error) {
+        return { connected: false, wa_state: null, probe_error: error.message };
+    }
+}
+
+function statusPayload(probe) {
+    return {
+        ready: isReady && probe.connected,
+        state,
+        state_reason: stateReason,
+        state_age_seconds: Math.round((Date.now() - stateSince) / 1000),
+        wa_state: probe.wa_state,
+        probe_error: probe.probe_error || null,
+    };
+}
+
+/**
+ * Exit with a non-zero code so supervisord (autorestart=unexpected) brings
+ * up a fresh bridge with a fresh Chromium. Used for unrecoverable errors and
+ * for explicit restart requests from the Python app.
+ */
+let exiting = false;
+async function exitForRestart(reason) {
+    if (exiting) return;
+    exiting = true;
+    console.error(`🔁 Exiting so supervisord restarts the bridge: ${reason}`);
+    // Don't let a hung browser block the exit.
+    setTimeout(() => process.exit(1), 5000).unref();
+    try {
+        await client.destroy();
+    } catch (e) {
+        console.warn('⚠️  client.destroy() failed during restart:', e.message);
+    }
+    process.exit(1);
+}
+
 // QR Code event
 client.on('qr', (qr) => {
     console.log('QR Code received');
     qrCodeData = qr;
+    // A QR code means there is no valid linked-device session: the owner has
+    // to (re)scan it. Keep the original timestamp across QR refreshes.
+    if (state !== 'qr') {
+        setState('qr', 'Linked device session missing or revoked; scan the QR code');
+    }
 
     // Display QR code in terminal
     qrcode.generate(qr, { small: true });
@@ -102,25 +175,28 @@ client.on('qr', (qr) => {
 // Ready event
 client.on('ready', () => {
     console.log('✅ WhatsApp client is ready!');
-    isReady = true;
+    setState('ready');
     qrCodeData = null;
 });
 
 // Authenticated event
 client.on('authenticated', () => {
     console.log('✅ WhatsApp authenticated');
+    if (state !== 'ready') {
+        setState('authenticated');
+    }
 });
 
 // Authentication failure
 client.on('auth_failure', (msg) => {
     console.error('❌ Authentication failed:', msg);
-    isReady = false;
+    setState('auth_failure', String(msg));
 });
 
 // Disconnected event
 client.on('disconnected', (reason) => {
     console.log('⚠️  WhatsApp disconnected:', reason);
-    isReady = false;
+    setState('disconnected', String(reason));
 });
 
 // Message received event
@@ -171,8 +247,9 @@ console.log('🔄 Initializing WhatsApp client...');
 client.initialize().catch((error) => {
     console.error('❌ Failed to initialize WhatsApp client:', error);
     console.error('Stack trace:', error.stack);
-    // Don't exit immediately - let supervisord handle retries
-    // The server will still be running but not ready
+    // Keep serving HTTP so the Python app can see *why* it's broken; its
+    // health monitor decides when to restart us.
+    setState('init_failed', error.message);
 });
 
 // ============================================================================
@@ -180,21 +257,29 @@ client.initialize().catch((error) => {
 // ============================================================================
 
 // Health check
-app.get('/health', (req, res) => {
+app.get('/health', async (req, res) => {
+    const probe = await probeConnection();
     res.json({
         status: 'ok',
         service: 'whatsapp-bridge',
-        ready: isReady
+        ...statusPayload(probe),
     });
 });
 
 // Get status
-app.get('/status', (req, res) => {
+app.get('/status', async (req, res) => {
+    const probe = await probeConnection();
     res.json({
-        ready: isReady,
+        ...statusPayload(probe),
         has_qr: qrCodeData !== null,
         qr_code: qrCodeData
     });
+});
+
+// Restart the bridge (exits; supervisord starts a fresh process)
+app.post('/restart', (req, res) => {
+    res.json({ success: true, message: 'Bridge restarting' });
+    setImmediate(() => exitForRestart('restart requested via API'));
 });
 
 // Send message
@@ -203,7 +288,8 @@ app.post('/send', async (req, res) => {
         if (!isReady) {
             return res.status(503).json({
                 error: 'WhatsApp client not ready',
-                message: 'Please authenticate first'
+                message: stateReason ? `${state}: ${stateReason}` : `Bridge state: ${state}`,
+                state,
             });
         }
 
@@ -296,8 +382,26 @@ app.listen(PORT, () => {
 });
 
 // Graceful shutdown
-process.on('SIGINT', async () => {
+async function shutdown() {
     console.log('\n⏹️  Shutting down WhatsApp bridge...');
-    await client.destroy();
+    try {
+        await client.destroy();
+    } catch (e) {
+        console.warn('⚠️  client.destroy() failed during shutdown:', e.message);
+    }
     process.exit(0);
+}
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
+
+// Puppeteer/whatsapp-web.js errors (e.g. "Session closed", "Target closed"
+// after Chromium dies) surface as unhandled rejections and leave the client
+// unusable. Restart instead of limping along in a broken state.
+process.on('unhandledRejection', (reason) => {
+    console.error('❌ Unhandled promise rejection:', reason);
+    exitForRestart(`unhandledRejection: ${reason && reason.message ? reason.message : reason}`);
+});
+process.on('uncaughtException', (error) => {
+    console.error('❌ Uncaught exception:', error);
+    exitForRestart(`uncaughtException: ${error.message}`);
 });

@@ -56,7 +56,16 @@ class WhatsAppService(BaseService):
 
         client = self._get_client()
         phone_number = self._format_phone_number(phone_number)
-        return client.send_message(phone_number=phone_number, message=message)
+        try:
+            return client.send_message(phone_number=phone_number, message=message)
+        except Exception as e:
+            # Let the health monitor check (and if needed restart) the bridge now.
+            from src.services.whatsapp_health import get_whatsapp_health_monitor
+
+            monitor = get_whatsapp_health_monitor()
+            if monitor:
+                monitor.report_send_failure(e)
+            raise
 
     def send_message_to_owner(self, message: str) -> Dict[str, Any]:
         """Send a WhatsApp message to the owner whose number is stored in settings."""

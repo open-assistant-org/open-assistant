@@ -177,6 +177,21 @@ When sending messages, always include country code:
 
 The **Phone Number / WhatsApp ID** setting additionally accepts a full WhatsApp ID such as `123456789012345678@lid` or `1234567890@c.us`. This is required when pairing your own phone — see [Finding Your WhatsApp Number / ID](#finding-your-whatsapp-number--id).
 
+## Automatic Recovery & Slack Alerts
+
+The bridge can break without its process exiting. For example, WhatsApp Web disconnects, Chromium dies, or the linked device is revoked. In those cases the bridge keeps answering HTTP with `503 WhatsApp client not ready`, so supervisord never restarts it. A health monitor in the Python app (`src/services/whatsapp_health.py`) handles this:
+
+1. **Probe.** Every 60s, and immediately after any failed WhatsApp send, it calls the bridge's `/health`. The bridge reports its lifecycle `state` (`initializing`, `qr`, `authenticated`, `ready`, `disconnected`, `auth_failure`, `init_failed`) and live-checks WhatsApp Web with `client.getState()`, so a dead browser page no longer looks healthy.
+2. **Confirm.** An unhealthy result is re-checked after 15s, so a single blip doesn't trigger anything. A bridge that is still starting up (up to 3 minutes) is left alone.
+3. **Restart.** It runs `supervisorctl restart whatsapp-bridge`, or falls back to `POST /restart` on the bridge, and waits up to 150s for it to come back. It tries this up to 2 times, then once every 30 minutes while the outage lasts. If the bridge shows a QR code (the linked device was revoked), it restarts once only, because re-linking needs a fresh scan.
+4. **Alert.** If WhatsApp is still broken and Slack is enabled with a default channel, the owner gets **one** Slack message per outage with re-link instructions, plus an all-clear when WhatsApp recovers. The outage is also logged once as an error (Sentry).
+
+While an outage is active, `notify_owner` (without an explicit channel) sends to Slack directly. If a WhatsApp send fails unexpectedly, the message is retried on Slack, so the owner never misses it.
+
+The bridge also exits (and supervisord restarts it) on unhandled Puppeteer errors such as `Session closed` / `Target closed`.
+
+Automatic restarts only happen when the bridge runs under supervisord (the Docker image). Without it, the monitor only alerts.
+
 ## Troubleshooting
 
 ### Bridge Connection Error
