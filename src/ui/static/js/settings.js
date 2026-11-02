@@ -3187,3 +3187,80 @@ async function deleteBrowserSession(id) {
         toast.error(error.message || 'Failed to delete session');
     }
 }
+
+// --- Backup & Migration -----------------------------------------------------
+
+function _backupStatus(message, type) {
+    const el = document.getElementById('backup-status');
+    if (!el) return;
+    el.style.display = 'block';
+    el.textContent = message;
+    el.style.background = type === 'error' ? 'rgba(220,53,69,0.15)' : 'rgba(40,167,69,0.15)';
+    el.style.color = type === 'error' ? '#ff8080' : '#7bd88f';
+}
+
+async function exportBackup() {
+    const secret = document.getElementById('backup-secret')?.value?.trim();
+    if (!secret) {
+        _backupStatus('Please enter the backend secret first.', 'error');
+        return;
+    }
+    const response = await fetch((window.INSTANCE_BASE_PATH || '') + '/api/backup/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ secret }),
+    });
+    if (!response.ok) {
+        let detail = `HTTP ${response.status}`;
+        try { detail = (await response.json()).detail || detail; } catch { /* ignore */ }
+        _backupStatus(`Export failed: ${detail}`, 'error');
+        return;
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'open-assistant-backup.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    _backupStatus('Export downloaded. Keep this file and the secret confidential — together they contain all your credentials.', 'success');
+}
+
+async function importBackup(fileInput) {
+    const file = fileInput.files?.[0];
+    fileInput.value = ''; // allow re-selecting the same file
+    if (!file) return;
+
+    const secret = document.getElementById('backup-secret')?.value?.trim();
+    if (!secret) {
+        _backupStatus('Please enter the backend secret (of the instance the file was exported from) first.', 'error');
+        return;
+    }
+    const mode = document.getElementById('backup-import-mode')?.value || 'fail';
+    if (mode === 'overwrite' && !confirm('Overwrite mode will REPLACE all included data on this instance with the file contents. Continue?')) {
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('bundle', file);
+    formData.append('secret', secret);
+    formData.append('mode', mode);
+
+    try {
+        const response = await fetch((window.INSTANCE_BASE_PATH || '') + '/api/backup/import', {
+            method: 'POST',
+            body: formData,
+        });
+        if (!response.ok) {
+            let detail = `HTTP ${response.status}`;
+            try { detail = (await response.json()).detail || detail; } catch { /* ignore */ }
+            throw new Error(detail);
+        }
+        const result = await response.json();
+        const totalRows = Object.values(result.tables || {}).reduce((a, b) => a + b, 0);
+        _backupStatus(`Import complete: ${totalRows} rows across ${Object.keys(result.tables || {}).length} tables, ${result.files || 0} files. Reload the page to see migrated data.`, 'success');
+        toast.success('Backup imported');
+    } catch (error) {
+        _backupStatus(`Import failed: ${error.message}`, 'error');
+    }
+}
