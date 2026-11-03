@@ -86,6 +86,8 @@
     width: 32px;
     height: 32px;
     flex-shrink: 0;
+    /* Soft green glow, as on open-assistant.org's nav-brand-icon. */
+    filter: drop-shadow(0 0 5px rgba(0, 255, 0, 0.15));
 }
 
 .navbar-brand-name {
