@@ -3219,7 +3219,7 @@ async function exportBackup() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'open-assistant-backup.json';
+    a.download = 'open-assistant-backup.json.gz';
     a.click();
     URL.revokeObjectURL(url);
     _backupStatus('Export downloaded. Keep this file and the secret confidential — together they contain all your credentials.', 'success');

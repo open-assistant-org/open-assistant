@@ -30,6 +30,13 @@ prove knowledge of the backend secret:
   *source* instance's key). The target instance's own `ENCRYPTION_KEY` is picked
   up from its environment automatically.
 
+## Bundle format
+
+The export is a gzip-compressed JSON file (`open-assistant-backup.json.gz`). It
+contains the data tables and data-dir files, but **not** the SQLite database
+file itself — the JSON *is* the database content. Import accepts both the
+`.json.gz` file as-is and a plain (decompressed) `.json` file.
+
 ## Migrating instances
 
 ```bash
@@ -39,11 +46,11 @@ SOURCE_KEY="<source ENCRYPTION_KEY>"
 curl -X POST http://old-server:8080/api/backup/export \
   -H 'Content-Type: application/json' \
   -d "{\"secret\": \"$SOURCE_KEY\"}" \
-  -o open-assistant-backup.json
+  -o open-assistant-backup.json.gz
 
 # 2. On the target server (already set up with its own ENCRYPTION_KEY): import
 curl -X POST http://new-server:8080/api/backup/import \
-  -F "bundle=@open-assistant-backup.json" \
+  -F "bundle=@open-assistant-backup.json.gz" \
   -F "secret=$SOURCE_KEY"
 ```
 

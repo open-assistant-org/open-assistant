@@ -220,3 +220,20 @@ class TestDataFiles:
         )["files"]
         assert n == 0
         assert not (dst_root / "evil.txt").exists()
+
+
+class TestBundleWireFormat:
+    def test_serialize_bundle_gzips_and_roundtrips(self):
+        from src.services.backup import parse_bundle, serialize_bundle
+
+        bundle = {"format_version": 1, "tables": {"t": [{"a": 1}]}, "files": {"x/y.txt": "hi"}}
+        wire = serialize_bundle(bundle)
+        assert wire[:2] == b"\x1f\x8b"  # gzip magic
+        assert len(wire) < len(json.dumps(bundle, indent=4).encode())
+        assert parse_bundle(wire) == bundle
+
+    def test_parse_bundle_accepts_plain_json(self):
+        from src.services.backup import parse_bundle
+
+        plain = json.dumps({"format_version": 1}).encode()
+        assert parse_bundle(plain) == {"format_version": 1}

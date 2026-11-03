@@ -1,13 +1,11 @@
 """Backup API for exporting and importing instance data."""
 
-import json
-
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi.responses import Response
 
 from src.core.database import DatabaseManager
 from src.core.dependencies import get_db_manager
-from src.services.backup import BackupError, BackupService
+from src.services.backup import BackupError, BackupService, parse_bundle, serialize_bundle
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -26,10 +24,11 @@ async def export_data(
     payload: dict,
     service: BackupService = Depends(get_backup_service),
 ):
-    """Export all instance data as a downloadable JSON bundle.
+    """Export all instance data as a downloadable gzip-compressed JSON bundle.
 
     Request body: ``{"secret": "<instance ENCRYPTION_KEY>"}``.
-    The returned bundle can be imported on another instance via /api/backup/import.
+    The downloaded file is ``open-assistant-backup.json.gz``; /api/backup/import
+    accepts it as-is (plain JSON uploads are also accepted).
     """
     secret = (payload or {}).get("secret")
     if not secret or not isinstance(secret, str):
@@ -39,10 +38,12 @@ async def export_data(
     except BackupError as e:
         raise HTTPException(status_code=403, detail=str(e)) from e
 
-    filename = "open-assistant-backup.json"
-    return JSONResponse(
-        content=bundle,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    return Response(
+        content=serialize_bundle(bundle),
+        media_type="application/gzip",
+        headers={
+            "Content-Disposition": 'attachment; filename="open-assistant-backup.json.gz"',
+        },
     )
 
 
@@ -59,7 +60,7 @@ async def import_data(
     rows; ``overwrite`` clears included tables first.
     """
     try:
-        bundle_data = json.loads((await bundle.read()).decode("utf-8"))
+        bundle_data = parse_bundle(await bundle.read())
     except Exception as e:
         raise HTTPException(status_code=400, detail="Invalid bundle file: not JSON") from e
     try:

@@ -46,6 +46,26 @@ class BackupError(Exception):
     """Raised when an export or import cannot be completed."""
 
 
+# Wire format helpers ---------------------------------------------------------
+
+
+def serialize_bundle(bundle: dict[str, Any]) -> bytes:
+    """Serialize a bundle to compact gzip-compressed bytes for transfer."""
+    import gzip
+
+    payload = json.dumps(bundle, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    return gzip.compress(payload, mtime=0)
+
+
+def parse_bundle(data: bytes) -> dict[str, Any]:
+    """Parse a bundle from raw upload bytes (plain or gzip-compressed JSON)."""
+    import gzip
+
+    if data[:2] == b"\x1f\x8b":  # gzip magic
+        data = gzip.decompress(data)
+    return json.loads(data.decode("utf-8"))
+
+
 def _derive_fernet_key(secret: str) -> Fernet:
     """Derive a Fernet instance from the user-provided secret (PBKDF2)."""
     import base64
