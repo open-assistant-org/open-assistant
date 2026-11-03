@@ -112,13 +112,26 @@ def test_no_stale_cookie_persistence_claim():
         assert "No cookie persistence" not in _read(path), f"stale claim in {path}"
 
 
-def test_ui_doc_links_point_at_published_pages():
-    """Links to docs.open-assistant.org in the settings UI must resolve to real docs pages."""
+def _app_sources():
+    src = REPO_ROOT / "src"
+    for pattern in ("*.py", "*.js", "*.html"):
+        yield from (f for f in src.rglob(pattern) if "node_modules" not in f.parts)
+
+
+def test_app_doc_links_point_at_published_pages():
+    """Links to docs.open-assistant.org anywhere in the app must resolve to real docs pages."""
     site_url = re.search(r"^site_url:\s*(\S+)", _read(MKDOCS), re.M).group(1).rstrip("/")
-    js = _read(REPO_ROOT / "src" / "ui" / "static" / "js" / "settings.js")
-    links = re.findall(re.escape(site_url) + r"/([\w./-]+)", js)
-    assert links, "expected the settings UI to link to the published browser manual"
-    for path in links:
-        page = DOCS / (path.strip("/") + ".md")
-        assert page.exists(), f"settings.js links to {site_url}/{path} but {page} does not exist"
-        assert path.endswith("/"), "mkdocs publishes directory URLs (trailing slash)"
+    found = 0
+    for source in _app_sources():
+        for path in re.findall(re.escape(site_url) + r"/([\w./-]+)", _read(source)):
+            found += 1
+            page = DOCS / (path.strip("/") + ".md")
+            assert page.exists(), f"{source} links to {site_url}/{path} but {page} does not exist"
+            assert path.endswith("/"), "mkdocs publishes directory URLs (trailing slash)"
+    assert found, "expected the app to link to the published docs site"
+
+
+def test_app_does_not_link_docs_via_github():
+    """Doc links must go to the published site, not GitHub blob/tree views."""
+    for source in _app_sources():
+        assert "open-assistant/blob/main/docs" not in _read(source), f"GitHub docs link in {source}"

@@ -47,8 +47,8 @@ uv sync --all-extras --dev
 cp .env.example .env
 ```
 
-See [`docs/setup/development.md`](docs/setup/development.md) for the full
-development environment guide, and [`docs/setup/configuration.md`](docs/setup/configuration.md)
+See [`docs/setup/development.md`](https://docs.open-assistant.org/setup/development/) for the full
+development environment guide, and [`docs/setup/configuration.md`](https://docs.open-assistant.org/setup/configuration/)
 for configuration details.
 
 ## Making Changes

@@ -640,7 +640,7 @@ async def google_ads_oauth_initiate(
                 detail=(
                     "Google Ads OAuth credentials not configured. "
                     "Please add google_ads.client_id and google_ads.client_secret in Settings. "
-                    "See docs/integrations/google_ads.md for setup instructions."
+                    "See https://docs.open-assistant.org/integrations/google_ads/ for setup instructions."
                 ),
             )
 

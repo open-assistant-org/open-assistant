@@ -844,20 +844,20 @@ function getServiceDisplayName(service) {
 
 function getIntegrationDocUrl(service) {
     const docMap = {
-        google: 'https://github.com/open-assistant-org/open-assistant/blob/main/docs/integrations/google.md',
+        google: 'https://docs.open-assistant.org/integrations/google/',
         google_navigator: 'https://developers.google.com/maps/documentation/places/web-service/get-api-key',
-        google_ads: 'https://github.com/open-assistant-org/open-assistant/blob/main/docs/integrations/google_ads.md',
-        outlook: 'https://github.com/open-assistant-org/open-assistant/blob/main/docs/integrations/microsoft.md',
-        notion: 'https://github.com/open-assistant-org/open-assistant/blob/main/docs/integrations/notion.md',
-        nextcloud: 'https://github.com/open-assistant-org/open-assistant/blob/main/docs/integrations/nextcloud.md',
-        whatsapp: 'https://github.com/open-assistant-org/open-assistant/blob/main/docs/integrations/whatsapp.md',
-        slack: 'https://github.com/open-assistant-org/open-assistant/blob/main/docs/integrations/slack.md',
+        google_ads: 'https://docs.open-assistant.org/integrations/google_ads/',
+        outlook: 'https://docs.open-assistant.org/integrations/microsoft/',
+        notion: 'https://docs.open-assistant.org/integrations/notion/',
+        nextcloud: 'https://docs.open-assistant.org/integrations/nextcloud/',
+        whatsapp: 'https://docs.open-assistant.org/integrations/whatsapp/',
+        slack: 'https://docs.open-assistant.org/integrations/slack/',
         brave: 'https://brave.com/search/api/',
         browser: 'https://docs.open-assistant.org/integrations/browser-sessions/',
-        whisper: 'https://github.com/open-assistant-org/open-assistant/blob/main/docs/integrations/whisper.md',
+        whisper: 'https://docs.open-assistant.org/integrations/whisper/',
         mistral_ocr: 'https://docs.mistral.ai/capabilities/vision/',
-        toggl: 'https://github.com/open-assistant-org/open-assistant/blob/main/docs/integrations/toggl.md',
-        google_news: 'https://github.com/open-assistant-org/open-assistant/blob/main/docs/integrations/google_news.md'
+        toggl: 'https://docs.open-assistant.org/integrations/toggl/',
+        google_news: 'https://docs.open-assistant.org/integrations/google_news/'
     };
     return docMap[service] || '#';
 }
