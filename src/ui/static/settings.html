@@ -253,6 +253,36 @@
                 </div>
 
                 <div class="settings-section">
+                    <h3 class="section-title">Backup & Migration</h3>
+                    <p class="text-muted">
+                        Export all data (including credentials) to a portable file, or import
+                        a previously exported file to migrate to another server.
+                        <a href="https://github.com/open-assistant-org/open-assistant/blob/main/docs/setup/backup-and-migration.md" target="_blank" class="help-link">Documentation →</a>
+                    </p>
+
+                    <div class="audit-filters">
+                        <input type="password" id="backup-secret" class="form-input"
+                            placeholder="Backend secret (ENCRYPTION_KEY of this instance)"
+                            autocomplete="off" />
+                        <select id="backup-import-mode" class="form-select">
+                            <option value="fail">On conflict: fail (default)</option>
+                            <option value="overwrite">On conflict: overwrite</option>
+                        </select>
+                        <button onclick="exportBackup()" class="btn btn-primary">Export Data</button>
+                        <button onclick="document.getElementById('backup-import-file').click()" class="btn btn-secondary">Import Data</button>
+                        <input type="file" id="backup-import-file" accept=".json,application/json"
+                            style="display:none;" onchange="importBackup(this)" />
+                    </div>
+
+                    <p class="text-muted" style="font-size:0.82rem;">
+                        For import, the secret is the one the file was exported with (the source instance's key).
+                        Keep the file and the secret confidential — together they contain all your credentials.
+                    </p>
+
+                    <div id="backup-status" class="backup-status" style="display:none;"></div>
+                </div>
+
+                <div class="settings-section">
                     <h3 class="section-title">Audit Log</h3>
                     <p class="text-muted">View configuration change history</p>
 
@@ -265,41 +295,6 @@
                     </div>
 
                     <div id="audit-log" class="audit-log"></div>
-                </div>
-
-                <div class="settings-section">
-                    <h3 class="section-title">Backup & Migration</h3>
-                    <p class="text-muted">
-                        Export all data (including credentials) to a portable file, or import
-                        a previously exported file to migrate to another server.
-                        <a href="https://github.com/open-assistant-org/open-assistant/blob/main/docs/setup/backup-and-migration.md" target="_blank" class="help-link">Documentation →</a>
-                    </p>
-
-                    <div style="display:flex; flex-direction:column; gap:14px;">
-                        <div>
-                            <label for="backup-secret" class="form-label">Backend secret (ENCRYPTION_KEY)</label>
-                            <input type="password" id="backup-secret" class="form-input"
-                                placeholder="ENCRYPTION_KEY of this instance"
-                                autocomplete="off" style="max-width:420px;" />
-                            <p class="text-muted" style="margin-top:4px;">
-                                Required to decrypt credentials. For import, use the secret of
-                                the instance the file was exported from.
-                            </p>
-                        </div>
-
-                        <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                            <button onclick="exportBackup()" class="btn btn-primary">Export Data</button>
-                            <button onclick="document.getElementById('backup-import-file').click()" class="btn btn-secondary">Import Data</button>
-                            <input type="file" id="backup-import-file" accept=".json,application/json"
-                                style="display:none;" onchange="importBackup(this)" />
-                            <select id="backup-import-mode" class="form-select" style="max-width:180px;">
-                                <option value="fail">Import mode: fail on conflict (default)</option>
-                                <option value="overwrite">Import mode: overwrite</option>
-                            </select>
-                        </div>
-
-                        <div id="backup-status" style="display:none; padding:10px 14px; border-radius:6px; font-size:0.9rem;"></div>
-                    </div>
                 </div>
 
                 <div class="settings-section danger-zone">

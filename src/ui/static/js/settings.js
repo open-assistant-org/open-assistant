@@ -3195,8 +3195,7 @@ function _backupStatus(message, type) {
     if (!el) return;
     el.style.display = 'block';
     el.textContent = message;
-    el.style.background = type === 'error' ? 'rgba(220,53,69,0.15)' : 'rgba(40,167,69,0.15)';
-    el.style.color = type === 'error' ? '#ff8080' : '#7bd88f';
+    el.classList.toggle('error', type === 'error');
 }
 
 async function exportBackup() {
