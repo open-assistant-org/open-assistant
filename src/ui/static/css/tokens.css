@@ -135,6 +135,13 @@
     --color-focus-border: color-mix(in oklab, var(--color-accent) 60%, var(--color-border-control));
     --color-focus-ring-soft: color-mix(in oklab, var(--color-accent) 10%, transparent);
 
+    /* Brand mark: the green "OA" badge from open-assistant.org. Fixed in
+       both themes on purpose - the one hint of green in the UI. Keep in
+       sync with static/robot-logo.svg. */
+    --color-logo-bg: #0a0a0a;
+    --color-logo-fg: #00ff00;
+    --color-logo-glow: rgba(0, 255, 0, 0.15);
+
     /* Semantic families: fg = readable text/icon, bg = soft tint,
        border = tint edge, solid = small marks (dots, progress) */
     --color-success-fg: var(--green-700);

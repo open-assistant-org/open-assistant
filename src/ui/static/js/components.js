@@ -150,15 +150,15 @@ function statusBadgeClass(status) {
 }
 window.statusBadgeClass = statusBadgeClass;
 
-// Brand mark: a rounded tile in the accent colour with a simple, friendly
-// face. Drawn with currentColor/var() so it follows the theme and any
-// future installation accent (--brand) automatically.
+// Brand mark: the "OA" badge from open-assistant.org's nav-brand-icon — a
+// dark tile with a green outline and green lettering. It deliberately keeps
+// its own colours (the --color-logo-* tokens, the one hint of green in the
+// otherwise monochrome UI), so it looks the same in light and dark themes.
+// Same geometry as static/robot-logo.svg.
 const LOGO_MARK = `
 <svg class="navbar-logo" viewBox="0 0 32 32" aria-hidden="true">
-    <rect width="32" height="32" rx="9" fill="var(--color-accent)"></rect>
-    <circle cx="11.5" cy="13.5" r="2" fill="var(--color-on-accent)"></circle>
-    <circle cx="20.5" cy="13.5" r="2" fill="var(--color-on-accent)"></circle>
-    <path d="M10.5 19.5c1.4 1.9 3.3 2.8 5.5 2.8s4.1-.9 5.5-2.8" fill="none" stroke="var(--color-on-accent)" stroke-width="2.2" stroke-linecap="round"></path>
+    <rect class="navbar-logo-tile" x="2" y="2" width="28" height="28" rx="5" stroke-width="2"></rect>
+    <text class="navbar-logo-text" x="16" y="20.3" font-size="12" font-weight="800" text-anchor="middle">OA</text>
 </svg>`;
 
 function injectIconSprite() {

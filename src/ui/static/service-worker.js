@@ -21,7 +21,9 @@
 // restyled offline page.
 // v9: design feedback pass - trash icon buttons, in-app confirm dialogs,
 // right-aligned actions, softer input focus. Bump so clients refetch CSS/JS.
-const CACHE_VERSION = 'v9';
+// v10: brand mark swapped for the green "OA" badge from open-assistant.org
+// (navbar logo, robot-logo.svg, favicon and PWA icons).
+const CACHE_VERSION = 'v10';
 const CACHE_NAME = `personal-assistant-${CACHE_VERSION}`;
 
 // Derive base path from the SW's own registration scope.
