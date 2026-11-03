@@ -11,9 +11,9 @@
     <!-- PWA Manifest -->
     <link rel="manifest" href="/api/pwa/manifest.json">
 
-    <!-- Theme Colors -->
-    <meta name="theme-color" content="#00ff00">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <!-- Theme Colors (theme.js keeps theme-color in sync with light/dark) -->
+    <meta name="theme-color" content="#f7f7f5">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
 
     <!-- PWA Meta Tags -->
     <meta name="mobile-web-app-capable" content="yes">
@@ -25,226 +25,15 @@
     <link rel="apple-touch-icon" href="/static/icons/icon-152x152.png">
     <link rel="apple-touch-icon" sizes="192x192" href="/static/icons/icon-192x192.png">
 
-    <!-- Stylesheets -->
+    <!-- Design system -->
     <script src="/static/js/theme.js"></script>
+    <link rel="preload" href="/static/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="/static/css/tokens.css">
+    <link rel="stylesheet" href="/static/css/base.css">
+    <link rel="stylesheet" href="/static/css/components.css">
     <link rel="stylesheet" href="/static/css/common.css">
     <link rel="stylesheet" href="/static/css/mobile.css">
-    <style>
-        .artifacts-container {
-            background: var(--card-background);
-            border-radius: 16px;
-            box-shadow: var(--shadow);
-            border: 1px solid var(--border-color);
-            width: 100%;
-            max-width: 1200px;
-            padding: 30px;
-        }
-
-        .artifacts-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 24px;
-        }
-
-        .artifacts-header h1 {
-            font-size: 1.75rem;
-            font-weight: 600;
-            color: var(--primary-color);
-        }
-
-        .jobs-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.9rem;
-        }
-
-        .jobs-table th {
-            text-align: left;
-            padding: 12px;
-            background: var(--background-secondary);
-            color: var(--text-secondary);
-            font-weight: 600;
-            border-bottom: 2px solid var(--border-color);
-        }
-
-        .jobs-table td {
-            padding: 12px;
-            border-bottom: 1px solid var(--border-color);
-            vertical-align: middle;
-        }
-
-        .jobs-table tr:last-child td { border-bottom: none; }
-        .jobs-table tr:hover { background: var(--background-secondary); }
-
-        .table-scroll { overflow-x: auto; }
-
-        .artifact-name { font-weight: 600; }
-        .artifact-file { color: var(--text-muted); font-size: 0.82rem; }
-
-        .status-badge-inline {
-            display: inline-block;
-            padding: 4px 10px;
-            border-radius: 12px;
-            font-size: 0.8rem;
-            font-weight: 500;
-        }
-        .status-badge-public {
-            background: rgba(34, 197, 94, 0.12);
-            color: var(--success-color);
-        }
-        .status-badge-private {
-            background: rgba(107, 114, 128, 0.15);
-            color: var(--text-muted);
-        }
-        .lock-badge {
-            margin-left: 6px;
-            font-size: 0.85rem;
-            cursor: default;
-        }
-
-        .job-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-        .job-action-btn {
-            padding: 4px 8px;
-            border: none;
-            border-radius: 4px;
-            font-size: 0.8rem;
-            cursor: pointer;
-            background: var(--primary-color);
-            color: var(--color-on-primary);
-            transition: opacity 0.2s;
-        }
-        .job-action-btn:hover { opacity: 0.8; }
-        .job-action-btn.btn-neutral { background: var(--background-secondary); color: var(--color-text); }
-        .job-action-btn.btn-danger { background: var(--error-color); color: #fff; }
-
-        .empty-state {
-            text-align: center;
-            padding: 40px 20px;
-            color: var(--text-muted);
-        }
-
-        /* Scoped ModalManager card styling (common.css base .modal is display:none). */
-        .modal-overlay .modal {
-            display: block;
-            background: var(--card-background);
-            border: 1px solid var(--border-color);
-            border-radius: 16px;
-            width: 90%;
-            max-width: 460px;
-            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4);
-            overflow: hidden;
-        }
-        /* Unthemed flat black shadow - softer layered elevation in light. */
-        :root[data-theme="light"] .modal-overlay .modal {
-            box-shadow: var(--shadow-xl);
-        }
-        .modal-overlay .modal-header {
-            padding: 20px 24px;
-            font-size: 1.15rem;
-            font-weight: 600;
-            color: var(--primary-color);
-            border-bottom: 1px solid var(--border-color);
-        }
-        .modal-overlay .modal-body { padding: 20px 24px; }
-        .modal-overlay .modal-footer {
-            display: flex;
-            justify-content: flex-end;
-            gap: 12px;
-            padding: 16px 24px;
-            border-top: 1px solid var(--border-color);
-        }
-        .modal-hint { margin: 0 0 14px; color: var(--text-secondary); font-size: 0.9rem; }
-        .artifact-input {
-            width: 100%;
-            padding: 10px 12px;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            background: var(--background-secondary);
-            color: var(--color-text);
-            font-size: 0.95rem;
-        }
-        .artifact-input:focus { outline: none; border-color: var(--primary-color); }
-
-        /* ================================================================
-           RESPONSIVE / MOBILE
-           ================================================================ */
-        @media (max-width: 768px) {
-            .artifacts-container {
-                padding: 16px;
-                border-radius: 0;
-            }
-
-            .artifacts-header {
-                flex-wrap: wrap;
-                gap: 12px;
-            }
-
-            .artifacts-header h1 {
-                font-size: 1.4rem;
-            }
-
-            /* Card-stacking table pattern */
-            .jobs-table,
-            .jobs-table thead,
-            .jobs-table tbody,
-            .jobs-table tr,
-            .jobs-table td {
-                display: block;
-                width: 100%;
-                box-sizing: border-box;
-            }
-
-            .jobs-table thead {
-                position: absolute;
-                width: 1px;
-                height: 1px;
-                overflow: hidden;
-                clip: rect(0 0 0 0);
-                white-space: nowrap;
-            }
-
-            .jobs-table tr {
-                border: 1px solid var(--border-color);
-                border-radius: 10px;
-                margin-bottom: 12px;
-                padding: 6px 12px;
-                background: var(--background-color);
-            }
-
-            .jobs-table tr:hover { background: var(--background-color); }
-
-            .jobs-table td {
-                padding: 8px 0;
-                border-bottom: 1px solid var(--border-color);
-                display: flex;
-                justify-content: space-between;
-                align-items: flex-start;
-                gap: 12px;
-                text-align: right;
-            }
-
-            .jobs-table td:last-child { border-bottom: none; }
-
-            .jobs-table td[data-label]::before {
-                content: attr(data-label);
-                font-weight: 600;
-                color: var(--text-muted);
-                text-align: left;
-                flex-shrink: 0;
-                white-space: nowrap;
-            }
-
-            .job-actions {
-                flex-wrap: wrap;
-                justify-content: flex-end;
-            }
-
-            .job-action-btn {
-                min-height: 36px;
-            }
-        }
-    </style>
+    <link rel="stylesheet" href="/static/css/pages/artifacts.css">
 </head>
 <body>
     <div id="navbar-root"></div>
@@ -253,10 +42,18 @@
     <div class="main-container">
         <div class="artifacts-container">
             <div class="artifacts-header">
-                <h1>Artifacts</h1>
-                <button onclick="loadArtifacts()" class="btn btn-secondary">Refresh</button>
+                <div>
+                    <h1>Artifacts</h1>
+                    <p class="page-description">Pages and files your assistant has created. Share them with a link, or keep them private.</p>
+                </div>
+                <button onclick="loadArtifacts()" class="btn btn-secondary">
+                    <svg class="icon" aria-hidden="true"><use href="#icon-refresh"></use></svg>
+                    Refresh
+                </button>
             </div>
-            <div id="artifacts" class="table-scroll">Loading...</div>
+            <div class="card card-flush">
+                <div id="artifacts" class="table-scroll"><div class="empty-state"><div class="spinner"></div></div></div>
+            </div>
         </div>
     </div>
     </div>
@@ -308,39 +105,43 @@
             const container = document.getElementById('artifacts');
 
             if (artifactsState.length === 0) {
-                container.innerHTML = '<div class="empty-state">No artifacts yet. ' +
-                    'Ask the assistant to create and store an HTML page or report.</div>';
+                container.innerHTML = '<div class="empty-state">' +
+                    '<span class="empty-state-icon"><svg class="icon icon-md" aria-hidden="true"><use href="#icon-artifacts"></use></svg></span>' +
+                    '<div class="empty-state-title">No artifacts yet</div>' +
+                    '<div>Ask the assistant to create and store an HTML page or report.</div></div>';
                 return;
             }
 
             const rows = artifactsState.map(a => {
                 const name = a.title || a.filename;
-                const visClass = a.is_public ? 'status-badge-public' : 'status-badge-private';
+                const visClass = a.is_public ? 'badge-on' : 'badge-off';
                 const visLabel = a.is_public ? 'Public' : 'Private';
                 const lock = a.has_secret
-                    ? '<span class="lock-badge" title="Passphrase protected">🔒</span>' : '';
+                    ? '<span class="lock-badge" title="Passphrase protected" aria-label="Passphrase protected"><svg class="icon" aria-hidden="true"><use href="#icon-lock"></use></svg></span>' : '';
                 const linkLabel = a.is_public ? 'Copy link' : 'Temp link';
                 const toggleLabel = a.is_public ? 'Make private' : 'Make public';
                 const secretLabel = a.has_secret ? 'Passphrase' : 'Set passphrase';
                 return `
                     <tr>
-                        <td data-label="Name">
-                            <div class="artifact-name">${escapeHtml(name)}</div>
-                            ${a.title ? `<div class="artifact-file">${escapeHtml(a.filename)}</div>` : ''}
+                        <td>
+                            <div>
+                                <div class="artifact-name">${escapeHtml(name)}</div>
+                                ${a.title ? `<div class="artifact-file">${escapeHtml(a.filename)}</div>` : ''}
+                            </div>
                         </td>
                         <td data-label="Type">${escapeHtml(shortType(a.mime_type))}</td>
                         <td data-label="Size">${formatSize(a.size)}</td>
                         <td data-label="Visibility">
-                            <span class="status-badge-inline ${visClass}">${visLabel}</span>${lock}
+                            <span><span class="badge ${visClass}">${visLabel}</span>${lock}</span>
                         </td>
                         <td data-label="Created">${a.created_at ? formatDateTime(a.created_at) : '—'}</td>
                         <td data-label="Actions">
                             <div class="job-actions">
                                 <button class="job-action-btn" onclick="viewArtifact('${a.artifact_id}')">View</button>
-                                <button class="job-action-btn btn-neutral" onclick="copyLink('${a.artifact_id}')">${linkLabel}</button>
-                                <button class="job-action-btn btn-neutral" onclick="toggleVisibility('${a.artifact_id}', ${!a.is_public})">${toggleLabel}</button>
-                                <button class="job-action-btn btn-neutral" onclick="managePassphrase('${a.artifact_id}')">${secretLabel}</button>
-                                <button class="job-action-btn btn-danger" onclick="deleteArtifact('${a.artifact_id}')">Delete</button>
+                                <button class="job-action-btn" onclick="copyLink('${a.artifact_id}')">${linkLabel}</button>
+                                <button class="job-action-btn" onclick="toggleVisibility('${a.artifact_id}', ${!a.is_public})">${toggleLabel}</button>
+                                <button class="job-action-btn" onclick="managePassphrase('${a.artifact_id}')">${secretLabel}</button>
+                                ${trashButton(`deleteArtifact('${a.artifact_id}')`, 'Delete artifact', 'job-action-btn')}
                             </div>
                         </td>
                     </tr>`;
@@ -355,7 +156,7 @@
                             <th>Size</th>
                             <th>Visibility</th>
                             <th>Created</th>
-                            <th>Actions</th>
+                            <th><span class="sr-only">Actions</span></th>
                         </tr>
                     </thead>
                     <tbody>${rows}</tbody>
@@ -437,10 +238,11 @@
             wrap.appendChild(hint);
             wrap.appendChild(input);
 
-            const buttons = [{ text: 'Cancel', className: 'btn-secondary' }];
+            const buttons = [];
             if (a.has_secret) {
-                buttons.push({ text: 'Remove', className: 'btn-danger', onClick: () => removeSecret(id) });
+                buttons.push({ text: 'Remove passphrase', icon: 'trash', className: 'btn-danger', onClick: () => removeSecret(id) });
             }
+            buttons.push({ text: 'Cancel', className: 'btn-secondary' });
             buttons.push({
                 text: a.has_secret ? 'Change' : 'Set',
                 className: 'btn-primary',
@@ -479,7 +281,7 @@
         function deleteArtifact(id) {
             const a = find(id);
             const name = a ? (a.title || a.filename) : 'this artifact';
-            modal.confirm('Delete artifact', `Delete "${escapeHtml(name)}"? This cannot be undone.`, async () => {
+            modal.confirm('Delete artifact?', `Delete "${escapeHtml(name)}"? This cannot be undone.`, async () => {
                 try {
                     await api.delete(`/api/artifacts/${id}`);
                     toast.success('Artifact deleted');
@@ -487,7 +289,7 @@
                 } catch (error) {
                     toast.error('Failed to delete artifact');
                 }
-            });
+            }, { confirmText: 'Delete', danger: true });
         }
 
         document.addEventListener('DOMContentLoaded', loadArtifacts);

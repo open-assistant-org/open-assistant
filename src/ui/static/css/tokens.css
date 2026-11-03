@@ -1,0 +1,393 @@
+/* ==========================================================================
+   Open Assistant design system - TOKENS
+   ==========================================================================
+
+   The single source of truth for colour, type, spacing, shape, elevation
+   and motion. Component and page CSS must only ever reference the
+   *semantic* tokens below (--color-*, --space-*, --radius-*, ...), never
+   raw hex values or the --gray-* primitives directly. That is what keeps
+   light/dark in sync and what makes re-branding a one-line change.
+
+   Layers
+   ------
+   1. Primitives   --gray-*, --green-*, --orange-*, --red-*   (raw palette)
+   2. Semantic     --color-bg, --color-text, --color-success-fg, ...
+   3. Components   consume semantic tokens only (components.css, common.css)
+
+   These rules are enforced by tests/test_design_system.py.
+
+   Colour philosophy
+   -----------------
+   The interface is monochromatic: a soft, very slightly warm neutral
+   scale. The only hues are the three semantic families - green (success),
+   orange (warning) and red (danger) - and they are always used as soft
+   tints with a darker readable foreground, never as loud solid fills.
+   "Info" is deliberately neutral.
+
+   Branding (accent)
+   -----------------
+   Every interactive "primary" surface (primary buttons, toggles, focus
+   ring, active navigation, checkboxes, links on hover) reads from
+   --color-accent. By default the accent IS the neutral ink colour, so
+   the baseline is fully monochrome. An installation can introduce a brand
+   colour later by defining just two variables, e.g.
+
+       :root { --brand: #3b5bdb; --brand-contrast: #ffffff; }
+
+   and every accent-derived token (hover, subtle tint, focus ring) follows
+   automatically via color-mix(). Nothing else needs to change. A brand
+   that is too dark to read on the dark canvas can be given a dark-theme
+   variant with --brand-dark / --brand-dark-contrast (both optional, they
+   fall back to --brand / --brand-contrast).
+
+   Theming
+   -------
+   :root holds the light theme (the default). theme.js sets
+   <html data-theme="light|dark"> before first paint from the user's
+   light/dark/system preference; [data-theme="dark"] overrides colour
+   tokens only. Shape, type and spacing tokens are theme-independent.
+   Without data-theme (no JS) the same dark block applies through
+   prefers-color-scheme, so the OS setting is still honoured.
+
+   Contrast (WCAG 2.1, computed):
+     light  text 17.1:1 · secondary 7.2:1 · tertiary 5.3:1 on surface
+            control border 3.3:1 (meets 1.4.11 non-text contrast)
+            success/warning/danger fg on their soft bg  >= 5.6:1
+     dark   text 14.7:1 · secondary 8.4:1 · tertiary 5.9:1 on surface
+            control border 3.2:1; semantic fg on soft bg >= 7.3:1
+   ========================================================================== */
+
+:root {
+    /* ---------------------------------------------------------------------
+       1. PRIMITIVES
+       --------------------------------------------------------------------- */
+    --gray-0:   #ffffff;
+    --gray-25:  #fbfbfa;
+    --gray-50:  #f7f7f5;
+    --gray-100: #f1f1ee;
+    --gray-150: #eaeae6;
+    --gray-200: #e1e1dc;
+    --gray-300: #cfcfc9;
+    --gray-400: #a9a9a2;
+    --gray-500: #8e8e87;
+    --gray-600: #6a6a64;
+    --gray-700: #585853;
+    --gray-800: #3a3a37;
+    --gray-850: #2a2a27;
+    --gray-900: #1c1c1a;
+    --gray-950: #121211;
+
+    --green-50:  #eaf5ee;
+    --green-200: #c5e4d0;
+    --green-500: #3f9a64;
+    --green-700: #256b42;
+
+    --orange-50:  #fcf1e3;
+    --orange-200: #f3d6b1;
+    --orange-500: #d9832e;
+    --orange-700: #8f4f0e;
+
+    --red-50:  #fcedeb;
+    --red-200: #f2c9c4;
+    --red-500: #d65a4f;
+    --red-700: #a63a32;
+
+    /* ---------------------------------------------------------------------
+       2. SEMANTIC - colour (light theme)
+       --------------------------------------------------------------------- */
+    color-scheme: light;
+
+    /* Surfaces: canvas < surface (cards) ; sunken = wells, inputs on cards */
+    --color-bg: var(--gray-50);
+    --color-surface: var(--gray-0);
+    --color-surface-raised: var(--gray-0);
+    --color-sunken: var(--gray-100);
+    --color-overlay: rgba(28, 28, 26, 0.32);
+
+    /* Neutral interaction fills */
+    --color-fill-hover: rgba(28, 28, 26, 0.045);
+    --color-fill-active: rgba(28, 28, 26, 0.08);
+
+    /* Text */
+    --color-text: var(--gray-900);
+    --color-text-secondary: var(--gray-700);
+    --color-text-tertiary: var(--gray-600);
+    --color-text-disabled: var(--gray-400);
+    --color-text-inverse: var(--gray-0);
+
+    /* Borders */
+    --color-border-subtle: var(--gray-150);
+    --color-border: var(--gray-200);
+    --color-border-strong: var(--gray-300);
+    /* Edges that identify an interactive control (inputs, unchecked
+       toggles) - kept at >= 3:1 against the surface for WCAG 1.4.11. */
+    --color-border-control: var(--gray-500);
+
+    /* Accent (see "Branding" above) */
+    --color-accent: var(--brand, var(--gray-900));
+    --color-on-accent: var(--brand-contrast, var(--gray-0));
+    --color-accent-hover: color-mix(in oklab, var(--color-accent) 84%, var(--color-surface));
+    --color-accent-subtle: color-mix(in oklab, var(--color-accent) 7%, var(--color-surface));
+    --color-accent-muted: color-mix(in oklab, var(--color-accent) 14%, var(--color-surface));
+    --color-focus-ring: color-mix(in oklab, var(--color-accent) 30%, transparent);
+    /* Text inputs get a quieter focus treatment: a softened edge plus a
+       faint halo. The edge alone still meets 3:1 against the surface. */
+    --color-focus-border: color-mix(in oklab, var(--color-accent) 60%, var(--color-border-control));
+    --color-focus-ring-soft: color-mix(in oklab, var(--color-accent) 10%, transparent);
+
+    /* Semantic families: fg = readable text/icon, bg = soft tint,
+       border = tint edge, solid = small marks (dots, progress) */
+    --color-success-fg: var(--green-700);
+    --color-success-bg: var(--green-50);
+    --color-success-border: var(--green-200);
+    --color-success-solid: var(--green-500);
+
+    --color-warning-fg: var(--orange-700);
+    --color-warning-bg: var(--orange-50);
+    --color-warning-border: var(--orange-200);
+    --color-warning-solid: var(--orange-500);
+
+    --color-danger-fg: var(--red-700);
+    --color-danger-bg: var(--red-50);
+    --color-danger-border: var(--red-200);
+    --color-danger-solid: var(--red-500);
+    /* Solid red for the confirm button of a destructive dialog only.
+       White text on it is 5.4:1. */
+    --color-danger-emphasis: #b8413a;
+    --color-danger-emphasis-hover: var(--red-700);
+    --color-on-danger: #ffffff;
+
+    /* Fixed in both themes: a QR code must stay dark-on-light to scan,
+       and the toggle knob is always a white disc. */
+    --color-qr-bg: #ffffff;
+    --color-qr-fg: #585853;
+    --color-knob: #ffffff;
+    --shadow-knob: 0 1px 2px rgba(0, 0, 0, 0.2), 0 1px 3px rgba(0, 0, 0, 0.1);
+
+    /* The selected segment of a .tabs control */
+    --color-tab-active: var(--color-surface);
+
+    /* Info / neutral are intentionally monochrome */
+    --color-neutral-fg: var(--gray-700);
+    --color-neutral-bg: var(--gray-100);
+    --color-neutral-border: var(--gray-200);
+    --color-neutral-solid: var(--gray-500);
+
+    /* ---------------------------------------------------------------------
+       3. TYPOGRAPHY
+       --------------------------------------------------------------------- */
+    --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    /* Geist Mono (self-hosted) for real code only: code blocks, logs and
+       JSON editors. Inline identifiers in the UI chrome use --font-sans. */
+    --font-mono: 'Geist Mono', ui-monospace, 'SF Mono', 'Cascadia Code', 'Segoe UI Mono', Menlo, monospace;
+
+    --text-xs: 0.75rem;     /* 12px - captions, badges   */
+    --text-sm: 0.8125rem;   /* 13px - secondary, tables  */
+    --text-base: 0.9375rem; /* 15px - body               */
+    --text-md: 1rem;        /* 16px - chat, emphasis     */
+    --text-lg: 1.125rem;    /* 18px - card titles        */
+    --text-xl: 1.375rem;    /* 22px - section headings   */
+    --text-2xl: 1.75rem;    /* 28px - page titles        */
+
+    --leading-tight: 1.25;
+    --leading-snug: 1.4;
+    --leading-normal: 1.55;
+    --leading-relaxed: 1.7;
+
+    --weight-regular: 400;
+    --weight-medium: 500;
+    --weight-semibold: 600;
+    --weight-bold: 700;
+
+    --tracking-tight: -0.015em;
+    --tracking-normal: -0.006em;
+    --tracking-wide: 0.02em;
+
+    /* ---------------------------------------------------------------------
+       4. SPACING (4px grid)
+       --------------------------------------------------------------------- */
+    --space-0-5: 2px;
+    --space-1: 4px;
+    --space-1-5: 6px;
+    --space-2: 8px;
+    --space-2-5: 10px;
+    --space-3: 12px;
+    --space-3-5: 14px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-8: 32px;
+    --space-10: 40px;
+    --space-12: 48px;
+    --space-16: 64px;
+
+    /* ---------------------------------------------------------------------
+       5. SHAPE & SIZE
+       --------------------------------------------------------------------- */
+    --radius-xs: 4px;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --radius-xl: 20px;
+    --radius-full: 999px;
+
+    --control-h-sm: 32px;
+    --control-h-md: 40px;
+    --control-h-lg: 48px;
+
+    /* Layout breakpoints. Custom properties can't be used inside @media,
+       so these are conventions (checked by tests/test_design_system.py):
+         phone   @media (max-width: 768px)  /  (min-width: 769px)
+         tablet  @media (max-width: 1024px) and (min-width: 769px)
+       Viewport media queries are for page chrome only (navigation,
+       sidebars, page padding, bottom-sheet modals). Components respond to
+       their own width with @container card / @container table. */
+    --content-max: 1080px;
+    --content-narrow: 760px;
+    --nav-width: 232px;
+    --nav-width-collapsed: 68px;
+    --topbar-h: 56px;
+
+    /* ---------------------------------------------------------------------
+       6. ELEVATION - soft, two-layer shadows
+       --------------------------------------------------------------------- */
+    --shadow-xs: 0 1px 2px rgba(28, 28, 26, 0.05);
+    --shadow-sm: 0 1px 2px rgba(28, 28, 26, 0.04), 0 2px 6px rgba(28, 28, 26, 0.04);
+    --shadow-md: 0 2px 4px rgba(28, 28, 26, 0.04), 0 8px 20px rgba(28, 28, 26, 0.07);
+    --shadow-lg: 0 4px 8px rgba(28, 28, 26, 0.04), 0 20px 48px rgba(28, 28, 26, 0.12);
+
+    /* ---------------------------------------------------------------------
+       7. MOTION & LAYERS
+       --------------------------------------------------------------------- */
+    --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --duration-fast: 120ms;
+    --duration-base: 180ms;
+    --duration-slow: 280ms;
+
+    --z-sticky: 100;
+    --z-nav: 1000;
+    --z-modal: 2000;
+    --z-toast: 3000;
+}
+
+/* ==========================================================================
+   DARK THEME - colour tokens only
+   ========================================================================== */
+:root[data-theme="dark"] {
+    color-scheme: dark;
+
+    --color-bg: #121211;
+    --color-surface: #1b1b19;
+    --color-surface-raised: #222220;
+    --color-sunken: #232321;
+    --color-overlay: rgba(0, 0, 0, 0.55);
+
+    --color-fill-hover: rgba(237, 237, 234, 0.06);
+    --color-fill-active: rgba(237, 237, 234, 0.1);
+
+    --color-text: #ededea;
+    --color-text-secondary: #b5b5af;
+    --color-text-tertiary: #97978f;
+    --color-text-disabled: #5f5f5a;
+    --color-text-inverse: #121211;
+
+    --color-border-subtle: #262624;
+    --color-border: #2f2f2c;
+    --color-border-strong: #3d3d39;
+    --color-border-control: #6b6b65;
+
+    --color-accent: var(--brand-dark, var(--brand, #ededea));
+    --color-on-accent: var(--brand-dark-contrast, var(--brand-contrast, #121211));
+
+    --color-success-fg: #8cd2a6;
+    --color-success-bg: #1a2c21;
+    --color-success-border: #2a4a36;
+    --color-success-solid: #5fb883;
+
+    --color-warning-fg: #f0b577;
+    --color-warning-bg: #2f2418;
+    --color-warning-border: #4d3a24;
+    --color-warning-solid: #e39a4f;
+
+    --color-danger-fg: #f29c94;
+    --color-danger-bg: #351e1c;
+    --color-danger-border: #55302c;
+    --color-danger-solid: #e2766c;
+    --color-danger-emphasis: #b8413a;
+    --color-danger-emphasis-hover: #c74d43;
+    --color-on-danger: #ffffff;
+
+    --color-tab-active: var(--color-border-strong);
+
+    --color-neutral-fg: #b5b5af;
+    --color-neutral-bg: #262624;
+    --color-neutral-border: #353532;
+    --color-neutral-solid: #8a8a84;
+
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 6px rgba(0, 0, 0, 0.2);
+    --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.3), 0 8px 20px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.3), 0 20px 48px rgba(0, 0, 0, 0.45);
+}
+
+/* No-JS fallback: until theme.js sets data-theme (or if it never runs),
+   follow the OS. This block must stay identical to the one above -
+   tests/test_design_system.py enforces that. */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme]) {
+        color-scheme: dark;
+
+        --color-bg: #121211;
+        --color-surface: #1b1b19;
+        --color-surface-raised: #222220;
+        --color-sunken: #232321;
+        --color-overlay: rgba(0, 0, 0, 0.55);
+
+        --color-fill-hover: rgba(237, 237, 234, 0.06);
+        --color-fill-active: rgba(237, 237, 234, 0.1);
+
+        --color-text: #ededea;
+        --color-text-secondary: #b5b5af;
+        --color-text-tertiary: #97978f;
+        --color-text-disabled: #5f5f5a;
+        --color-text-inverse: #121211;
+
+        --color-border-subtle: #262624;
+        --color-border: #2f2f2c;
+        --color-border-strong: #3d3d39;
+        --color-border-control: #6b6b65;
+
+        --color-accent: var(--brand-dark, var(--brand, #ededea));
+        --color-on-accent: var(--brand-dark-contrast, var(--brand-contrast, #121211));
+
+        --color-success-fg: #8cd2a6;
+        --color-success-bg: #1a2c21;
+        --color-success-border: #2a4a36;
+        --color-success-solid: #5fb883;
+
+        --color-warning-fg: #f0b577;
+        --color-warning-bg: #2f2418;
+        --color-warning-border: #4d3a24;
+        --color-warning-solid: #e39a4f;
+
+        --color-danger-fg: #f29c94;
+        --color-danger-bg: #351e1c;
+        --color-danger-border: #55302c;
+        --color-danger-solid: #e2766c;
+        --color-danger-emphasis: #b8413a;
+        --color-danger-emphasis-hover: #c74d43;
+        --color-on-danger: #ffffff;
+
+        --color-tab-active: var(--color-border-strong);
+
+        --color-neutral-fg: #b5b5af;
+        --color-neutral-bg: #262624;
+        --color-neutral-border: #353532;
+        --color-neutral-solid: #8a8a84;
+
+        --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
+        --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 6px rgba(0, 0, 0, 0.2);
+        --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.3), 0 8px 20px rgba(0, 0, 0, 0.3);
+        --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.3), 0 20px 48px rgba(0, 0, 0, 0.45);
+    }
+}

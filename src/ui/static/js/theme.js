@@ -1,6 +1,6 @@
 /**
- * Theme runtime. Loaded synchronously in <head>, BEFORE common.css and any
- * page <style> block, so the resolved theme is applied to <html> before
+ * Theme runtime. Loaded synchronously in <head>, BEFORE the design-system
+ * stylesheets (css/tokens.css etc.), so the resolved theme is applied to <html> before
  * first paint. Every page is a full navigation (no SPA router), so this
  * file runs fresh on every load and must not depend on common.js (which
  * loads later).
@@ -38,7 +38,8 @@
     }
 
     function updateMetaThemeColor(resolved) {
-        var color = resolved === 'light' ? '#f4f6f8' : '#0f0f0f';
+        // Match --color-bg in css/tokens.css for each theme.
+        var color = resolved === 'light' ? '#f7f7f5' : '#121211';
         var themeColorTag = document.querySelector('meta[name="theme-color"]');
         if (themeColorTag) themeColorTag.setAttribute('content', color);
 

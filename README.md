@@ -70,7 +70,7 @@ Ask for a web page, dashboard, or document and the assistant saves it as an **ar
 - 🔒 **Private by design** — Single-user, single-container, self-hosted. Credentials are encrypted at rest, and your data never leaves your machine.
 - 🧠 **A team, not a chatbot** — 10 built-in agents, 165+ tools, and a coordinator that knows who to call. Create your own agents in the UI.
 - 🔓 **No lock-in** — Bring your own brain: OpenRouter, Anthropic, Groq, or run fully offline with [Ollama](docs/integrations/llm-providers.md) / vLLM.
-- ⏰ **Works while you sleep** — Recurring cron jobs and one-shot scheduled tasks. A nightly job even maintains your assistant's memory and personality.
+- ⏰ **Works while you sleep** — Recurring scheduled tasks and one-off tasks. A nightly job even maintains your assistant's memory and personality.
 - 🧩 **Extensible** — Remote [MCP servers](docs/mcp-servers.md), a plugin system, and custom agents mean the toolset grows with you.
 - 💬 **Wherever you are** — Full-featured web UI, plus two-way [WhatsApp](docs/integrations/whatsapp.md) and [Slack](docs/integrations/slack.md) messaging (text, voice notes, and images).
 

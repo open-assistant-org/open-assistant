@@ -135,9 +135,9 @@ Web-based monitoring dashboard with:
 - System logs viewer
 - Service connection status
 
-**Jobs tab**:
-- Cron job management with enable/disable
-- Future task management
+**Tasks tab**:
+- Scheduled tasks (recurring cron jobs) with an enable/disable switch and Run now
+- One-off tasks (future tasks) with cancel
 - Execution history with status and duration
 
 ### Unified Search

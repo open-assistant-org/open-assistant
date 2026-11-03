@@ -142,7 +142,7 @@ src/
 ├── ui/                        # Web UI
 │   ├── __init__.py
 │   ├── app.py                 # UI backend
-│   ├── static/                # Static files (JS, CSS)
+│   ├── static/                # Static files (JS, CSS) - see design-system.md
 │   └── templates/             # HTML templates
 └── utils/                     # Utility functions
     ├── __init__.py

@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Design system - Open Assistant</title>
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <meta name="theme-color" content="#f7f7f5">
+
+    <!-- Design system -->
+    <script src="/static/js/theme.js"></script>
+    <link rel="preload" href="/static/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="/static/css/tokens.css">
+    <link rel="stylesheet" href="/static/css/base.css">
+    <link rel="stylesheet" href="/static/css/components.css">
+    <link rel="stylesheet" href="/static/css/common.css">
+    <link rel="stylesheet" href="/static/css/mobile.css">
+    <style>
+        /* Layout for this reference page only */
+        .ds-section { margin-bottom: var(--space-12); }
+        .ds-section > h2 { margin-bottom: var(--space-1); }
+        .ds-section > .ds-lead { color: var(--color-text-secondary); margin-bottom: var(--space-5); max-width: 640px; }
+        .ds-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+        .ds-row + .ds-row { margin-top: var(--space-4); }
+        .ds-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--space-3); }
+        .ds-grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--space-5); }
+        .ds-swatch { border: 1px solid var(--color-border); border-radius: var(--radius-md); overflow: hidden; background: var(--color-surface); }
+        .ds-swatch-color { height: 56px; border-bottom: 1px solid var(--color-border-subtle); background: var(--ds-value); }
+        .ds-swatch-meta { padding: var(--space-2) var(--space-3); font-size: var(--text-xs); }
+        .ds-swatch-meta code { display: block; padding: 0; border: none; background: none; color: var(--color-text-secondary); margin-top: 2px; }
+        .ds-type-row { display: flex; align-items: baseline; gap: var(--space-5); padding: var(--space-3) 0; border-bottom: 1px solid var(--color-border-subtle); }
+        .ds-type-row:last-child { border-bottom: none; }
+        .ds-type-row code { flex: 0 0 120px; padding: 0; border: none; background: none; color: var(--color-text-tertiary); font-size: var(--text-xs); }
+        .ds-type-row > span { font-size: var(--ds-value, inherit); }
+        .ds-type-heading { font-weight: var(--weight-semibold); letter-spacing: var(--tracking-tight); }
+        .ds-type-mono { font-family: var(--font-mono); }
+        .ds-space { display: flex; align-items: center; gap: var(--space-3); font-size: var(--text-xs); color: var(--color-text-secondary); }
+        .ds-space code { flex: 0 0 84px; padding: 0; border: none; background: none; }
+        .ds-space-bar { width: var(--ds-value); height: 12px; border-radius: var(--radius-xs); background: var(--color-accent-muted); }
+        .ds-radius { width: 64px; height: 64px; border: 1px solid var(--color-border-strong); border-radius: var(--ds-value); background: var(--color-sunken); }
+        .ds-shadow { width: 120px; height: 72px; border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--ds-value); display: flex; align-items: center; justify-content: center; font-size: var(--text-xs); color: var(--color-text-secondary); }
+        .ds-toc { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-10); }
+        .ds-demo-modal { position: relative; inset: auto; display: flex; padding: var(--space-8); border-radius: var(--radius-lg); animation: none; }
+        .ds-demo-modal .modal-content { animation: none; }
+        .ds-demo-toast { position: static; }
+        .ds-brand-input { width: 120px; padding: var(--space-1); }
+        .ds-label { margin-bottom: var(--space-2); color: var(--color-text-tertiary); font-size: var(--text-xs); font-weight: var(--weight-medium); }
+        .ds-dodont { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); gap: var(--space-4); margin-top: var(--space-4); }
+        .ds-do, .ds-dont { padding: var(--space-4); border: 1px solid var(--color-border); border-top-width: 3px; border-radius: var(--radius-md); background: var(--color-surface); }
+        .ds-do { border-top-color: var(--color-success-solid); }
+        .ds-dont { border-top-color: var(--color-danger-solid); }
+        .ds-do > p, .ds-dont > p { margin-top: var(--space-3); color: var(--color-text-secondary); font-size: var(--text-sm); }
+        .ds-narrow { max-width: 420px; }
+        .ds-icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: var(--space-1); }
+        .ds-icon { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); padding: var(--space-3) var(--space-1); border-radius: var(--radius-md); color: var(--color-text); font-size: var(--text-xs); }
+        .ds-icon:hover { background: var(--color-fill-hover); }
+        .ds-icon .icon { width: 20px; height: 20px; }
+        .ds-icon span { color: var(--color-text-tertiary); text-align: center; word-break: break-all; }
+    </style>
+</head>
+<body>
+    <div id="navbar-root"></div>
+
+    <div class="page-content">
+    <div class="main-container">
+    <div class="page">
+        <div class="page-header">
+            <div>
+                <h1>Design system</h1>
+                <p>Tokens and components used across Open Assistant. Everything here is built from <code>css/tokens.css</code> and <code>css/components.css</code>.</p>
+            </div>
+            <div class="ds-row">
+                <div class="tabs mb-0" role="group" aria-label="Theme">
+                    <button class="tab" data-theme-choice="light">Light</button>
+                    <button class="tab" data-theme-choice="dark">Dark</button>
+                    <button class="tab" data-theme-choice="system">System</button>
+                </div>
+            </div>
+        </div>
+
+        <nav class="ds-toc" aria-label="Sections">
+            <a class="chip" href="#color">Colour</a>
+            <a class="chip" href="#type">Typography</a>
+            <a class="chip" href="#space">Spacing &amp; shape</a>
+            <a class="chip" href="#icons">Icons</a>
+            <a class="chip" href="#buttons">Buttons</a>
+            <a class="chip" href="#forms">Forms</a>
+            <a class="chip" href="#feedback">Badges &amp; alerts</a>
+            <a class="chip" href="#surfaces">Cards &amp; tables</a>
+            <a class="chip" href="#layout">Responsive layout</a>
+            <a class="chip" href="#overlays">Modals &amp; toasts</a>
+            <a class="chip" href="#brand">Branding</a>
+        </nav>
+
+        <!-- COLOUR -->
+        <section class="ds-section" id="color">
+            <h2>Colour</h2>
+            <p class="ds-lead">A soft, slightly warm neutral scale carries the whole interface. Green, orange and red appear only for meaning, and always as gentle tints with a readable foreground.</p>
+            <h4 class="mb-2">Surfaces &amp; text</h4>
+            <div class="ds-grid mb-3" id="swatches-neutral"></div>
+            <h4 class="mb-2">Semantic</h4>
+            <div class="ds-grid" id="swatches-semantic"></div>
+        </section>
+
+        <!-- TYPE -->
+        <section class="ds-section" id="type">
+            <h2>Typography</h2>
+            <p class="ds-lead">Inter, self-hosted, with a single-storey <em>a</em> and a tailed <em>l</em> for a friendlier, more legible texture. Body text is 15px; chat is 16px. Inline identifiers stay in Inter; Geist Mono is reserved for real code (code blocks, logs, JSON).</p>
+            <div class="card">
+                <div class="ds-type-row"><code>--text-2xl / 28</code><span class="ds-type-heading" style="--ds-value:var(--text-2xl)">Good morning, Sofie</span></div>
+                <div class="ds-type-row"><code>--text-xl / 22</code><span class="ds-type-heading" style="--ds-value:var(--text-xl)">Your day at a glance</span></div>
+                <div class="ds-type-row"><code>--text-lg / 18</code><span class="ds-type-heading" style="--ds-value:var(--text-lg)">Integrations</span></div>
+                <div class="ds-type-row"><code>--text-md / 16</code><span style="--ds-value:var(--text-md)">I've drafted a reply to your landlord. Want to read it first?</span></div>
+                <div class="ds-type-row"><code>--text-base / 15</code><span>Connect the services your assistant can use on your behalf.</span></div>
+                <div class="ds-type-row"><code>--text-sm / 13</code><span class="text-sm text-secondary">Last synced 4 minutes ago</span></div>
+                <div class="ds-type-row"><code>--text-xs / 12</code><span class="text-xs text-tertiary">Updated by system · 14:02</span></div>
+                <div class="ds-type-row"><code>inline code</code><span>Runs <code>google_calendar_list_events</code> every <code>0 7 * * 1-5</code></span></div>
+                <div class="ds-type-row"><code>--font-mono</code><span class="ds-type-mono" style="--ds-value:var(--text-sm)">{"tool": "google_calendar_list_events", "days": 7}</span></div>
+            </div>
+        </section>
+
+        <!-- SPACE & SHAPE -->
+        <section class="ds-section" id="space">
+            <h2>Spacing &amp; shape</h2>
+            <p class="ds-lead">A 4px grid, generous padding and rounded corners. Elevation is soft and used sparingly.</p>
+            <div class="ds-grid-2">
+                <div class="card">
+                    <div class="card-header">Spacing</div>
+                    <div class="flex-col gap-2" id="ds-spacing"></div>
+                </div>
+                <div class="card">
+                    <div class="card-header">Radius</div>
+                    <div class="ds-row">
+                        <div class="ds-radius" style="--ds-value:var(--radius-sm)"></div>
+                        <div class="ds-radius" style="--ds-value:var(--radius-md)"></div>
+                        <div class="ds-radius" style="--ds-value:var(--radius-lg)"></div>
+                        <div class="ds-radius" style="--ds-value:var(--radius-xl)"></div>
+                        <div class="ds-radius" style="--ds-value:var(--radius-full)"></div>
+                    </div>
+                    <div class="card-header mt-3">Elevation</div>
+                    <div class="ds-row">
+                        <div class="ds-shadow" style="--ds-value:var(--shadow-xs)">xs</div>
+                        <div class="ds-shadow" style="--ds-value:var(--shadow-sm)">sm</div>
+                        <div class="ds-shadow" style="--ds-value:var(--shadow-md)">md</div>
+                        <div class="ds-shadow" style="--ds-value:var(--shadow-lg)">lg</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ICONS -->
+        <section class="ds-section" id="icons">
+            <h2>Icons</h2>
+            <p class="ds-lead">Every icon is from <a href="https://lucide.dev" target="_blank" rel="noopener">Lucide</a>, served from one inline sprite in <code>js/components.js</code>. Use <code>icon('name')</code> in JS or <code>&lt;svg class="icon"&gt;&lt;use href="#icon-name"&gt;</code> in HTML. Icons inherit the text colour.</p>
+            <div class="card">
+                <div class="ds-icon-grid" id="ds-icons"></div>
+            </div>
+        </section>
+
+        <!-- BUTTONS -->
+        <section class="ds-section" id="buttons">
+            <h2>Buttons</h2>
+            <p class="ds-lead">One primary action per area. Secondary for everything else, ghost for low-emphasis actions. Delete and remove are always a shaded red trash button; the solid red button is only for confirming a destructive dialog. Icon buttons are square, and button groups are right-aligned.</p>
+            <div class="card">
+                <div class="ds-row">
+                    <button class="btn btn-primary">Save changes</button>
+                    <button class="btn btn-secondary">Test connection</button>
+                    <button class="btn btn-ghost">Cancel</button>
+                    <button class="btn btn-destructive">Yes, delete</button>
+                    <button class="btn btn-primary" disabled>Disabled</button>
+                </div>
+                <div class="ds-row">
+                    <button class="btn btn-primary btn-sm"><svg class="icon" aria-hidden="true"><use href="#icon-plus"></use></svg>Add agent</button>
+                    <button class="btn btn-secondary btn-sm"><svg class="icon" aria-hidden="true"><use href="#icon-refresh"></use></svg>Refresh</button>
+                    <button class="btn btn-primary btn-lg">Get started</button>
+                    <button class="btn-icon" aria-label="Show value"><svg class="icon" aria-hidden="true"><use href="#icon-eye"></use></svg></button>
+                    <button class="btn btn-danger btn-icon" aria-label="Delete" title="Delete"><svg class="icon" aria-hidden="true"><use href="#icon-trash"></use></svg></button>
+                    <button class="btn btn-danger btn-sm btn-icon" aria-label="Delete" title="Delete"><svg class="icon" aria-hidden="true"><use href="#icon-trash"></use></svg></button>
+                    <button class="job-action-btn">View</button>
+                    <button class="job-action-btn btn-danger job-action-icon" aria-label="Delete" title="Delete"><svg class="icon" aria-hidden="true"><use href="#icon-trash"></use></svg></button>
+                </div>
+                <div class="ds-label mt-3">States</div>
+                <div class="ds-row">
+                    <button class="btn btn-primary">Default</button>
+                    <button class="btn btn-primary" disabled>Disabled</button>
+                    <button class="btn btn-primary" disabled aria-busy="true"><svg class="icon icon-spin" aria-hidden="true"><use href="#icon-loader"></use></svg>Saving…</button>
+                    <button class="btn btn-secondary" disabled>Disabled</button>
+                    <button class="btn btn-danger btn-icon" disabled aria-label="Delete (disabled)"><svg class="icon" aria-hidden="true"><use href="#icon-trash"></use></svg></button>
+                </div>
+            </div>
+            <div class="ds-dodont">
+                <div class="ds-do">
+                    <div class="btn-row"><button class="btn btn-danger btn-icon" aria-label="Remove agent" title="Remove agent"><svg class="icon" aria-hidden="true"><use href="#icon-trash"></use></svg></button></div>
+                    <p><strong>Do</strong> use the shaded red trash button (<code>trashButton()</code>) for delete and remove.</p>
+                </div>
+                <div class="ds-dont">
+                    <div class="btn-row"><button class="btn btn-destructive">Delete</button></div>
+                    <p><strong>Don't</strong> use the solid red button outside a confirm dialog, or a text "Delete" button.</p>
+                </div>
+                <div class="ds-do">
+                    <div class="btn-row"><button class="btn btn-ghost">Cancel</button><button class="btn btn-destructive">Yes, stop it</button></div>
+                    <p><strong>Do</strong> confirm destructive actions with <code>modal.ask()</code>, a solid red confirm and a label that says what happens.</p>
+                </div>
+                <div class="ds-dont">
+                    <div class="btn-row"><button class="btn btn-secondary">Cancel</button><button class="btn btn-primary">OK</button></div>
+                    <p><strong>Don't</strong> use <code>window.confirm()</code> or vague labels like "OK".</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- FORMS -->
+        <section class="ds-section" id="forms">
+            <h2>Forms</h2>
+            <p class="ds-lead">Inputs have a clear 3:1 edge, a visible focus ring and roomy 40px height (44px on touch).</p>
+            <div class="ds-grid-2">
+                <div class="card">
+                    <div class="form-group">
+                        <div class="setting-header">
+                            <label class="form-label" for="ds-name">Display name <span class="required">*</span></label>
+                            <span class="badge badge-sm badge-on">Saved</span>
+                        </div>
+                        <input class="form-input" id="ds-name" placeholder="My assistant">
+                        <small class="form-hint">Shown in chat and notifications.</small>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="ds-key">API key</label>
+                        <div class="input-group">
+                            <input class="form-input" id="ds-key" type="password" value="sk-example-key">
+                            <button class="btn-icon" type="button" aria-label="Show or hide value"><svg class="icon" aria-hidden="true"><use href="#icon-eye"></use></svg></button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="ds-select">Model</label>
+                        <select class="form-select" id="ds-select"><option>Balanced</option><option>Fast</option></select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="ds-textarea">Custom instructions</label>
+                        <textarea class="form-textarea" id="ds-textarea" placeholder="Be concise and friendly…"></textarea>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="form-group">
+                        <span class="form-label">Toggle</span>
+                        <label class="toggle-label"><input type="checkbox" class="toggle-input" checked><span class="toggle-slider"></span><span class="toggle-text">Enabled</span></label>
+                        <label class="toggle-label"><input type="checkbox" class="toggle-input"><span class="toggle-slider"></span><span class="toggle-text">Disabled</span></label>
+                    </div>
+                    <div class="form-group">
+                        <span class="form-label">Checkbox &amp; radio</span>
+                        <label class="checkbox-label"><input type="checkbox" checked> Send me a daily summary</label>
+                        <div class="radio-group">
+                            <label class="radio-label"><input type="radio" name="ds-r" checked> None</label>
+                            <label class="radio-label"><input type="radio" name="ds-r"> Static headers</label>
+                            <label class="radio-label"><input type="radio" name="ds-r"> OAuth 2.1</label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="ds-slider">Temperature</label>
+                        <div class="slider-group">
+                            <input type="range" class="form-slider" id="ds-slider" min="0" max="1" step="0.1" value="0.7" oninput="document.getElementById('ds-slider-v').textContent=this.value">
+                            <span class="slider-value" id="ds-slider-v">0.7</span>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="ds-disabled">Disabled</label>
+                        <input class="form-input" id="ds-disabled" value="Managed by your administrator" disabled>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="ds-invalid">With an error</label>
+                        <input class="form-input" id="ds-invalid" aria-invalid="true" value="not-an-email">
+                        <small class="form-hint text-danger">Enter a valid email address.</small>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- FEEDBACK -->
+        <section class="ds-section" id="feedback">
+            <h2>Badges &amp; alerts</h2>
+            <p class="ds-lead">Status is always communicated with text as well as colour. Colour means an outcome (connected, failed, expiring); states such as enabled or public use the neutral <code>.badge-on</code> / <code>.badge-off</code>. For job and run statuses use <code>statusBadgeClass(status)</code>.</p>
+            <div class="card">
+                <div class="ds-row">
+                    <span class="badge badge-success"><span class="status-dot"></span>Connected</span>
+                    <span class="badge badge-warning"><span class="status-dot"></span>Expires soon</span>
+                    <span class="badge badge-danger"><span class="status-dot"></span>Failed</span>
+                    <span class="badge badge-on">Enabled</span>
+                    <span class="badge badge-off">Disabled</span>
+                    <span class="badge badge-neutral">Pending</span>
+                    <span class="badge badge-outline">MCP</span>
+                    <span class="badge badge-sm badge-on">Saved</span>
+                    <span class="meta-item">15 tools assigned</span>
+                    <span class="spinner spinner-sm" role="status" aria-label="Loading"></span>
+                </div>
+                <div class="ds-label mt-3">Loading</div>
+                <div class="flex-col gap-2 ds-narrow">
+                    <span class="skeleton"></span>
+                    <span class="skeleton"></span>
+                    <span class="skeleton"></span>
+                </div>
+                <div class="mt-3">
+                    <div class="alert"><svg class="icon" aria-hidden="true"><use href="#icon-alert"></use></svg><div><strong>Heads up.</strong> Your assistant will use these credentials on your behalf.</div></div>
+                    <div class="alert alert-success"><svg class="icon" aria-hidden="true"><use href="#icon-check"></use></svg><div>Connection successful. You're all set.</div></div>
+                    <div class="alert alert-warning"><svg class="icon" aria-hidden="true"><use href="#icon-alert"></use></svg><div>Your Google token expires in 3 days.</div></div>
+                    <div class="alert alert-danger mb-0"><svg class="icon" aria-hidden="true"><use href="#icon-close"></use></svg><div>We couldn't reach the server. Please try again.</div></div>
+                </div>
+            </div>
+            <div class="ds-dodont">
+                <div class="ds-do">
+                    <div class="ds-row"><span class="badge badge-on">Enabled</span><span class="badge badge-success">Connected</span></div>
+                    <p><strong>Do</strong> keep states neutral and save green for real successes.</p>
+                </div>
+                <div class="ds-dont">
+                    <div class="ds-row"><span class="badge badge-success">Enabled</span><span class="badge badge-success">Running</span></div>
+                    <p><strong>Don't</strong> colour a state green. "Enabled" is not an achievement.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- SURFACES -->
+        <section class="ds-section" id="surfaces">
+            <h2>Cards, tabs &amp; tables</h2>
+            <p class="ds-lead">Content sits on the canvas in white cards with a hairline border. Tabs are a segmented control.</p>
+            <div class="tabs">
+                <button class="tab active">Agents</button>
+                <button class="tab">Tools</button>
+                <button class="tab">Integrations</button>
+                <button class="tab">Advanced</button>
+            </div>
+            <div class="stats-grid">
+                <div class="stat-card"><div class="stat-label">Conversations</div><div class="stat-value">128</div></div>
+                <div class="stat-card"><div class="stat-label">Success rate</div><div class="stat-value">99.2%</div></div>
+                <div class="stat-card"><div class="stat-label">Scheduled tasks</div><div class="stat-value">6</div></div>
+            </div>
+            <div class="card card-flush mb-3">
+                <div class="card-header">Scheduled tasks <span class="card-description mt-0">Europe/Brussels</span></div>
+                <div class="table-scroll">
+                    <table class="table table-stack">
+                        <thead><tr><th><span class="sr-only">Enabled</span></th><th>Name</th><th>Schedule</th><th><span class="sr-only">Actions</span></th></tr></thead>
+                        <tbody>
+                            <tr><td data-label="Enabled"><label class="toggle-label"><input type="checkbox" class="toggle-input" aria-label="Enable Morning briefing" checked><span class="toggle-slider"></span></label></td><td>Morning briefing</td><td data-label="Schedule"><code>0 7 * * 1-5</code></td><td data-label="Actions"><div class="row-actions"><button class="job-action-btn">Edit</button><button class="job-action-btn"><svg class="icon icon-filled" aria-hidden="true"><use href="#icon-play"></use></svg>Run now</button></div></td></tr>
+                            <tr><td data-label="Enabled"><label class="toggle-label"><input type="checkbox" class="toggle-input" aria-label="Enable Weekly invoice check"><span class="toggle-slider"></span></label></td><td>Weekly invoice check</td><td data-label="Schedule"><code>0 9 * * 1</code></td><td data-label="Actions"><div class="row-actions"><button class="job-action-btn">Edit</button><button class="job-action-btn"><svg class="icon icon-filled" aria-hidden="true"><use href="#icon-play"></use></svg>Run now</button><button class="job-action-btn btn-danger job-action-icon" aria-label="Delete" title="Delete"><svg class="icon" aria-hidden="true"><use href="#icon-trash"></use></svg></button></div></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card">
+                <div class="empty-state">
+                    <span class="empty-state-icon"><svg class="icon icon-md" aria-hidden="true"><use href="#icon-artifacts"></use></svg></span>
+                    <div class="empty-state-title">No artifacts yet</div>
+                    <div>Ask the assistant to create and store an HTML page or report.</div>
+                    <button class="btn btn-secondary btn-sm mt-1">Start a chat</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- LAYOUT -->
+        <section class="ds-section" id="layout">
+            <h2>Responsive layout</h2>
+            <p class="ds-lead">Components respond to their own width, not the screen's. Every card is a <code>card</code> size container and every table wrapper a <code>table</code> container, so layout uses <code>@container</code> queries. Below, the same table sits in a narrow card and stacks into rows even on a wide screen. Viewport media queries (768px) are kept for page chrome: navigation, sidebars and bottom-sheet modals.</p>
+            <div class="card ds-narrow">
+                <div class="card-header">Narrow card</div>
+                <div class="table-scroll">
+                    <table class="table table-stack">
+                        <thead><tr><th>Name</th><th>Status</th><th><span class="sr-only">Actions</span></th></tr></thead>
+                        <tbody>
+                            <tr><td>Morning briefing</td><td data-label="Status"><span class="badge badge-success">Completed</span></td><td data-label="Actions"><div class="row-actions"><button class="job-action-btn"><svg class="icon icon-filled" aria-hidden="true"><use href="#icon-play"></use></svg>Run now</button></div></td></tr>
+                            <tr><td>Invoice check</td><td data-label="Status"><span class="badge badge-danger">Failed</span></td><td data-label="Actions"><div class="row-actions"><button class="job-action-btn">Retry</button></div></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- OVERLAYS -->
+        <section class="ds-section" id="overlays">
+            <h2>Modals &amp; toasts</h2>
+            <p class="ds-lead">Dialogs are calm and centred (bottom sheets on phones). Toasts are quiet, with a small coloured dot for meaning.</p>
+            <div class="ds-grid-2">
+                <div class="modal ds-demo-modal">
+                    <div class="modal-content">
+                        <div class="modal-header"><h2>Add MCP server</h2><button class="modal-close" aria-label="Close"><svg class="icon" aria-hidden="true"><use href="#icon-close"></use></svg></button></div>
+                        <div class="modal-body">
+                            <div class="form-group"><label for="ds-mcp">Server URL</label><input class="form-input" id="ds-mcp" placeholder="https://example.com/mcp"></div>
+                        </div>
+                        <div class="modal-footer"><button class="btn btn-secondary">Cancel</button><button class="btn btn-primary">Connect and add</button></div>
+                    </div>
+                </div>
+                <div class="flex-col gap-3">
+                    <div class="toast success ds-demo-toast">Settings saved</div>
+                    <div class="toast warning ds-demo-toast">Your Outlook token expires soon</div>
+                    <div class="toast error ds-demo-toast">Couldn't reach Notion. Check your key.</div>
+                    <div class="toast ds-demo-toast">Started a new conversation</div>
+                    <div class="ds-row">
+                        <button class="btn btn-secondary btn-sm" onclick="toast.success('Settings saved')">Show success toast</button>
+                        <button class="btn btn-secondary btn-sm" onclick="modal.confirm('Delete artifact?', 'Delete “Weekly report”? This cannot be undone.', () => {}, { confirmText: 'Delete', danger: true })">Open confirm dialog</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- BRAND -->
+        <section class="ds-section" id="brand">
+            <h2>Branding</h2>
+            <p class="ds-lead">The baseline is fully monochrome. An installation can add a brand accent by setting two variables, <code>--brand</code> and <code>--brand-contrast</code>; hover, tints and focus rings follow automatically. If the brand is too dark for the dark theme, add <code>--brand-dark</code> and <code>--brand-dark-contrast</code>. Try it:</p>
+            <div class="card">
+                <div class="ds-row">
+                    <label class="form-label" for="ds-brand">Brand colour</label>
+                    <input class="form-input ds-brand-input" id="ds-brand" type="color" value="#1c1c1a">
+                    <button class="btn btn-ghost btn-sm" id="ds-brand-reset">Reset</button>
+                </div>
+                <div class="ds-row">
+                    <button class="btn btn-primary">Primary action</button>
+                    <label class="toggle-label"><input type="checkbox" class="toggle-input" checked><span class="toggle-slider"></span></label>
+                    <input type="checkbox" checked aria-label="Example checkbox">
+                    <span class="badge badge-on">On badge</span>
+                    <input class="form-input measure-sm" placeholder="Focus me">
+                </div>
+                <pre class="mt-3"><code>:root {
+    --brand: #3b5bdb;          /* your accent */
+    --brand-contrast: #ffffff; /* text on top of it */
+
+    /* optional: a lighter variant for the dark theme */
+    --brand-dark: #91a7ff;
+    --brand-dark-contrast: #121211;
+}</code></pre>
+            </div>
+        </section>
+    </div>
+    </div>
+    </div>
+
+    <script src="/static/js/components.js"></script>
+    <script src="/static/js/common.js"></script>
+    <script>
+        const neutral = [
+            ['--color-bg', 'Canvas'], ['--color-surface', 'Surface'], ['--color-sunken', 'Sunken'],
+            ['--color-border-subtle', 'Border subtle'], ['--color-border', 'Border'], ['--color-border-strong', 'Border strong'],
+            ['--color-border-control', 'Control edge'], ['--color-text-tertiary', 'Text tertiary'],
+            ['--color-text-secondary', 'Text secondary'], ['--color-text', 'Text'], ['--color-accent', 'Accent'],
+            ['--color-accent-subtle', 'Accent subtle'],
+        ];
+        const semantic = [];
+        ['success', 'warning', 'danger', 'neutral'].forEach(k => {
+            semantic.push([`--color-${k}-bg`, `${k} bg`], [`--color-${k}-fg`, `${k} fg`], [`--color-${k}-solid`, `${k} solid`]);
+        });
+        function swatches(id, list) {
+            document.getElementById(id).innerHTML = list.map(([v, label]) => `
+                <div class="ds-swatch"><div class="ds-swatch-color" style="--ds-value:var(${v})"></div>
+                <div class="ds-swatch-meta"><strong>${label}</strong><code>${v}</code></div></div>`).join('');
+        }
+        swatches('swatches-neutral', neutral);
+        swatches('swatches-semantic', semantic);
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const ids = [...document.querySelectorAll('#oa-icon-sprite symbol')].map(sym => sym.id.replace('icon-', ''));
+            document.getElementById('ds-icons').innerHTML = ids
+                .map(id => `<div class="ds-icon">${icon(id)}<span>${id}</span></div>`).join('');
+        });
+
+        const spacing = ['--space-1', '--space-2', '--space-3', '--space-4', '--space-5', '--space-6', '--space-8', '--space-10', '--space-12', '--space-16'];
+        document.getElementById('ds-spacing').innerHTML = spacing
+            .map(v => `<div class="ds-space"><code>${v}</code><div class="ds-space-bar" style="--ds-value:var(${v})"></div></div>`).join('');
+
+        // Theme switcher
+        const themeButtons = document.querySelectorAll('[data-theme-choice]');
+        function syncThemeButtons() {
+            themeButtons.forEach(b => b.classList.toggle('active', b.dataset.themeChoice === window.theme.get()));
+        }
+        themeButtons.forEach(b => b.addEventListener('click', () => { window.theme.set(b.dataset.themeChoice); syncThemeButtons(); }));
+        syncThemeButtons();
+
+        // Brand playground
+        const brand = document.getElementById('ds-brand');
+        function contrastFor(hex) {
+            const n = parseInt(hex.slice(1), 16);
+            const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(c => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; });
+            const L = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+            return L > 0.4 ? '#1c1c1a' : '#ffffff';
+        }
+        brand.addEventListener('input', () => {
+            document.documentElement.style.setProperty('--brand', brand.value);
+            document.documentElement.style.setProperty('--brand-contrast', contrastFor(brand.value));
+        });
+        document.getElementById('ds-brand-reset').addEventListener('click', () => {
+            document.documentElement.style.removeProperty('--brand');
+            document.documentElement.style.removeProperty('--brand-contrast');
+            brand.value = '#1c1c1a';
+        });
+    </script>
+</body>
+</html>
