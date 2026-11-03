@@ -69,10 +69,10 @@ Ask for a web page, dashboard, or document and the assistant saves it as an **ar
 
 - 🔒 **Private by design** — Single-user, single-container, self-hosted. Credentials are encrypted at rest, and your data never leaves your machine.
 - 🧠 **A team, not a chatbot** — 10 built-in agents, 165+ tools, and a coordinator that knows who to call. Create your own agents in the UI.
-- 🔓 **No lock-in** — Bring your own brain: OpenRouter, Anthropic, Groq, or run fully offline with [Ollama](docs/integrations/llm-providers.md) / vLLM.
+- 🔓 **No lock-in** — Bring your own brain: OpenRouter, Anthropic, Groq, or run fully offline with [Ollama](https://docs.open-assistant.org/integrations/llm-providers/) / vLLM.
 - ⏰ **Works while you sleep** — Recurring scheduled tasks and one-off tasks. A nightly job even maintains your assistant's memory and personality.
-- 🧩 **Extensible** — Remote [MCP servers](docs/mcp-servers.md), a plugin system, and custom agents mean the toolset grows with you.
-- 💬 **Wherever you are** — Full-featured web UI, plus two-way [WhatsApp](docs/integrations/whatsapp.md) and [Slack](docs/integrations/slack.md) messaging (text, voice notes, and images).
+- 🧩 **Extensible** — Remote [MCP servers](https://docs.open-assistant.org/mcp-servers/), a plugin system, and custom agents mean the toolset grows with you.
+- 💬 **Wherever you are** — Full-featured web UI, plus two-way [WhatsApp](https://docs.open-assistant.org/integrations/whatsapp/) and [Slack](https://docs.open-assistant.org/integrations/slack/) messaging (text, voice notes, and images).
 
 ## 🔌 Integrations
 
@@ -91,7 +91,7 @@ Ask for a web page, dashboard, or document and the assistant saves it as an **ar
 | 🎙️ | **Whisper · Mistral OCR** | Transcribe voice messages, read PDFs |
 | 🔌 | **MCP servers** | Connect any remote MCP server, authenticated with static headers |
 
-Each integration is enabled independently — connect only what you need, and the tools appear. See the [integration guides](docs/integrations/) for setup.
+Each integration is enabled independently — connect only what you need, and the tools appear. See the [integration guides](https://docs.open-assistant.org/integrations/) for setup.
 
 ## 🚀 Quick start
 
@@ -234,23 +234,23 @@ open-assistant/
 
 Full docs live at [docs.open-assistant.org](https://docs.open-assistant.org) and in the [`docs/`](docs/) directory:
 
-- [Install & update guide](docs/setup/install-and-update.md)
-- [Configuration reference](docs/setup/configuration.md)
-- [LLM provider setup](docs/integrations/llm-providers.md) — OpenRouter, Anthropic, Groq, Ollama, vLLM
-- [MCP servers](docs/mcp-servers.md)
-- [Slash commands](docs/commands.md) — `/clear` and friends
-- [Development setup](docs/setup/development.md)
+- [Install & update guide](https://docs.open-assistant.org/setup/install-and-update/)
+- [Configuration reference](https://docs.open-assistant.org/setup/configuration/)
+- [LLM provider setup](https://docs.open-assistant.org/integrations/llm-providers/) — OpenRouter, Anthropic, Groq, Ollama, vLLM
+- [MCP servers](https://docs.open-assistant.org/mcp-servers/)
+- [Slash commands](https://docs.open-assistant.org/commands/) — `/clear` and friends
+- [Development setup](https://docs.open-assistant.org/setup/development/)
 
 ## 🤝 Contributing
 
-Contributions are welcome — bug reports, feature ideas, integrations, and docs all count. Read [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow, and [docs/setup/development.md](docs/setup/development.md) to get a dev environment running. The project follows documentation-first development: features are documented before they're implemented.
+Contributions are welcome — bug reports, feature ideas, integrations, and docs all count. Read [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow, and [docs/setup/development.md](https://docs.open-assistant.org/setup/development/) to get a dev environment running. The project follows documentation-first development: features are documented before they're implemented.
 
 ## 🔒 Security
 
 - All credentials are stored encrypted (Fernet) — never in plaintext
 - OAuth2 for every service integration, with automatic token refresh
 - Single-user by design: no multi-tenant surface to attack
-- See the [configuration guide](docs/setup/configuration.md) for security best practices
+- See the [configuration guide](https://docs.open-assistant.org/setup/configuration/) for security best practices
 
 ## 📄 License
 
