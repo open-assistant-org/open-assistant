@@ -608,7 +608,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
         display_order=2,
         ui_widget="text",
         placeholder="123456789-abc123.apps.googleusercontent.com",
-        help_url="https://github.com/open-assistant-org/open-assistant/blob/main/docs/integrations/google.md",
+        help_url="https://docs.open-assistant.org/integrations/google/",
     ),
     "google.client_secret": SettingDefinition(
         key="google.client_secret",
@@ -622,7 +622,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
         display_order=3,
         ui_widget="masked",
         placeholder="Enter your client secret",
-        help_url="https://github.com/open-assistant-org/open-assistant/blob/main/docs/integrations/google.md",
+        help_url="https://docs.open-assistant.org/integrations/google/",
     ),
     "google.project_id": SettingDefinition(
         key="google.project_id",
@@ -1257,7 +1257,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
         display_order=2,
         ui_widget="text",
         placeholder="123456789-abc123.apps.googleusercontent.com",
-        help_url="https://github.com/open-assistant-org/open-assistant/blob/main/docs/integrations/google_ads.md",
+        help_url="https://docs.open-assistant.org/integrations/google_ads/",
     ),
     "google_ads.client_secret": SettingDefinition(
         key="google_ads.client_secret",
@@ -1271,7 +1271,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
         display_order=3,
         ui_widget="masked",
         placeholder="Enter your client secret",
-        help_url="https://github.com/open-assistant-org/open-assistant/blob/main/docs/integrations/google_ads.md",
+        help_url="https://docs.open-assistant.org/integrations/google_ads/",
     ),
     "google_ads.developer_token": SettingDefinition(
         key="google_ads.developer_token",
@@ -1285,7 +1285,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
         display_order=4,
         ui_widget="masked",
         placeholder="abc123def456...",
-        help_url="https://github.com/open-assistant-org/open-assistant/blob/main/docs/integrations/google_ads.md",
+        help_url="https://docs.open-assistant.org/integrations/google_ads/",
     ),
     "google_ads.customer_id": SettingDefinition(
         key="google_ads.customer_id",
@@ -1298,7 +1298,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
         display_order=5,
         ui_widget="text",
         placeholder="123-456-7890",
-        help_url="https://github.com/open-assistant-org/open-assistant/blob/main/docs/integrations/google_ads.md",
+        help_url="https://docs.open-assistant.org/integrations/google_ads/",
     ),
     "google_ads.login_customer_id": SettingDefinition(
         key="google_ads.login_customer_id",
@@ -1311,7 +1311,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
         display_order=6,
         ui_widget="text",
         placeholder="123-456-7890",
-        help_url="https://github.com/open-assistant-org/open-assistant/blob/main/docs/integrations/google_ads.md",
+        help_url="https://docs.open-assistant.org/integrations/google_ads/",
     ),
     "google_ads.project_id": SettingDefinition(
         key="google_ads.project_id",
