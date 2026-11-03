@@ -118,11 +118,11 @@ function hideManagedTabs() {
     tabsToHide.forEach(tabName => {
         const tab = document.querySelector(`.tab[data-tab="${tabName}"]`);
         if (tab) {
-            tab.style.display = 'none';
+            tab.hidden = true;
         }
         const tabContent = document.getElementById(`${tabName}-tab`);
         if (tabContent) {
-            tabContent.style.display = 'none';
+            tabContent.hidden = true;
         }
     });
 
@@ -138,7 +138,7 @@ function hideManagedTabs() {
     sectionsToHide.forEach(sectionId => {
         const section = document.getElementById(sectionId);
         if (section) {
-            section.style.display = 'none';
+            section.hidden = true;
         }
     });
 }
@@ -344,7 +344,8 @@ function renderField(setting) {
     // Store current value
     settingsState.currentValues[def.key] = value;
 
-    const sourceBadge = `<span class="setting-source source-${source}">${source.toUpperCase()}</span>`;
+    const SOURCE_LABELS = { db: 'Saved', env: 'Environment', default: 'Default' };
+    const sourceBadge = `<span class="badge badge-sm ${source === 'db' ? 'badge-on' : 'badge-neutral'}" title="Where this value comes from">${SOURCE_LABELS[source] || source}</span>`;
 
     let fieldHtml = '';
 
@@ -384,7 +385,7 @@ function renderField(setting) {
     const startsHidden = dependsOn && !dependencyValueMatches(dependsOn);
 
     return `
-        <div class="form-group"${dependencyAttrs}${startsHidden ? ' style="display: none;"' : ''}>
+        <div class="form-group"${dependencyAttrs}${startsHidden ? ' hidden' : ''}>
             <div class="setting-header">
                 <label class="form-label" for="${def.key}">
                     ${def.display_name}
@@ -417,7 +418,7 @@ function applyFieldDependencies() {
             key: group.getAttribute('data-depends-on-key'),
             value: group.getAttribute('data-depends-on-value') === 'true',
         };
-        group.style.display = dependencyValueMatches(dependsOn) ? '' : 'none';
+        group.hidden = !dependencyValueMatches(dependsOn);
     });
 }
 
@@ -437,7 +438,7 @@ function renderTextInput(def, value) {
                 ${def.is_required ? 'required' : ''}
                 data-original-value="${value || ''}"
             >
-            ${isMasked ? `<button type="button" class="btn-icon" onclick="toggleMasked('${def.key}')">👁️</button>` : ''}
+            ${isMasked ? `<button type="button" class="btn-icon" onclick="toggleMasked('${def.key}')" title="Show or hide value" aria-label="Show or hide value"><svg class="icon" aria-hidden="true"><use href="#icon-eye"></use></svg></button>` : ''}
         </div>
     `;
 }
@@ -693,7 +694,7 @@ async function createIntegrationCard(serviceName) {
         const isOAuthService = serviceName === 'google' || serviceName === 'outlook' || serviceName === 'google_ads';
 
         // Build action buttons HTML
-        // In managed mode, some services only get Test Connection button (no Save Settings)
+        // In managed mode, some services only get Test connection button (no Save settings)
         const isManagedOnlyService = isManaged && ['google_navigator', 'brave', 'whisper', 'mistral_ocr'].includes(serviceName);
         // Services that need no configuration beyond the enable toggle (no credentials, no settings)
         const isNoConfigService = serviceName === 'yahoo_finance';
@@ -704,41 +705,41 @@ async function createIntegrationCard(serviceName) {
                                      serviceName === 'google_ads' ? 'authenticateGoogleAds' :
                                      'authenticateOutlook';
             actionButtonsHtml = `
-                <button onclick="${authFunctionName}()" class="btn btn-primary">
-                    🔐 Authenticate ${serviceName.charAt(0).toUpperCase() + serviceName.slice(1)}
+                <button onclick="${authFunctionName}()" class="btn btn-secondary">
+                    Authenticate ${serviceName.charAt(0).toUpperCase() + serviceName.slice(1)}
                 </button>
                 <button onclick="testConnection('${serviceName}')" class="btn btn-secondary">
-                    🔍 Test Connection
+                    Test connection
                 </button>
                 ${(!isManaged || managedFields.length === 0) ? `<button onclick="saveIntegration('${serviceName}')" class="btn btn-primary">
-                    💾 Save Settings
+                    Save settings
                 </button>` : ''}
             `;
         } else if (serviceName === 'whatsapp') {
             actionButtonsHtml = `
-                <button onclick="linkWhatsApp()" class="btn btn-primary">
-                    📱 Link WhatsApp
+                <button onclick="linkWhatsApp()" class="btn btn-secondary">
+                    Link WhatsApp
                 </button>
                 <button onclick="testConnection('${serviceName}')" class="btn btn-secondary">
-                    🔍 Test Connection
+                    Test connection
                 </button>
                 <button onclick="saveIntegration('${serviceName}')" class="btn btn-primary">
-                    💾 Save Settings
+                    Save settings
                 </button>
             `;
         } else if (isNoConfigService) {
             actionButtonsHtml = `
                 <button onclick="testConnection('${serviceName}')" class="btn btn-secondary">
-                    🔍 Test Connection
+                    Test connection
                 </button>
             `;
         } else {
             actionButtonsHtml = `
                 <button onclick="testConnection('${serviceName}')" class="btn btn-secondary">
-                    🔍 Test Connection
+                    Test connection
                 </button>
                 ${!isManagedOnlyService ? `<button onclick="saveIntegration('${serviceName}')" class="btn btn-primary">
-                    💾 Save Settings
+                    Save settings
                 </button>` : ''}
             `;
         }
@@ -746,9 +747,8 @@ async function createIntegrationCard(serviceName) {
         card.innerHTML = `
             <div class="integration-header" onclick="toggleIntegrationExpanded('${serviceName}')">
                 <div class="integration-title">
-                    <span class="integration-icon">${getServiceIcon(serviceName)}</span>
+                    <span class="integration-icon">${getServiceIcon(serviceName)}<span class="expand-icon">${icon('chevron-down')}</span></span>
                     <h4>${getServiceDisplayName(serviceName)}</h4>
-                    <span class="expand-icon">▼</span>
                 </div>
                 <label class="toggle-label" onclick="event.stopPropagation()">
                     <input
@@ -760,10 +760,10 @@ async function createIntegrationCard(serviceName) {
                     <span class="toggle-slider"></span>
                 </label>
             </div>
-            <div class="integration-body" style="display: none;">
+            <div class="integration-body" hidden>
                 ${(!isManaged || managedFields.length === 0) && !isNoConfigService ? `<div class="integration-help">
                     <a href="${docUrl}" target="_blank" class="help-link">
-                        📚 How to get ${serviceName} credentials?
+                        How to get ${getServiceDisplayName(serviceName)} credentials ${icon('arrow-up-right')}
                     </a>
                 </div>` : ''}
                 <div class="integration-settings">
@@ -785,7 +785,7 @@ async function createIntegrationCard(serviceName) {
         card.innerHTML = `
             <div class="integration-header">
                 <div class="integration-title">
-                    <span class="integration-icon">⚠️</span>
+                    <span class="integration-icon">${icon('alert')}</span>
                     <h4>${getServiceDisplayName(serviceName)}</h4>
                 </div>
             </div>
@@ -797,25 +797,28 @@ async function createIntegrationCard(serviceName) {
     }
 }
 
+// Lucide icon per service (sprite ids in js/components.js)
+const SERVICE_ICON_NAMES = {
+    google: 'svc-google',
+    google_navigator: 'svc-map',
+    google_ads: 'svc-ads',
+    outlook: 'svc-mail',
+    notion: 'svc-notion',
+    nextcloud: 'svc-cloud',
+    whatsapp: 'svc-whatsapp',
+    slack: 'svc-slack',
+    brave: 'svc-search',
+    browser: 'svc-globe',
+    whisper: 'svc-mic',
+    mistral_ocr: 'svc-ocr',
+    toggl: 'svc-timer',
+    google_news: 'svc-news',
+    yahoo_finance: 'svc-finance',
+    system: 'svc-system',
+};
+
 function getServiceIcon(service) {
-    const icons = {
-        google: '🔵',
-        google_navigator: '🗺️',
-        google_ads: '📊',
-        outlook: '📨',
-        notion: '📝',
-        nextcloud: '☁️',
-        whatsapp: '💬',
-        slack: '📢',
-        brave: '🔎',
-        browser: '🌐',
-        whisper: '🎙️',
-        mistral_ocr: '🔍',
-        toggl: '⏱️',
-        google_news: '📰',
-        yahoo_finance: '📈'
-    };
-    return icons[service] || '🔧';
+    return icon(SERVICE_ICON_NAMES[service] || 'svc-plug');
 }
 
 function getServiceDisplayName(service) {
@@ -861,9 +864,9 @@ function getIntegrationDocUrl(service) {
 
 function renderConnectionStatus(hasCredentials, service) {
     if (hasCredentials) {
-        return '<span class="status-badge status-success">Connected</span>';
+        return '<span class="badge badge-success">Connected</span>';
     } else {
-        return '<span class="status-badge status-warning">Not Configured</span>';
+        return '<span class="badge badge-off">Not configured</span>';
     }
 }
 
@@ -887,13 +890,10 @@ function toggleIntegrationExpanded(service) {
     const body = card.querySelector('.integration-body');
     const icon = card.querySelector('.expand-icon');
 
-    if (body.style.display === 'none') {
-        body.style.display = 'block';
-        icon.textContent = '▲';
-    } else {
-        body.style.display = 'none';
-        icon.textContent = '▼';
-    }
+    const expanded = body.hidden;
+    body.hidden = !expanded;
+    if (icon) icon.classList.toggle('expanded', expanded);
+    card.classList.toggle('is-expanded', expanded);
 }
 
 async function saveIntegration(service) {
@@ -983,7 +983,7 @@ async function saveIntegrationSettings() {
 }
 
 function closeIntegrationModal() {
-    document.getElementById('integrationModal').style.display = 'none';
+    document.getElementById('integrationModal').classList.remove('active');
     settingsState.currentIntegration = null;
 }
 
@@ -1073,23 +1073,23 @@ async function savePrompts() {
 async function testLLMConnection() {
     try {
         const resultDiv = document.getElementById('llm-test-result');
-        resultDiv.style.display = 'block';
+        resultDiv.hidden = false;
         resultDiv.innerHTML = '<p>Testing connection...</p>';
 
         const response = await api.post('/api/settings/test-llm');
 
         if (response.status === 'connected') {
-            resultDiv.innerHTML = `<p class="success">✅ Connection successful!</p>`;
+            resultDiv.innerHTML = `<p class="success">Connection successful</p>`;
         } else if (response.status === 'error') {
-            resultDiv.innerHTML = `<p class="error">❌ ${response.message}</p>`;
+            resultDiv.innerHTML = `<p class="error">${response.message}</p>`;
         } else {
-            resultDiv.innerHTML = `<p class="warning">⚠️ ${response.message}</p>`;
+            resultDiv.innerHTML = `<p class="warning">${response.message}</p>`;
         }
 
     } catch (error) {
         const resultDiv = document.getElementById('llm-test-result');
-        resultDiv.style.display = 'block';
-        resultDiv.innerHTML = `<p class="error">❌ Test failed: ${error.message}</p>`;
+        resultDiv.hidden = false;
+        resultDiv.innerHTML = `<p class="error">Test failed: ${error.message}</p>`;
     }
 }
 
@@ -1135,8 +1135,8 @@ async function loadAuditLog() {
                             <td>${entry.event_type}</td>
                             <td>${entry.action}</td>
                             <td>
-                                <span class="status-badge ${entry.success ? 'status-success' : 'status-error'}">
-                                    ${entry.success ? '✅' : '❌'}
+                                <span class="badge ${entry.success ? 'badge-success' : 'badge-danger'}">
+                                    ${entry.success ? 'Success' : 'Failed'}
                                 </span>
                             </td>
                             <td>${entry.user_id || 'system'}</td>
@@ -1184,11 +1184,11 @@ async function exportSettings() {
 }
 
 async function resetAllSettings() {
-    if (!confirm('Are you sure you want to reset ALL settings to defaults? This cannot be undone.')) {
-        return;
-    }
-
-    if (!confirm('This will delete all settings from the database. Are you REALLY sure?')) {
+    if (!await modal.ask(
+        'Reset all settings?',
+        'Every setting goes back to its default and all stored settings are deleted from the database. This cannot be undone.',
+        { confirmText: 'Reset all settings', danger: true }
+    )) {
         return;
     }
 
@@ -1228,22 +1228,22 @@ async function fetchConnectionStatus(serviceName) {
 
 function getStatusClass(status) {
     const map = {
-        'connected': 'status-success',
-        'expired': 'status-warning',
-        'error': 'status-error',
-        'not_configured': 'status-info'
+        'connected': 'badge-success',
+        'expired': 'badge-warning',
+        'error': 'badge-danger',
+        'not_configured': 'badge-neutral'
     };
-    return map[status] || 'status-info';
+    return map[status] || 'badge-neutral';
 }
 
 function getStatusText(status) {
     const map = {
-        'connected': '✓ Connected',
-        'expired': '⚠ Expired',
-        'error': '✗ Error',
-        'not_configured': '○ Not Configured'
+        'connected': 'Connected',
+        'expired': 'Expired',
+        'error': 'Error',
+        'not_configured': 'Not configured'
     };
-    return map[status] || '○ Unknown';
+    return map[status] || 'Unknown';
 }
 
 async function refreshConnectionStatus(service) {
@@ -1486,7 +1486,7 @@ async function pollWhatsAppQr() {
 
         if (response.ready) {
             // Already connected
-            qrContainer.innerHTML = '<p style="color: var(--success-color); font-size: 1.2rem;">Connected</p>';
+            qrContainer.innerHTML = '<p class="qr-status text-success">Connected</p>';
             statusText.textContent = 'WhatsApp is linked and ready.';
             toast.success('WhatsApp is connected!');
             stopWhatsAppQrPolling();
@@ -1509,7 +1509,7 @@ async function pollWhatsAppQr() {
             });
             statusText.textContent = 'Scan this code with your phone to link WhatsApp.';
         } else {
-            qrContainer.innerHTML = '<p style="color: var(--text-muted);">Waiting for QR code from bridge...</p>';
+            qrContainer.innerHTML = '<p class="qr-status">Waiting for QR code from bridge...</p>';
             statusText.textContent = 'Make sure the WhatsApp bridge is running.';
         }
 
@@ -1534,7 +1534,7 @@ function closeWhatsAppQrModal() {
 
     // Reset modal content
     document.getElementById('whatsappQrCode').innerHTML =
-        '<p style="color: var(--text-muted);">Waiting for QR code...</p>';
+        '<p class="qr-status">Waiting for QR code...</p>';
     document.getElementById('whatsappQrStatus').textContent =
         'Waiting for authentication...';
 }
@@ -1583,7 +1583,7 @@ async function testConnection(service) {
 
         // Show result
         if (response.status === 'connected' || response.status === 'success') {
-            toast.success(`✓ ${service} connection successful!`);
+            toast.success(`${service} connection successful`);
         } else if (response.status === 'warning') {
             // For warning status, show as info with better message
             toast.info(`${service}: Credentials configured. ${response.message}`);
@@ -1595,7 +1595,7 @@ async function testConnection(service) {
                 // Could open auth URL in popup if needed
             }
         } else if (response.status === 'error') {
-            toast.error(`✗ ${response.message}`);
+            toast.error(response.message);
         } else {
             toast.warning(`${service}: ${response.message || 'Unknown status'}`);
         }
@@ -1653,8 +1653,6 @@ function createAgentCard(agent, index, total) {
     }
 
     const toolsCount = agent.tools ? agent.tools.length : 0;
-    const statusClass = agent.enabled ? 'status-success' : 'status-warning';
-    const statusText = agent.enabled ? 'Enabled' : 'Disabled';
     const isCoordinator = agent.name === 'coordinator';
 
     const upDisabled = index === 0 ? 'disabled' : '';
@@ -1665,8 +1663,8 @@ function createAgentCard(agent, index, total) {
             <div class="agent-header">
                 <div class="agent-title">
                     <div class="agent-priority-controls">
-                        <button class="btn-priority" onclick="moveAgent('${agent.name}', 'up')" ${upDisabled} title="Move up">&#9650;</button>
-                        <button class="btn-priority" onclick="moveAgent('${agent.name}', 'down')" ${downDisabled} title="Move down">&#9660;</button>
+                        <button class="btn-priority" onclick="moveAgent('${agent.name}', 'up')" ${upDisabled} title="Move up" aria-label="Move up">${icon('chevron-up')}</button>
+                        <button class="btn-priority" onclick="moveAgent('${agent.name}', 'down')" ${downDisabled} title="Move down" aria-label="Move down">${icon('chevron-down')}</button>
                     </div>
                     <span class="agent-icon">${getAgentIcon(agent.name)}</span>
                     <div class="agent-info">
@@ -1675,11 +1673,11 @@ function createAgentCard(agent, index, total) {
                     </div>
                 </div>
                 <div class="agent-actions">
-                    <span class="status-badge ${statusClass}">${statusText}</span>
                     <label class="toggle-label" ${isCoordinator ? 'title="Coordinator cannot be disabled"' : ''}>
                         <input
                             type="checkbox"
                             class="toggle-input"
+                            aria-label="Enable ${escapeAttr(agent.display_name)}"
                             ${agent.enabled ? 'checked' : ''}
                             ${isCoordinator ? 'disabled' : ''}
                             onchange="toggleAgent('${agent.name}', this.checked)"
@@ -1698,9 +1696,9 @@ function createAgentCard(agent, index, total) {
             </div>
             <div class="agent-footer">
                 <button onclick="openAgentModal('${agent.name}')" class="btn btn-secondary btn-sm">
-                    Edit Prompt
+                    Edit prompt
                 </button>
-                ${!isCoordinator ? `<button onclick="deleteAgent('${agent.name}')" class="btn btn-danger btn-sm">Remove</button>` : ''}
+                ${!isCoordinator ? trashButton(`deleteAgent('${agent.name}')`, 'Remove agent') : ''}
             </div>
         </div>
     `;
@@ -1708,19 +1706,17 @@ function createAgentCard(agent, index, total) {
 
 function createMcpAgentCard(agent, index, total) {
     const srv = (settingsState.mcpServers || {})[agent.name] || {};
-    const statusClass = agent.enabled ? 'status-success' : 'status-warning';
-    const statusText = agent.enabled ? 'Enabled' : 'Disabled';
     const serverId = agent.name.slice('mcp_'.length);
     const authType = srv.auth_type || 'header';
     const url = srv.url || '';
     const keywords = (srv.intent_keywords || []).join(', ');
     const toolNames = srv.tool_names || [];
     const toolsHtml = toolNames.length
-        ? `<div style="margin-top:4px; font-size:0.82rem; color:var(--text-muted);">${toolNames.map(t => `<code>${escapeHtml(t)}</code>`).join(' ')}</div>`
+        ? `<div class="agent-tools">${toolNames.map(t => `<code>${escapeHtml(t)}</code>`).join(' ')}</div>`
         : '';
 
     const authBadge = authType === 'oauth2'
-        ? '<span class="meta-item" style="background:var(--accent-dim,#1a2a1a);color:var(--accent,#0f0);">OAuth 2.1</span>'
+        ? '<span class="meta-item">OAuth 2.1</span>'
         : authType === 'none'
             ? '<span class="meta-item">No auth</span>'
             : '<span class="meta-item">Static headers</span>';
@@ -1729,41 +1725,41 @@ function createMcpAgentCard(agent, index, total) {
     const oauthAuthorized = srv.oauth_authorized === true;
     const oauthStatusHtml = authType === 'oauth2'
         ? (oauthAuthorized
-            ? '<span class="meta-item text-success">✓ Authorized</span>'
-            : '<span class="meta-item text-warning">⚠ Not authorized</span>')
+            ? `<span class="meta-item text-success">${icon('check')}Authorized</span>`
+            : `<span class="meta-item text-warning">${icon('alert')}Not authorized</span>`)
         : '';
 
     const footerButtons = authType === 'oauth2'
         ? `<button onclick="connectMcpOAuth('${serverId}')" class="btn btn-secondary btn-sm">Connect via OAuth</button>
-           <button onclick="refreshMcpServer('${serverId}')" class="btn btn-secondary btn-sm">Refresh Tools</button>
+           <button onclick="refreshMcpServer('${serverId}')" class="btn btn-secondary btn-sm">Refresh tools</button>
            <button onclick="openMcpEditModal('${serverId}')" class="btn btn-secondary btn-sm">Edit</button>`
         : `<button onclick="openMcpCredentialsModal('${serverId}')" class="btn btn-secondary btn-sm">Credentials</button>
-           <button onclick="refreshMcpServer('${serverId}')" class="btn btn-secondary btn-sm">Refresh Tools</button>
+           <button onclick="refreshMcpServer('${serverId}')" class="btn btn-secondary btn-sm">Refresh tools</button>
            <button onclick="openMcpEditModal('${serverId}')" class="btn btn-secondary btn-sm">Edit</button>`;
 
     const upDisabled = index === 0 ? 'disabled' : '';
     const downDisabled = index === total - 1 ? 'disabled' : '';
 
     return `
-        <div class="agent-card" id="agent-${agent.name}" style="border-left:3px solid var(--accent,#0f0);">
+        <div class="agent-card" id="agent-${agent.name}">
             <div class="agent-header">
                 <div class="agent-title">
                     <div class="agent-priority-controls">
-                        <button class="btn-priority" onclick="moveAgent('${agent.name}', 'up')" ${upDisabled} title="Move up">&#9650;</button>
-                        <button class="btn-priority" onclick="moveAgent('${agent.name}', 'down')" ${downDisabled} title="Move down">&#9660;</button>
+                        <button class="btn-priority" onclick="moveAgent('${agent.name}', 'up')" ${upDisabled} title="Move up" aria-label="Move up">${icon('chevron-up')}</button>
+                        <button class="btn-priority" onclick="moveAgent('${agent.name}', 'down')" ${downDisabled} title="Move down" aria-label="Move down">${icon('chevron-down')}</button>
                     </div>
-                    <span class="agent-icon">${escapeHtml(srv.icon || '🔌')}</span>
+                    <span class="agent-icon">${icon('server')}</span>
                     <div class="agent-info">
-                        <h4>${escapeHtml(agent.display_name)} <span style="font-size:0.75rem;font-weight:normal;color:var(--text-muted);">MCP</span></h4>
+                        <h4>${escapeHtml(agent.display_name)} <span class="badge badge-outline badge-sm">MCP</span></h4>
                         <small class="text-muted" title="${escapeAttr(url)}">${escapeHtml(url.length > 60 ? url.slice(0,57)+'…' : url)}</small>
                     </div>
                 </div>
                 <div class="agent-actions">
-                    <span class="status-badge ${statusClass}">${statusText}</span>
                     <label class="toggle-label">
                         <input
                             type="checkbox"
                             class="toggle-input"
+                            aria-label="Enable ${escapeAttr(agent.display_name)}"
                             ${agent.enabled ? 'checked' : ''}
                             onchange="toggleMcpServer('${escapeAttr(serverId)}', this.checked)"
                         >
@@ -1776,31 +1772,31 @@ function createMcpAgentCard(agent, index, total) {
                     ${authBadge}
                     ${oauthStatusHtml}
                     <span class="meta-item">${toolNames.length} tool${toolNames.length !== 1 ? 's' : ''}</span>
-                    ${keywords ? `<span class="meta-item" title="Intent keywords">🔑 ${escapeHtml(keywords)}</span>` : ''}
+                    ${keywords ? `<span class="meta-item" title="Intent keywords">${escapeHtml(keywords)}</span>` : ''}
                 </div>
                 ${toolsHtml}
             </div>
             <div class="agent-footer">
                 ${footerButtons}
-                <button onclick="deleteAgent('${escapeAttr(agent.name)}')" class="btn btn-danger btn-sm">Remove</button>
+                ${trashButton(`deleteAgent('${escapeAttr(agent.name)}')`, 'Remove MCP server')}
             </div>
         </div>
     `;
 }
 
 function getAgentIcon(agentName) {
-    const icons = {
-        coordinator: '🎯',
-        research: '🔍',
-        communication: '📨',
-        planner: '📅',
-        browser: '🌐',
-        writer: '✍️',
-        file_handler: '📁',
-        system: '⚙️',
-        navigator: '🗺️'
+    const names = {
+        coordinator: 'agent-coordinator',
+        research: 'agent-research',
+        communication: 'agent-communication',
+        planner: 'agent-planner',
+        browser: 'agent-browser',
+        writer: 'agent-writer',
+        file_handler: 'agent-files',
+        system: 'agent-system',
+        navigator: 'agent-navigator',
     };
-    return icons[agentName] || '🤖';
+    return icon(names[agentName] || 'agent-default');
 }
 
 function escapeHtml(str) {
@@ -1891,12 +1887,12 @@ async function refreshMcpServer(serverId) {
     } catch (error) {
         toast.error('Refresh failed: ' + (error.message || 'Unknown error'));
     } finally {
-        if (btn) { btn.disabled = false; btn.textContent = 'Refresh Tools'; }
+        if (btn) { btn.disabled = false; btn.textContent = 'Refresh tools'; }
     }
 }
 
 async function deleteAgent(agentName) {
-    if (!confirm(`Are you sure you want to remove the "${agentName}" agent? This cannot be undone.`)) {
+    if (!await modal.ask('Remove agent?', `Remove the "${agentName}" agent? This cannot be undone.`, { confirmText: 'Remove', danger: true })) {
         return;
     }
 
@@ -1941,10 +1937,10 @@ async function openAgentModal(agentName) {
         const resetBtn = document.getElementById('agent-reset-btn');
         if (resetBtn) {
             const defaultAgents = ['coordinator', 'research', 'communication', 'writer', 'file_handler', 'planner', 'system', 'navigator', 'browser'];
-            resetBtn.style.display = defaultAgents.includes(agentName) ? 'inline-block' : 'none';
+            resetBtn.hidden = !defaultAgents.includes(agentName);
         }
 
-        document.getElementById('agentModal').style.display = 'flex';
+        document.getElementById('agentModal').classList.add('active');
 
     } catch (error) {
         console.error('Failed to open agent modal:', error);
@@ -1953,7 +1949,7 @@ async function openAgentModal(agentName) {
 }
 
 function closeAgentModal() {
-    document.getElementById('agentModal').style.display = 'none';
+    document.getElementById('agentModal').classList.remove('active');
     settingsState.currentAgent = null;
 }
 
@@ -2006,7 +2002,7 @@ async function resetAgentToDefault() {
             return;
         }
 
-        if (!confirm(`Reset ${agentName} agent to default configuration?`)) {
+        if (!await modal.ask('Reset agent?', `Reset the "${agentName}" agent to its default configuration? Your changes to it will be lost.`, { confirmText: 'Reset', danger: true })) {
             return;
         }
 
@@ -2037,11 +2033,11 @@ function openAddAgentModal() {
     document.getElementById('new-agent-role').value = '';
     document.getElementById('new-agent-goal').value = '';
     document.getElementById('new-agent-backstory').value = '';
-    document.getElementById('addAgentModal').style.display = 'flex';
+    document.getElementById('addAgentModal').classList.add('active');
 }
 
 function closeAddAgentModal() {
-    document.getElementById('addAgentModal').style.display = 'none';
+    document.getElementById('addAgentModal').classList.remove('active');
 }
 
 async function createNewAgent() {
@@ -2092,20 +2088,6 @@ async function createNewAgent() {
 // TOOLS TAB - DRAG & DROP
 // ============================================================================
 
-const SERVICE_ICONS = {
-    google: '🔵',
-    google_navigator: '🗺️',
-    outlook: '📨',
-    notion: '📝',
-    nextcloud: '☁️',
-    whatsapp: '💬',
-    slack: '📢',
-    brave: '🔎',
-    browser: '🌐',
-    google_news: '📰',
-    system: '⚙️'
-};
-
 function escapeHtmlText(str) {
     const div = document.createElement('div');
     div.textContent = str;
@@ -2148,21 +2130,21 @@ function getAllToolsFlat() {
 }
 
 function buildToolChip(tool) {
-    const icon = SERVICE_ICONS[tool.service] || '🔧';
+    const toolIcon = getServiceIcon(tool.service);
     const name = escapeAttr(tool.tool_name);
     const displayName = escapeHtmlText(tool.display_name);
     const description = escapeAttr(tool.description || '');
-    return `<div class="tool-chip" draggable="true" data-tool="${name}" title="${description}" ondragstart="onToolDragStart(event)">${icon} ${displayName}</div>`;
+    return `<div class="tool-chip" draggable="true" data-tool="${name}" title="${description}" ondragstart="onToolDragStart(event)"><span class="tool-chip-icon">${toolIcon}</span>${displayName}</div>`;
 }
 
-function buildDropZone(label, zoneId, tools) {
+function buildDropZone(label, zoneId, tools, iconHtml = '') {
     const chips = tools.map(t => buildToolChip(t)).join('');
     const escapedLabel = escapeHtmlText(label);
     const count = tools.length;
     return `
         <div class="tool-drop-zone" data-zone="${escapeAttr(zoneId)}"
              ondragover="onToolDragOver(event)" ondragleave="onToolDragLeave(event)" ondrop="onToolDrop(event)">
-            <div class="tool-zone-header">${escapedLabel} <span class="tool-zone-count">(${count})</span></div>
+            <div class="tool-zone-header">${iconHtml}${escapedLabel} <span class="tool-zone-count">${count}</span></div>
             <div class="tool-zone-body">${chips || '<span class="tool-zone-empty">Drop tools here</span>'}</div>
         </div>
     `;
@@ -2187,8 +2169,7 @@ function renderToolsDragDrop() {
 
     let html = buildDropZone('Unassigned', '__unassigned__', unassigned);
     for (const { agent, tools } of agentZones) {
-        const icon = getAgentIcon(agent.name);
-        html += buildDropZone(`${icon} ${agent.display_name}`, agent.name, tools);
+        html += buildDropZone(agent.display_name, agent.name, tools, getAgentIcon(agent.name));
     }
 
     container.innerHTML = html;
@@ -2282,11 +2263,11 @@ function createPluginCard(plugin) {
     card.id = `plugin-card-${plugin.id}`;
 
     const authLabel = {
-        bearer: 'Bearer Token',
-        header: 'API Key Header',
-        basic: 'Basic Auth',
-        api_key_with_jwt: 'API Key + JWT',
-        query: 'API Key (Query Param)'
+        bearer: 'Bearer token',
+        header: 'API key header',
+        basic: 'Basic auth',
+        api_key_with_jwt: 'API key + JWT',
+        query: 'API key (query param)'
     }[plugin.auth_type] || plugin.auth_type;
 
     // Build credential fields based on auth type
@@ -2294,11 +2275,11 @@ function createPluginCard(plugin) {
     if (plugin.auth_type === 'bearer' || plugin.auth_type === 'header' || plugin.auth_type === 'query') {
         credentialFields = `
             <div class="form-group">
-                <label class="form-label">API Token / Secret</label>
+                <label class="form-label">API token / secret</label>
                 <div class="input-group">
                     <input type="password" id="plugin-token-${plugin.id}" class="form-input masked-input"
                         placeholder="Enter token..." value="${plugin.has_credentials ? '***MASKED***' : ''}">
-                    <button type="button" onclick="toggleMasked('plugin-token-${plugin.id}')" class="btn-icon">👁️</button>
+                    <button type="button" onclick="toggleMasked('plugin-token-${plugin.id}')" class="btn-icon" title="Show or hide value" aria-label="Show or hide value"><svg class="icon" aria-hidden="true"><use href="#icon-eye"></use></svg></button>
                 </div>
             </div>`;
     } else if (plugin.auth_type === 'basic') {
@@ -2306,11 +2287,11 @@ function createPluginCard(plugin) {
             // Fixed-password basic auth (e.g. Toggl): only need the token/username
             credentialFields = `
                 <div class="form-group">
-                    <label class="form-label">API Token</label>
+                    <label class="form-label">API token</label>
                     <div class="input-group">
                         <input type="password" id="plugin-token-${plugin.id}" class="form-input masked-input"
                             placeholder="Enter API token..." value="${plugin.has_credentials ? '***MASKED***' : ''}">
-                        <button type="button" onclick="toggleMasked('plugin-token-${plugin.id}')" class="btn-icon">👁️</button>
+                        <button type="button" onclick="toggleMasked('plugin-token-${plugin.id}')" class="btn-icon" title="Show or hide value" aria-label="Show or hide value"><svg class="icon" aria-hidden="true"><use href="#icon-eye"></use></svg></button>
                     </div>
                 </div>`;
         } else {
@@ -2321,14 +2302,14 @@ function createPluginCard(plugin) {
                     <div class="input-group">
                         <input type="password" id="plugin-token-${plugin.id}" class="form-input masked-input"
                             placeholder="Enter username..." value="${plugin.has_credentials ? '***MASKED***' : ''}">
-                        <button type="button" onclick="toggleMasked('plugin-token-${plugin.id}')" class="btn-icon">👁️</button>
+                        <button type="button" onclick="toggleMasked('plugin-token-${plugin.id}')" class="btn-icon" title="Show or hide value" aria-label="Show or hide value"><svg class="icon" aria-hidden="true"><use href="#icon-eye"></use></svg></button>
                     </div>
                 </div>
                 <div class="form-group" id="plugin-password-group-${plugin.id}">
                     <label class="form-label">Password <span class="text-muted">(leave blank to keep existing)</span></label>
                     <div class="input-group">
                         <input type="password" id="plugin-password-${plugin.id}" class="form-input masked-input" placeholder="Enter password...">
-                        <button type="button" onclick="toggleMasked('plugin-password-${plugin.id}')" class="btn-icon">👁️</button>
+                        <button type="button" onclick="toggleMasked('plugin-password-${plugin.id}')" class="btn-icon" title="Show or hide value" aria-label="Show or hide value"><svg class="icon" aria-hidden="true"><use href="#icon-eye"></use></svg></button>
                     </div>
                 </div>`;
         }
@@ -2336,11 +2317,11 @@ function createPluginCard(plugin) {
         // Static API key header + JWT obtained via username/password login
         credentialFields = `
             <div class="form-group">
-                <label class="form-label">API Key <span class="text-muted">(sent as static header on every request)</span></label>
+                <label class="form-label">API key <span class="text-muted">(sent as static header on every request)</span></label>
                 <div class="input-group">
                     <input type="password" id="plugin-apikey-${plugin.id}" class="form-input masked-input"
                         placeholder="Enter API key..." value="${plugin.has_credentials ? '***MASKED***' : ''}">
-                    <button type="button" onclick="toggleMasked('plugin-apikey-${plugin.id}')" class="btn-icon">👁️</button>
+                    <button type="button" onclick="toggleMasked('plugin-apikey-${plugin.id}')" class="btn-icon" title="Show or hide value" aria-label="Show or hide value"><svg class="icon" aria-hidden="true"><use href="#icon-eye"></use></svg></button>
                 </div>
             </div>
             <div class="form-group">
@@ -2354,7 +2335,7 @@ function createPluginCard(plugin) {
                 <label class="form-label">Password <span class="text-muted">(leave blank to keep existing)</span></label>
                 <div class="input-group">
                     <input type="password" id="plugin-password-${plugin.id}" class="form-input masked-input" placeholder="Enter password...">
-                    <button type="button" onclick="toggleMasked('plugin-password-${plugin.id}')" class="btn-icon">👁️</button>
+                    <button type="button" onclick="toggleMasked('plugin-password-${plugin.id}')" class="btn-icon" title="Show or hide value" aria-label="Show or hide value"><svg class="icon" aria-hidden="true"><use href="#icon-eye"></use></svg></button>
                 </div>
             </div>`;
     }
@@ -2381,7 +2362,7 @@ function createPluginCard(plugin) {
                         <input type="password" id="${inputId}" class="form-input masked-input"
                             placeholder="${field.placeholder || ''}" data-config-key="${field.key}"
                             value="${plugin.has_credentials ? '***MASKED***' : ''}">
-                        <button type="button" onclick="toggleMasked('${inputId}')" class="btn-icon">👁️</button>
+                        <button type="button" onclick="toggleMasked('${inputId}')" class="btn-icon" title="Show or hide value" aria-label="Show or hide value"><svg class="icon" aria-hidden="true"><use href="#icon-eye"></use></svg></button>
                     </div>
                     ${field.description ? `<div class="form-hint">${field.description}</div>` : ''}
                 </div>`;
@@ -2393,9 +2374,8 @@ function createPluginCard(plugin) {
     card.innerHTML = `
         <div class="integration-header" onclick="togglePluginCard('${plugin.id}')">
             <div class="integration-title">
-                <span class="integration-icon">${plugin.icon}</span>
-                <h4>${plugin.display_name}<span class="text-muted" style="font-size:0.82rem; margin-left:8px; font-weight:400;">${authLabel} · ${plugin.endpoint_count} tool${plugin.endpoint_count !== 1 ? 's' : ''}</span>${isBuiltin ? '' : '<span class="status-badge status-info" style="font-size:0.72rem; margin-left:6px;">custom</span>'}</h4>
-                <span class="expand-icon" id="plugin-chevron-${plugin.id}">▼</span>
+                <span class="integration-icon">${icon('puzzle')}<span class="expand-icon" id="plugin-chevron-${plugin.id}">${icon('chevron-down')}</span></span>
+                <h4>${plugin.display_name}<span class="integration-subtitle">${authLabel} · ${plugin.endpoint_count} tool${plugin.endpoint_count !== 1 ? 's' : ''}</span>${isBuiltin ? '' : '<span class="badge badge-outline badge-sm">Custom</span>'}</h4>
             </div>
             <label class="toggle-label" onclick="event.stopPropagation()">
                 <input type="checkbox" class="toggle-input" id="plugin-enabled-${plugin.id}"
@@ -2404,19 +2384,19 @@ function createPluginCard(plugin) {
                 <span class="toggle-slider"></span>
             </label>
         </div>
-        <div class="integration-body" id="plugin-body-${plugin.id}" style="display:none;">
-            <p class="text-muted" style="margin-bottom:16px;">${plugin.description}</p>
+        <div class="integration-body" id="plugin-body-${plugin.id}" hidden>
+            <p class="text-muted mb-2">${plugin.description}</p>
 
             ${credentialFields}
             ${configFieldsHtml}
 
             <div class="integration-actions">
-                <button onclick="savePluginCredentials('${plugin.id}')" class="btn btn-primary">💾 Save</button>
-                <button onclick="testPluginConnection('${plugin.id}')" class="btn btn-secondary">🔍 Test Connection</button>
-                ${!isBuiltin ? `<button onclick="showEditPluginModal('${plugin.id}')" class="btn btn-secondary">✏️ Edit JSON</button>` : ''}
-                ${!isBuiltin ? `<button onclick="deletePlugin('${plugin.id}')" class="btn btn-danger">🗑 Delete</button>` : ''}
+                <button onclick="savePluginCredentials('${plugin.id}')" class="btn btn-primary">Save</button>
+                <button onclick="testPluginConnection('${plugin.id}')" class="btn btn-secondary">Test connection</button>
+                ${!isBuiltin ? `<button onclick="showEditPluginModal('${plugin.id}')" class="btn btn-secondary">Edit JSON</button>` : ''}
+                ${!isBuiltin ? trashButton(`deletePlugin('${plugin.id}')`, 'Delete plugin', 'btn btn-danger btn-icon') : ''}
             </div>
-            <div id="plugin-status-${plugin.id}" style="margin-top:8px;"></div>
+            <div id="plugin-status-${plugin.id}" class="mt-1"></div>
         </div>`;
 
     // Load current config values async
@@ -2445,13 +2425,10 @@ async function loadPluginConfigValues(pluginId, configFields) {
 function togglePluginCard(pluginId) {
     const body = document.getElementById(`plugin-body-${pluginId}`);
     const chevron = document.getElementById(`plugin-chevron-${pluginId}`);
-    if (body.style.display === 'none') {
-        body.style.display = 'block';
-        chevron.textContent = '▲';
-    } else {
-        body.style.display = 'none';
-        chevron.textContent = '▼';
-    }
+    const expanded = body.hidden;
+    body.hidden = !expanded;
+    if (chevron) chevron.classList.toggle('expanded', expanded);
+    body.closest('.integration-card')?.classList.toggle('is-expanded', expanded);
 }
 
 async function togglePlugin(pluginId, enabled) {
@@ -2501,13 +2478,13 @@ async function savePluginCredentials(pluginId) {
     try {
         await api.put(`/api/plugins/${pluginId}/credentials`, body);
         if (statusEl) {
-            statusEl.innerHTML = '<span class="text-success">✓ Saved</span>';
+            statusEl.innerHTML = `<span class="inline-status text-success">${icon('check')}Saved</span>`;
             setTimeout(() => { statusEl.innerHTML = ''; }, 3000);
         }
         toast.success('Plugin credentials saved');
     } catch (error) {
         console.error('Failed to save plugin credentials:', error);
-        if (statusEl) statusEl.innerHTML = '<span class="text-error">✗ Save failed</span>';
+        if (statusEl) statusEl.innerHTML = `<span class="inline-status text-error">${icon('circle-x')}Save failed</span>`;
         toast.error('Failed to save credentials');
     }
 }
@@ -2519,21 +2496,21 @@ async function testPluginConnection(pluginId) {
     try {
         const result = await api.get(`/api/plugins/${pluginId}/test`);
         if (result.success) {
-            if (statusEl) statusEl.innerHTML = `<span class="text-success">✓ ${result.message}</span>`;
+            if (statusEl) statusEl.innerHTML = `<span class="inline-status text-success">${icon('check')}${result.message}</span>`;
             toast.success('Connection successful');
         } else {
-            if (statusEl) statusEl.innerHTML = `<span class="text-error">✗ ${result.message}</span>`;
+            if (statusEl) statusEl.innerHTML = `<span class="inline-status text-error">${icon('circle-x')}${result.message}</span>`;
             toast.error(`Connection failed: ${result.message}`);
         }
     } catch (error) {
         console.error('Plugin test failed:', error);
-        if (statusEl) statusEl.innerHTML = '<span class="text-error">✗ Test failed</span>';
+        if (statusEl) statusEl.innerHTML = `<span class="inline-status text-error">${icon('circle-x')}Test failed</span>`;
         toast.error('Connection test failed');
     }
 }
 
 async function deletePlugin(pluginId) {
-    if (!confirm(`Delete plugin "${pluginId}"? This cannot be undone.`)) return;
+    if (!await modal.ask('Delete plugin?', `Delete the "${pluginId}" plugin? This cannot be undone.`, { confirmText: 'Delete', danger: true })) return;
     try {
         await api.delete(`/api/plugins/${pluginId}`);
         const card = document.getElementById(`plugin-card-${pluginId}`);
@@ -2551,19 +2528,19 @@ let _editingPluginId = null;
 function showAddPluginModal() {
     _editingPluginId = null;
     document.getElementById('plugin-json-input').value = '';
-    document.getElementById('plugin-json-error').style.display = 'none';
-    document.getElementById('plugin-modal-title').textContent = 'Install Custom Plugin';
-    document.getElementById('plugin-modal-save-btn').textContent = 'Validate & Install';
-    document.getElementById('addPluginModal').style.display = 'flex';
+    document.getElementById('plugin-json-error').hidden = true;
+    document.getElementById('plugin-modal-title').textContent = 'Install custom plugin';
+    document.getElementById('plugin-modal-save-btn').textContent = 'Validate and install';
+    document.getElementById('addPluginModal').classList.add('active');
 }
 
 async function showEditPluginModal(pluginId) {
     _editingPluginId = pluginId;
-    document.getElementById('plugin-json-error').style.display = 'none';
-    document.getElementById('plugin-modal-title').textContent = 'Edit Plugin JSON';
-    document.getElementById('plugin-modal-save-btn').textContent = 'Validate & Save';
+    document.getElementById('plugin-json-error').hidden = true;
+    document.getElementById('plugin-modal-title').textContent = 'Edit plugin JSON';
+    document.getElementById('plugin-modal-save-btn').textContent = 'Validate and save';
     document.getElementById('plugin-json-input').value = 'Loading...';
-    document.getElementById('addPluginModal').style.display = 'flex';
+    document.getElementById('addPluginModal').classList.add('active');
 
     try {
         const defn = await api.get(`/api/plugins/${pluginId}/definition`);
@@ -2572,12 +2549,12 @@ async function showEditPluginModal(pluginId) {
         document.getElementById('plugin-json-input').value = '';
         const errorEl = document.getElementById('plugin-json-error');
         errorEl.textContent = `Failed to load plugin definition: ${error.detail || error.message}`;
-        errorEl.style.display = 'block';
+        errorEl.hidden = false;
     }
 }
 
 function closeAddPluginModal() {
-    document.getElementById('addPluginModal').style.display = 'none';
+    document.getElementById('addPluginModal').classList.remove('active');
     _editingPluginId = null;
 }
 
@@ -2592,20 +2569,20 @@ async function savePluginJson() {
 async function _installPlugin() {
     const textarea = document.getElementById('plugin-json-input');
     const errorEl = document.getElementById('plugin-json-error');
-    errorEl.style.display = 'none';
+    errorEl.hidden = true;
 
     let parsed;
     try {
         parsed = JSON.parse(textarea.value);
     } catch (e) {
         errorEl.textContent = `Invalid JSON: ${e.message}`;
-        errorEl.style.display = 'block';
+        errorEl.hidden = false;
         return;
     }
 
     if (!parsed.id || !parsed.display_name || !parsed.endpoints || !parsed.auth) {
         errorEl.textContent = 'Missing required fields: id, display_name, auth, endpoints';
-        errorEl.style.display = 'block';
+        errorEl.hidden = false;
         return;
     }
 
@@ -2620,27 +2597,27 @@ async function _installPlugin() {
     } catch (error) {
         const msg = error.detail || error.message || 'Validation failed';
         errorEl.textContent = `Install failed: ${msg}`;
-        errorEl.style.display = 'block';
+        errorEl.hidden = false;
     }
 }
 
 async function _updatePlugin(pluginId) {
     const textarea = document.getElementById('plugin-json-input');
     const errorEl = document.getElementById('plugin-json-error');
-    errorEl.style.display = 'none';
+    errorEl.hidden = true;
 
     let parsed;
     try {
         parsed = JSON.parse(textarea.value);
     } catch (e) {
         errorEl.textContent = `Invalid JSON: ${e.message}`;
-        errorEl.style.display = 'block';
+        errorEl.hidden = false;
         return;
     }
 
     if (!parsed.id || !parsed.display_name || !parsed.endpoints || !parsed.auth) {
         errorEl.textContent = 'Missing required fields: id, display_name, auth, endpoints';
-        errorEl.style.display = 'block';
+        errorEl.hidden = false;
         return;
     }
 
@@ -2659,7 +2636,7 @@ async function _updatePlugin(pluginId) {
     } catch (error) {
         const msg = error.detail || error.message || 'Validation failed';
         errorEl.textContent = `Update failed: ${msg}`;
-        errorEl.style.display = 'block';
+        errorEl.hidden = false;
     }
 }
 
@@ -2682,29 +2659,28 @@ function showAddMcpModal() {
     document.querySelector('input[name="mcp-auth-type"][value="header"]').checked = true;
     onMcpAuthTypeChange('header');
     addMcpHeaderRow();
-    document.getElementById('addMcpModal').style.display = 'flex';
+    document.getElementById('addMcpModal').classList.add('active');
 }
 
 function closeAddMcpModal() {
-    document.getElementById('addMcpModal').style.display = 'none';
+    document.getElementById('addMcpModal').classList.remove('active');
 }
 
 function onMcpAuthTypeChange(authType) {
-    document.getElementById('mcp-header-fields').style.display = authType === 'header' ? '' : 'none';
-    document.getElementById('mcp-oauth-fields').style.display = authType === 'oauth2' ? '' : 'none';
+    document.getElementById('mcp-header-fields').hidden = authType !== 'header';
+    document.getElementById('mcp-oauth-fields').hidden = authType !== 'oauth2';
 }
 
 function addMcpHeaderRow(name = '', value = '') {
     const list = document.getElementById('mcp-headers-list');
     const row = document.createElement('div');
     row.className = 'mcp-header-row';
-    row.style = 'display:flex; gap:6px; margin-bottom:6px;';
     row.innerHTML = `
         <input type="text" class="form-input mcp-header-name" placeholder="Header name (e.g. Authorization)"
-            value="${escapeAttr(name)}" style="flex:1;">
+            value="${escapeAttr(name)}">
         <input type="password" class="form-input mcp-header-value" placeholder="Value"
-            value="${escapeAttr(value)}" style="flex:1;">
-        <button type="button" class="btn-icon" onclick="this.parentElement.remove()">🗑️</button>`;
+            value="${escapeAttr(value)}">
+        ${trashButton('this.parentElement.remove()', 'Remove header', 'btn btn-danger btn-icon')}`;
     list.appendChild(row);
 }
 
@@ -2728,7 +2704,7 @@ async function createMcpServer() {
         toast.error('Server ID must be lowercase letters, digits, and underscores, starting with a letter');
         return;
     }
-    if (!displayName) { toast.error('Display Name is required'); return; }
+    if (!displayName) { toast.error('Display name is required'); return; }
     if (!/^https?:\/\//.test(url)) { toast.error('URL must start with http:// or https://'); return; }
 
     const keywords = document.getElementById('new-mcp-keywords').value
@@ -2768,7 +2744,7 @@ async function createMcpServer() {
         settingsState.agentsLoaded = true;
         // For OAuth servers, prompt the user to connect immediately.
         if (authType === 'oauth2') {
-            if (confirm(`'${server.display_name}' was added. Connect via OAuth now to authorize access?`)) {
+            if (await modal.ask('Connect now?', `"${server.display_name}" was added. Connect via OAuth now to authorize access?`, { confirmText: 'Connect', cancelText: 'Later' })) {
                 connectMcpOAuth(server.id);
             }
         }
@@ -2776,7 +2752,7 @@ async function createMcpServer() {
         toast.error(`Failed to add server: ${error.message}`);
     } finally {
         btn.disabled = false;
-        btn.textContent = 'Connect & Add';
+        btn.textContent = 'Connect and add';
     }
 }
 
@@ -2831,11 +2807,11 @@ function openMcpEditModal(serverId) {
     document.getElementById('mcp-edit-display-name').value = srv.display_name || '';
     document.getElementById('mcp-edit-keywords').value = (srv.intent_keywords || []).join(', ');
     document.getElementById('mcp-edit-backstory').value = srv.backstory || '';
-    document.getElementById('mcpEditModal').style.display = 'flex';
+    document.getElementById('mcpEditModal').classList.add('active');
 }
 
 function closeMcpEditModal() {
-    document.getElementById('mcpEditModal').style.display = 'none';
+    document.getElementById('mcpEditModal').classList.remove('active');
 }
 
 async function saveMcpEdit() {
@@ -2863,7 +2839,7 @@ async function saveMcpEdit() {
 function openMcpCredentialsModal(serverId) {
     const srv = (settingsState.mcpServers || {})[`mcp_${serverId}`] || {};
     document.getElementById('mcp-creds-server-id').value = serverId;
-    document.getElementById('mcp-creds-title').textContent = `Update Credentials — ${srv.display_name || serverId}`;
+    document.getElementById('mcp-creds-title').textContent = `Update credentials — ${srv.display_name || serverId}`;
 
     const headersSection = document.getElementById('mcp-creds-headers-section');
     const headersList = document.getElementById('mcp-creds-headers-list');
@@ -2871,25 +2847,25 @@ function openMcpCredentialsModal(serverId) {
 
     const headerNames = srv.header_names || [];
     if (headerNames.length > 0) {
-        headersSection.style.display = '';
+        headersSection.hidden = false;
         headerNames.forEach(name => {
             const row = document.createElement('div');
-            row.style = 'display:flex; gap:6px; margin-bottom:6px; align-items:center;';
+            row.className = 'mcp-header-row mcp-cred-row';
             row.innerHTML = `
-                <span style="flex:1; font-size:0.9rem;">${escapeHtml(name)}</span>
+                <span class="mcp-cred-name">${escapeHtml(name)}</span>
                 <input type="password" class="form-input mcp-cred-header-value" data-name="${escapeAttr(name)}"
-                    placeholder="New value (blank = keep existing)" style="flex:1.5;">`;
+                    placeholder="New value (blank = keep existing)">`;
             headersList.appendChild(row);
         });
     } else {
-        headersSection.style.display = 'none';
+        headersSection.hidden = true;
     }
 
-    document.getElementById('mcpCredentialsModal').style.display = 'flex';
+    document.getElementById('mcpCredentialsModal').classList.add('active');
 }
 
 function closeMcpCredentialsModal() {
-    document.getElementById('mcpCredentialsModal').style.display = 'none';
+    document.getElementById('mcpCredentialsModal').classList.remove('active');
 }
 
 async function saveMcpCredentials() {
@@ -2931,7 +2907,7 @@ const browserSessionsState = { sessions: [], replacingId: null };
 function renderBrowserSessionsSkeleton() {
     return `
         <div class="browser-sessions" id="browser-sessions">
-            <h5>🔐 Authenticated sessions</h5>
+            <h5>Authenticated sessions</h5>
             <p class="browser-sessions-help">
                 Let the browser use your own logged-in accounts. Paste a cookie export below; it is stored
                 encrypted and injected into the browser behind the scenes. The AI can use the logged-in
@@ -2942,7 +2918,7 @@ function renderBrowserSessionsSkeleton() {
                 <p class="text-muted">Loading…</p>
             </div>
             <details class="browser-session-add" id="browser-session-add">
-                <summary id="browser-session-add-summary">➕ Add a session</summary>
+                <summary id="browser-session-add-summary">Add a session</summary>
                 <div class="form-group">
                     <label for="bs-name">Name</label>
                     <input type="text" id="bs-name" class="form-input" maxlength="64" placeholder="e.g. Personal Gmail" autocomplete="off">
@@ -2957,7 +2933,7 @@ function renderBrowserSessionsSkeleton() {
                         <option value="header">Raw "Cookie:" header</option>
                     </select>
                 </div>
-                <div class="form-group" id="bs-domain-group" style="display:none;">
+                <div class="form-group" id="bs-domain-group" hidden>
                     <label for="bs-domain">Domain</label>
                     <input type="text" id="bs-domain" class="form-input" placeholder="example.com" autocomplete="off">
                     <small class="text-muted">Required for a raw Cookie header, which carries no domain.</small>
@@ -2975,8 +2951,8 @@ function renderBrowserSessionsSkeleton() {
                     Keep refreshed: save cookies the site renews while the browser is in use
                 </label>
                 <div class="browser-session-add-actions">
-                    <button class="btn btn-primary" id="bs-save" onclick="saveBrowserSession()">💾 Save session</button>
-                    <button class="btn btn-secondary" id="bs-cancel" style="display:none;" onclick="resetBrowserSessionForm()">Cancel</button>
+                    <button class="btn btn-primary" id="bs-save" onclick="saveBrowserSession()">Save session</button>
+                    <button class="btn btn-secondary" id="bs-cancel" hidden onclick="resetBrowserSessionForm()">Cancel</button>
                 </div>
             </details>
         </div>
@@ -3001,7 +2977,7 @@ function browserSessionExpiry(s) {
     }
     const latest = new Date(s.latest_expiry);
     const days = Math.floor((latest - new Date()) / 86400000);
-    if (latest < new Date()) return { cls: 'error', text: 'Expired: re-import' };
+    if (latest < new Date()) return { cls: 'danger', text: 'Expired: re-import' };
     if (days < 7) return { cls: 'warning', text: `Expires in ${Math.max(days, 0)} d` };
     return { cls: 'success', text: `Valid until ${latest.toISOString().slice(0, 10)}` };
 }
@@ -3023,7 +2999,7 @@ function renderBrowserSessions() {
                 <div class="session-main">
                     <div class="session-title">
                         <strong>${escapeHtml(s.name)}</strong>
-                        <span class="session-badge session-badge-${exp.cls}">${escapeHtml(exp.text)}</span>
+                        <span class="badge badge-${exp.cls}">${escapeHtml(exp.text)}</span>
                     </div>
                     <div class="session-meta">
                         ${domains}
@@ -3035,9 +3011,9 @@ function renderBrowserSessions() {
                         onchange="updateBrowserSession('${id}', {enabled: this.checked})"> Enabled</label>
                     <label class="session-check" title="Save cookies the site renews while the browser is in use"><input type="checkbox" ${s.persist_updates ? 'checked' : ''}
                         onchange="updateBrowserSession('${id}', {persist_updates: this.checked})"> Keep refreshed</label>
-                    <button class="btn btn-secondary btn-sm" onclick="testBrowserSession('${id}')">🔍 Test</button>
-                    <button class="btn btn-secondary btn-sm" onclick="startReplaceBrowserSession('${id}')">♻️ Replace</button>
-                    <button class="btn btn-danger btn-sm" onclick="deleteBrowserSession('${id}')">🗑️ Delete</button>
+                    <button class="btn btn-secondary btn-sm" onclick="testBrowserSession('${id}')">Test</button>
+                    <button class="btn btn-secondary btn-sm" onclick="startReplaceBrowserSession('${id}')">Replace</button>
+                    ${trashButton(`deleteBrowserSession('${id}')`, 'Delete session')}
                 </div>
             </div>`;
     }).join('');
@@ -3045,7 +3021,7 @@ function renderBrowserSessions() {
 
 function onBrowserSessionFormatChange() {
     const fmt = document.getElementById('bs-format').value;
-    document.getElementById('bs-domain-group').style.display = fmt === 'header' ? 'block' : 'none';
+    document.getElementById('bs-domain-group').hidden = fmt !== 'header';
 }
 
 function onBrowserSessionFile(input) {
@@ -3075,9 +3051,9 @@ function resetBrowserSessionForm() {
     document.getElementById('bs-persist').checked = true;
     document.getElementById('bs-persist').disabled = false;
     document.getElementById('bs-file').value = '';
-    document.getElementById('bs-save').textContent = '💾 Save session';
-    document.getElementById('bs-cancel').style.display = 'none';
-    document.getElementById('browser-session-add-summary').textContent = '➕ Add a session';
+    document.getElementById('bs-save').textContent = 'Save session';
+    document.getElementById('bs-cancel').hidden = true;
+    document.getElementById('browser-session-add-summary').textContent = 'Add a session';
     document.getElementById('browser-session-add').open = false;
     onBrowserSessionFormatChange();
 }
@@ -3092,9 +3068,9 @@ function startReplaceBrowserSession(id) {
     name.disabled = true;
     document.getElementById('bs-persist').checked = s.persist_updates;
     document.getElementById('bs-persist').disabled = true;
-    document.getElementById('bs-save').textContent = '♻️ Replace cookies';
-    document.getElementById('bs-cancel').style.display = 'inline-block';
-    document.getElementById('browser-session-add-summary').textContent = `♻️ Replace cookies for “${s.name}”`;
+    document.getElementById('bs-save').textContent = 'Replace cookies';
+    document.getElementById('bs-cancel').hidden = false;
+    document.getElementById('browser-session-add-summary').textContent = `Replace cookies for “${s.name}”`;
     const details = document.getElementById('browser-session-add');
     details.open = true;
     details.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -3175,7 +3151,7 @@ async function testBrowserSession(id) {
 async function deleteBrowserSession(id) {
     const s = browserSessionsState.sessions.find(x => x.id === id);
     if (!s) return;
-    if (!window.confirm(`Delete “${s.name}”?\n\nThis only removes the cookies stored here. To fully revoke access, also log out of the site or end the session in its security settings.`)) {
+    if (!await modal.ask(`Delete “${s.name}”?`, 'This only removes the cookies stored here. To fully revoke access, also log out of the site or end the session in its security settings.', { confirmText: 'Delete', danger: true })) {
         return;
     }
     try {

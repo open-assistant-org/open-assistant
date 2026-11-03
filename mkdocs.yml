@@ -12,11 +12,26 @@ docs_dir: docs
 
 theme:
   name: material
-  # Single dark scheme — the app UI has no light mode, so the docs stay on-brand.
+  # Mirrors the app's design system (docs/design-system.md): light by
+  # default, dark on request, monochrome with a custom accent.
   palette:
-    - scheme: slate
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
       primary: custom
       accent: custom
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  # Fonts are self-hosted in docs/assets/fonts (see stylesheets/extra.css),
+  # so no requests go to Google Fonts.
+  font: false
   logo: assets/open-assistant.svg
   favicon: assets/open-assistant.svg
   features:
@@ -75,6 +90,7 @@ nav:
       - Configuration: setup/configuration.md
       - Development: setup/development.md
   - Development Checklist: development-checklist.md
+  - Design System: design-system.md
   - Architecture:
       - System Architecture: architecture/system-architecture.md
       - Solution Architecture: architecture/solution-architecture.md

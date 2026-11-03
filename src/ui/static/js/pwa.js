@@ -116,7 +116,7 @@ function showInstallButton() {
         // call and let CSS decide (including hiding it on desktop via
         // .pwa-install-btn's media query in common.css) rather than
         // forcing it visible here.
-        installButton.style.removeProperty('display');
+        installButton.hidden = false;
         installButton.addEventListener('click', promptInstall);
     }
 }
@@ -126,7 +126,7 @@ function showInstallButton() {
  */
 function hideInstallButton() {
     if (installButton) {
-        installButton.style.display = 'none';
+        installButton.hidden = true;
     }
 }
 

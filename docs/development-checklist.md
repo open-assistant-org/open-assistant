@@ -62,7 +62,7 @@ If you're adding an entirely new service (e.g. Slack, Spotify, etc.):
 
 ### UI integration
 
-- [ ] **Service icon** — add to `getServiceIcon()` in `src/ui/static/js/settings.js`
+- [ ] **Service icon** — map the service to a Lucide icon in `SERVICE_ICON_NAMES` (`src/ui/static/js/settings.js`), adding the symbol to the sprite in `js/components.js` if needed
 - [ ] **Service list** — add service name to the `services` array in `loadIntegrations()` in `settings.js`
 - [ ] **Doc URL** — add to `getIntegrationDocUrl()` in `settings.js`
 - [ ] **Integration status** — add to `integrations_config` in `src/api/integrations.py` (if applicable)

@@ -24,12 +24,12 @@ async def get_manifest() -> JSONResponse:
         "version": __version__,
         "start_url": "/",
         "display": "standalone",
-        "background_color": "#0a0a0a",
         # The manifest is read once at install time and can't follow the
-        # in-app light/dark/system theme switch, so this is a fixed value
-        # that reads reasonably against both the dark and light splash
-        # screens - see static/js/theme.js for the runtime per-page value.
-        "theme_color": "#0a7d0a",
+        # in-app light/dark/system theme switch, so these match the default
+        # (light) --color-bg from static/css/tokens.css - see
+        # static/js/theme.js for the runtime per-page value.
+        "background_color": "#f7f7f5",
+        "theme_color": "#f7f7f5",
         "orientation": "any",
         "scope": "/",
         "icons": [

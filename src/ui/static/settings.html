@@ -11,11 +11,10 @@
     <!-- PWA Manifest -->
     <link rel="manifest" href="/api/pwa/manifest.json">
 
-    <!-- Theme Colors -->
-    <meta name="theme-color" content="#00ff00">
-    <meta name="msapplication-TileColor" content="#0a0a0a">
-    <meta name="msapplication-navbutton-color" content="#00ff00">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <!-- Theme Colors (theme.js keeps theme-color in sync with light/dark) -->
+    <meta name="theme-color" content="#f7f7f5">
+    <meta name="msapplication-TileColor" content="#f7f7f5">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
 
     <!-- PWA Meta Tags -->
     <meta name="mobile-web-app-capable" content="yes">
@@ -34,8 +33,12 @@
     <link rel="apple-touch-icon" sizes="384x384" href="/static/icons/icon-384x384.png">
     <link rel="apple-touch-icon" sizes="512x512" href="/static/icons/icon-512x512.png">
 
-    <!-- Stylesheets -->
+    <!-- Design system -->
     <script src="/static/js/theme.js"></script>
+    <link rel="preload" href="/static/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="/static/css/tokens.css">
+    <link rel="stylesheet" href="/static/css/base.css">
+    <link rel="stylesheet" href="/static/css/components.css">
     <link rel="stylesheet" href="/static/css/common.css">
     <link rel="stylesheet" href="/static/css/mobile.css">
 </head>
@@ -46,7 +49,10 @@
     <div class="main-container">
         <div class="settings-container">
             <div class="settings-header">
-                <h1>Settings</h1>
+                <div>
+                    <h1>Settings</h1>
+                    <p class="page-description">Shape how your assistant thinks, what it can reach and how it looks.</p>
+                </div>
             </div>
 
             <!-- Tabs -->
@@ -54,7 +60,7 @@
                 <button class="tab active" data-tab="agents">Agents</button>
                 <button class="tab" data-tab="tools">Tools</button>
                 <button class="tab" data-tab="integrations">Integrations</button>
-                <button class="tab" data-tab="prompts">System Prompts</button>
+                <button class="tab" data-tab="prompts">Prompts</button>
                 <button class="tab" data-tab="llm">LLM</button>
                 <button class="tab" data-tab="plugins">Plugins</button>
                 <button class="tab" data-tab="application">Application</button>
@@ -81,7 +87,7 @@
                 </div>
 
                 <div class="settings-section" id="section-memory">
-                    <h3 class="section-title">Memory Management</h3>
+                    <h3 class="section-title">Memory management</h3>
                     <div id="memory-settings"></div>
                 </div>
 
@@ -90,41 +96,45 @@
                     <div id="web-ui-settings"></div>
                 </div>
 
-                <button onclick="saveApplicationSettings()" class="btn btn-primary">Save Application Settings</button>
+                <div class="settings-actions">
+                    <button onclick="saveApplicationSettings()" class="btn btn-primary">Save application settings</button>
+                </div>
             </div>
 
             <!-- LLM Tab -->
             <div id="llm-tab" class="tab-content">
                 <div class="settings-section">
-                    <h3 class="section-title">LLM Configuration</h3>
+                    <h3 class="section-title">LLM configuration</h3>
                     <p class="text-muted">
                         Configure your LLM provider for AI-powered conversations.
-                        <a href="https://github.com/open-assistant-org/open-assistant/blob/main/docs/integrations/llm-providers.md" target="_blank" class="help-link">
-                            📚 How to get API credentials?
-                        </a>
+                        <a href="https://github.com/open-assistant-org/open-assistant/blob/main/docs/integrations/llm-providers.md" target="_blank" class="help-link">How to get API credentials <svg class="icon" aria-hidden="true"><use href="#icon-arrow-up-right"></use></svg></a>
                     </p>
                     <div id="llm-settings"></div>
                 </div>
 
                 <div class="settings-section">
+                    <h3 class="section-title">Connection</h3>
+                    <p class="text-muted">Send a short test request to check that your provider and key work.</p>
                     <button onclick="testLLMConnection()" class="btn btn-secondary">
-                        Test Connection
+                        Test connection
                     </button>
-                    <div id="llm-test-result" class="test-result" style="display: none;"></div>
+                    <div id="llm-test-result" class="test-result" hidden></div>
                 </div>
 
-                <button onclick="saveCategory('llm')" class="btn btn-primary">Save LLM Settings</button>
+                <div class="settings-actions">
+                    <button onclick="saveCategory('llm')" class="btn btn-primary">Save LLM settings</button>
+                </div>
             </div>
 
             <!-- Prompts Tab -->
             <div id="prompts-tab" class="tab-content">
                 <div class="settings-section">
-                    <h3 class="section-title">System Prompt</h3>
+                    <h3 class="section-title">System prompt</h3>
                     <p class="text-muted">The system prompt defines the base behavior of the assistant. The default prompt is always included, and you can add custom instructions on top.</p>
 
                     <div class="form-group">
                         <div class="setting-header">
-                            <label class="form-label" for="prompt-system_prompt_default">Default Prompt</label>
+                            <label class="form-label" for="prompt-system_prompt_default">Default prompt</label>
                         </div>
                         <textarea
                             id="prompt-system_prompt_default"
@@ -137,7 +147,7 @@
 
                     <div class="form-group">
                         <div class="setting-header">
-                            <label class="form-label" for="prompt-system_prompt_custom">Custom Instructions</label>
+                            <label class="form-label" for="prompt-system_prompt_custom">Custom instructions</label>
                         </div>
                         <textarea
                             id="prompt-system_prompt_custom"
@@ -185,7 +195,9 @@
                     </div>
                 </div>
 
-                <button onclick="savePrompts()" class="btn btn-primary">Save Prompts</button>
+                <div class="settings-actions">
+                    <button onclick="savePrompts()" class="btn btn-primary">Save prompts</button>
+                </div>
             </div>
 
             <!-- Agent Prompts Tab -->
@@ -193,15 +205,14 @@
                 <div class="settings-section">
                     <div class="section-title-row">
                         <div>
-                            <h3 class="section-title">Agent Prompts & Priority</h3>
+                            <h3 class="section-title">Agents</h3>
                             <p class="text-muted">
-                                Configure agent roles, prompts, and priority order. Agents higher in the list have higher priority.
-                                Use the arrows to reorder, or add/remove agents as needed.
+                                Configure agent roles, prompts and priority. Agents higher in the list are picked first; use the arrows to reorder.
                             </p>
                         </div>
-                        <div style="display:flex; gap:8px;">
-                            <button onclick="openAddAgentModal()" class="btn btn-primary btn-sm">+ Add Agent</button>
-                            <button onclick="showAddMcpModal()" class="btn btn-secondary btn-sm">+ Add MCP</button>
+                        <div class="btn-row">
+                            <button onclick="showAddMcpModal()" class="btn btn-secondary btn-sm"><svg class="icon" aria-hidden="true"><use href="#icon-plus"></use></svg>Add MCP server</button>
+                            <button onclick="openAddAgentModal()" class="btn btn-primary btn-sm"><svg class="icon" aria-hidden="true"><use href="#icon-plus"></use></svg>Add agent</button>
                         </div>
                     </div>
                     <div id="agents-list"></div>
@@ -211,7 +222,7 @@
             <!-- Tools Tab -->
             <div id="tools-tab" class="tab-content">
                 <div class="settings-section">
-                    <h3 class="section-title">Tool Assignments</h3>
+                    <h3 class="section-title">Tool assignments</h3>
                     <p class="text-muted">
                         Drag and drop tools between agents to reassign them. Changes are saved automatically.
                     </p>
@@ -222,8 +233,8 @@
             <!-- Integrations Tab -->
             <div id="integrations-tab" class="tab-content">
                 <div class="settings-section">
-                    <h3 class="section-title">Service Integrations</h3>
-                    <p class="text-muted">Configure connections to external services</p>
+                    <h3 class="section-title">Integrations</h3>
+                    <p class="text-muted">Connect the services your assistant can use on your behalf.</p>
                     <div id="integrations-list"></div>
                 </div>
             </div>
@@ -231,14 +242,16 @@
             <!-- Plugins Tab -->
             <div id="plugins-tab" class="tab-content">
                 <div class="settings-section">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                        <h3 class="section-title" style="margin-bottom:0;">Plugin Integrations</h3>
-                        <button onclick="showAddPluginModal()" class="btn btn-secondary">+ Add Custom Plugin</button>
+                    <div class="section-title-row">
+                        <div>
+                            <h3 class="section-title">Plugins</h3>
+                            <p class="text-muted">
+                                Enable lightweight REST API integrations. Each plugin's endpoints are injected as LLM tools at runtime.
+                                <a href="https://github.com/open-assistant-org/open-assistant/blob/main/docs/plugin-schema.md" target="_blank" class="help-link">How to write a plugin <svg class="icon" aria-hidden="true"><use href="#icon-arrow-up-right"></use></svg></a>
+                            </p>
+                        </div>
+                        <button onclick="showAddPluginModal()" class="btn btn-secondary btn-sm"><svg class="icon" aria-hidden="true"><use href="#icon-plus"></use></svg>Add custom plugin</button>
                     </div>
-                    <p class="text-muted">
-                        Enable lightweight REST API integrations. Each plugin's endpoints are injected as LLM tools at runtime.
-                        <a href="https://github.com/open-assistant-org/open-assistant/blob/main/docs/plugin-schema.md" target="_blank" class="help-link">📚 How to write a plugin?</a>
-                    </p>
                     <div id="plugins-list"></div>
                 </div>
             </div>
@@ -246,20 +259,22 @@
             <!-- Advanced Tab -->
             <div id="advanced-tab" class="tab-content">
                 <div class="settings-section">
-                    <h3 class="section-title">User Preferences</h3>
-                    <p class="text-muted">Timezone and locale preferences used by the assistant and cron scheduler</p>
+                    <h3 class="section-title">Preferences</h3>
+                    <p class="text-muted">Timezone and locale used by the assistant and the scheduler.</p>
                     <div id="user-preferences-settings"></div>
-                    <button onclick="saveCategory('user')" class="btn btn-primary">Save Preferences</button>
+                    <div class="settings-actions">
+                        <button onclick="saveCategory('user')" class="btn btn-primary">Save preferences</button>
+                    </div>
                 </div>
 
                 <div class="settings-section">
-                    <h3 class="section-title">Audit Log</h3>
-                    <p class="text-muted">View configuration change history</p>
+                    <h3 class="section-title">Audit log</h3>
+                    <p class="text-muted">A history of configuration changes.</p>
 
                     <div class="audit-filters">
                         <select id="audit-event-type" class="form-select">
-                            <option value="">All Events</option>
-                            <option value="setting_change">Setting Changes</option>
+                            <option value="">All events</option>
+                            <option value="setting_change">Setting changes</option>
                         </select>
                         <button onclick="loadAuditLog()" class="btn btn-secondary">Refresh</button>
                     </div>
@@ -268,11 +283,11 @@
                 </div>
 
                 <div class="settings-section danger-zone">
-                    <h3 class="section-title">Danger Zone</h3>
-                    <p class="text-muted">These actions cannot be undone</p>
+                    <h3 class="section-title">Danger zone</h3>
+                    <p class="text-muted">These actions cannot be undone.</p>
 
                     <button onclick="resetAllSettings()" class="btn btn-danger">
-                        Reset All Settings to Defaults
+                        Reset all settings to defaults
                     </button>
                 </div>
             </div>
@@ -280,35 +295,38 @@
     </div>
 
     <!-- Add / Edit Plugin Modal -->
-    <div id="addPluginModal" class="modal" style="display:none;">
-        <div class="modal-content" style="max-width:680px;">
+    <div id="addPluginModal" class="modal">
+        <div class="modal-content measure-lg">
             <div class="modal-header">
-                <h2 id="plugin-modal-title">Install Custom Plugin</h2>
-                <button class="modal-close" onclick="closeAddPluginModal()">&times;</button>
+                <h2 id="plugin-modal-title">Install custom plugin</h2>
+                <button class="modal-close" aria-label="Close" onclick="closeAddPluginModal()"><svg class="icon" aria-hidden="true"><use href="#icon-close"></use></svg></button>
             </div>
             <div class="modal-body">
-                <p class="text-muted" style="margin-bottom:12px;">
-                    Paste a plugin definition JSON below.
-                    <a href="https://github.com/open-assistant-org/open-assistant/blob/main/docs/plugin-schema.md" target="_blank" class="help-link">View schema docs →</a>
-                </p>
-                <textarea id="plugin-json-input" class="form-input" rows="18"
-                    style="font-family:monospace; font-size:0.82rem; width:100%; box-sizing:border-box;"
-                    placeholder='{"id": "my_service", "display_name": "My Service", ...}'></textarea>
-                <div id="plugin-json-error" style="display:none; margin-top:8px; padding:8px 12px; background:#330000; color:#ff6666; border-radius:4px; font-size:0.85rem;"></div>
+                <div class="form-group mb-0">
+                    <label class="form-label" for="plugin-json-input">Plugin definition</label>
+                    <small class="form-hint" id="plugin-json-hint">
+                        Paste a plugin definition as JSON.
+                        <a href="https://github.com/open-assistant-org/open-assistant/blob/main/docs/plugin-schema.md" target="_blank" class="help-link">View schema docs <svg class="icon" aria-hidden="true"><use href="#icon-arrow-up-right"></use></svg></a>
+                    </small>
+                    <textarea id="plugin-json-input" class="form-textarea code-input" rows="18"
+                        aria-describedby="plugin-json-hint"
+                        placeholder='{"id": "my_service", "display_name": "My Service", ...}'></textarea>
+                </div>
+                <div id="plugin-json-error" class="alert alert-danger mt-1 mb-0" hidden></div>
             </div>
             <div class="modal-footer">
                 <button onclick="closeAddPluginModal()" class="btn btn-secondary">Cancel</button>
-                <button id="plugin-modal-save-btn" onclick="savePluginJson()" class="btn btn-primary">Validate & Install</button>
+                <button id="plugin-modal-save-btn" onclick="savePluginJson()" class="btn btn-primary">Validate and install</button>
             </div>
         </div>
     </div>
 
     <!-- Integration Card Modal -->
-    <div id="integrationModal" class="modal" style="display: none;">
+    <div id="integrationModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2 id="integration-modal-title">Integration Settings</h2>
-                <button class="modal-close" onclick="closeIntegrationModal()">&times;</button>
+                <h2 id="integration-modal-title">Integration settings</h2>
+                <button class="modal-close" aria-label="Close" onclick="closeIntegrationModal()"><svg class="icon" aria-hidden="true"><use href="#icon-close"></use></svg></button>
             </div>
             <div class="modal-body">
                 <div id="integration-modal-content"></div>
@@ -323,13 +341,13 @@
     <!-- Device Code Modal -->
     <div id="deviceCodeModal" class="device-code-modal">
         <div class="device-code-content">
-            <h2>Microsoft Authentication</h2>
+            <h2>Microsoft authentication</h2>
             <p>Please visit the URL below and enter this code:</p>
             <div class="device-code" id="deviceCode" onclick="copyDeviceCode()" title="Click to copy"></div>
             <p class="verification-url" id="verificationUrl"></p>
-            <button class="open-url-btn" id="openUrlBtn">Open in New Tab</button>
-            <p style="margin-top: 1.5rem; color: var(--text-muted); font-size: 0.9rem;">
-                Waiting for authentication... This window will close automatically when complete.
+            <button class="btn btn-primary open-url-btn" id="openUrlBtn">Open in new tab</button>
+            <p class="device-code-hint">
+                Waiting for authentication… This window closes automatically when you're done.
             </p>
             <button onclick="closeDeviceCodeModal()" class="btn btn-secondary">
                 Cancel
@@ -342,37 +360,37 @@
         <div class="device-code-content">
             <h2>Link WhatsApp</h2>
             <p>Scan this QR code with your phone:</p>
-            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem;">
-                WhatsApp &gt; Settings &gt; Linked Devices &gt; Link a Device
+            <p class="device-code-hint mt-0">
+                WhatsApp › Settings › Linked devices › Link a device
             </p>
             <div id="whatsappQrCode" class="whatsapp-qr-container">
-                <p style="color: var(--text-muted);">Waiting for QR code...</p>
+                <p>Waiting for QR code…</p>
             </div>
-            <p id="whatsappQrStatus" style="margin-top: 1rem; color: var(--text-muted); font-size: 0.9rem;">
-                Waiting for authentication...
+            <p id="whatsappQrStatus" class="device-code-hint">
+                Waiting for authentication…
             </p>
-            <div style="margin-top: 1rem; padding: 10px; background: #f5f5f5; border-radius: 5px; font-size: 0.85rem; color: #666;">
-                <strong>💡 Tip:</strong> If the QR code doesn't appear here, check your container logs:<br>
-                <code style="background: #e0e0e0; padding: 2px 6px; border-radius: 3px; font-family: monospace;">docker logs -f &lt;container_name&gt;</code>
+            <div class="alert alert-info">
+                <div><strong>Tip:</strong> if the QR code doesn't appear, check your container logs:
+                <code>docker logs -f &lt;container_name&gt;</code></div>
             </div>
-            <button onclick="closeWhatsAppQrModal()" class="btn btn-secondary" style="margin-top: 1rem;">
+            <button onclick="closeWhatsAppQrModal()" class="btn btn-secondary">
                 Cancel
             </button>
         </div>
     </div>
 
     <!-- Agent Edit Modal -->
-    <div id="agentModal" class="modal" style="display: none;">
+    <div id="agentModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2 id="agent-modal-title">Edit Agent</h2>
-                <button class="modal-close" onclick="closeAgentModal()">&times;</button>
+                <h2 id="agent-modal-title">Edit agent</h2>
+                <button class="modal-close" aria-label="Close" onclick="closeAgentModal()"><svg class="icon" aria-hidden="true"><use href="#icon-close"></use></svg></button>
             </div>
             <div class="modal-body">
                 <input type="hidden" id="agent-name">
 
                 <div class="form-group">
-                    <label for="agent-display-name">Display Name</label>
+                    <label for="agent-display-name">Display name</label>
                     <input type="text" id="agent-display-name" class="form-input" placeholder="Agent display name">
                 </div>
 
@@ -387,7 +405,7 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="agent-backstory">Backstory / System Prompt</label>
+                    <label for="agent-backstory">Backstory / system prompt</label>
                     <textarea id="agent-backstory" class="form-textarea" rows="10" placeholder="Agent backstory and instructions"></textarea>
                 </div>
 
@@ -397,26 +415,25 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="agent-intent-keywords">Intent Keywords (comma-separated)</label>
+                    <label for="agent-intent-keywords">Intent keywords (comma-separated)</label>
                     <textarea id="agent-intent-keywords" class="form-textarea" rows="2" placeholder="e.g. email, send, message, draft, reply"></textarea>
                     <small class="form-hint">Keywords used to automatically select this skill when a user's message matches. Leave empty to rely on priority-based selection.</small>
                 </div>
 
             </div>
             <div class="modal-footer">
-                <button onclick="resetAgentToDefault()" id="agent-reset-btn" class="btn btn-secondary">Reset to Default</button>
-                <button onclick="closeAgentModal()" class="btn btn-secondary">Cancel</button>
+                <button onclick="resetAgentToDefault()" id="agent-reset-btn" class="btn btn-secondary">Reset to default</button>
                 <button onclick="saveAgentSettings()" class="btn btn-primary">Save</button>
             </div>
         </div>
     </div>
 
     <!-- Add Agent Modal -->
-    <div id="addAgentModal" class="modal" style="display: none;">
+    <div id="addAgentModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Add New Agent</h2>
-                <button class="modal-close" onclick="closeAddAgentModal()">&times;</button>
+                <h2>Add new agent</h2>
+                <button class="modal-close" aria-label="Close" onclick="closeAddAgentModal()"><svg class="icon" aria-hidden="true"><use href="#icon-close"></use></svg></button>
             </div>
             <div class="modal-body">
                 <div class="form-group">
@@ -425,8 +442,8 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="new-agent-display-name">Display Name</label>
-                    <input type="text" id="new-agent-display-name" class="form-input" placeholder="My Custom Agent">
+                    <label for="new-agent-display-name">Display name</label>
+                    <input type="text" id="new-agent-display-name" class="form-input" placeholder="My custom agent">
                 </div>
 
                 <div class="form-group">
@@ -440,23 +457,23 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="new-agent-backstory">Backstory / System Prompt</label>
+                    <label for="new-agent-backstory">Backstory / system prompt</label>
                     <textarea id="new-agent-backstory" class="form-textarea" rows="6" placeholder="Agent backstory and instructions"></textarea>
                 </div>
             </div>
             <div class="modal-footer">
                 <button onclick="closeAddAgentModal()" class="btn btn-secondary">Cancel</button>
-                <button onclick="createNewAgent()" class="btn btn-primary">Create Agent</button>
+                <button onclick="createNewAgent()" class="btn btn-primary">Create agent</button>
             </div>
         </div>
     </div>
 
     <!-- Add MCP Server Modal -->
-    <div id="addMcpModal" class="modal" style="display: none;">
-        <div class="modal-content" style="max-width:600px;">
+    <div id="addMcpModal" class="modal">
+        <div class="modal-content measure-md">
             <div class="modal-header">
-                <h2>Add MCP Server</h2>
-                <button class="modal-close" onclick="closeAddMcpModal()">&times;</button>
+                <h2>Add MCP server</h2>
+                <button class="modal-close" aria-label="Close" onclick="closeAddMcpModal()"><svg class="icon" aria-hidden="true"><use href="#icon-close"></use></svg></button>
             </div>
             <div class="modal-body">
                 <div class="form-group">
@@ -464,7 +481,7 @@
                     <input type="text" id="new-mcp-id" class="form-input" placeholder="e.g., cloudflare_gateway" pattern="[a-z][a-z0-9_]*">
                 </div>
                 <div class="form-group">
-                    <label for="new-mcp-display-name">Display Name</label>
+                    <label for="new-mcp-display-name">Display name</label>
                     <input type="text" id="new-mcp-display-name" class="form-input" placeholder="Cloudflare Gateway">
                 </div>
                 <div class="form-group">
@@ -472,7 +489,7 @@
                     <input type="text" id="new-mcp-description" class="form-input" placeholder="What this server does">
                 </div>
                 <div class="form-group">
-                    <label for="new-mcp-keywords">Intent Keywords (comma-separated)</label>
+                    <label for="new-mcp-keywords">Intent keywords (comma-separated)</label>
                     <input type="text" id="new-mcp-keywords" class="form-input" placeholder="cloudflare, gateway, cdn">
                     <div class="form-hint">A message containing any of these words activates this server's tools.</div>
                 </div>
@@ -490,16 +507,16 @@
                 <!-- Auth type selector -->
                 <div class="form-group">
                     <label>Authentication</label>
-                    <div style="display:flex; gap:16px; margin-top:4px; flex-wrap:wrap;">
-                        <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                    <div class="radio-group">
+                        <label class="radio-label">
                             <input type="radio" name="mcp-auth-type" value="none" onchange="onMcpAuthTypeChange(this.value)">
                             None
                         </label>
-                        <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                        <label class="radio-label">
                             <input type="radio" name="mcp-auth-type" value="header" checked onchange="onMcpAuthTypeChange(this.value)">
-                            Static Headers
+                            Static headers
                         </label>
-                        <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                        <label class="radio-label">
                             <input type="radio" name="mcp-auth-type" value="oauth2" onchange="onMcpAuthTypeChange(this.value)">
                             OAuth 2.1 (PKCE)
                         </label>
@@ -509,16 +526,16 @@
                 <!-- Static header fields -->
                 <div id="mcp-header-fields">
                     <div class="form-group">
-                        <label>Auth Headers <span class="text-muted">(values stored encrypted)</span></label>
+                        <label>Auth headers <span class="text-muted">(values stored encrypted)</span></label>
                         <div id="mcp-headers-list"></div>
-                        <button type="button" onclick="addMcpHeaderRow()" class="btn btn-secondary btn-sm" style="margin-top:6px;">+ Add Header</button>
+                        <button type="button" onclick="addMcpHeaderRow()" class="btn btn-secondary btn-sm self-start"><svg class="icon" aria-hidden="true"><use href="#icon-plus"></use></svg>Add header</button>
                     </div>
                 </div>
 
                 <!-- OAuth 2.1 fields -->
-                <div id="mcp-oauth-fields" style="display:none;">
+                <div id="mcp-oauth-fields" hidden>
                     <div class="form-group">
-                        <label for="new-mcp-scopes">OAuth Scopes <span class="text-muted">(space-separated, optional)</span></label>
+                        <label for="new-mcp-scopes">OAuth scopes <span class="text-muted">(space-separated, optional)</span></label>
                         <input type="text" id="new-mcp-scopes" class="form-input" placeholder="read write">
                         <div class="form-hint">
                             OAuth metadata and dynamic client registration will be discovered automatically from the server URL.
@@ -529,26 +546,26 @@
             </div>
             <div class="modal-footer">
                 <button onclick="closeAddMcpModal()" class="btn btn-secondary">Cancel</button>
-                <button onclick="createMcpServer()" class="btn btn-primary" id="mcp-create-btn">Connect &amp; Add</button>
+                <button onclick="createMcpServer()" class="btn btn-primary" id="mcp-create-btn">Connect and add</button>
             </div>
         </div>
     </div>
 
     <!-- Update MCP Credentials Modal (static-header servers only) -->
-    <div id="mcpCredentialsModal" class="modal" style="display: none;">
-        <div class="modal-content" style="max-width:540px;">
+    <div id="mcpCredentialsModal" class="modal">
+        <div class="modal-content measure-md">
             <div class="modal-header">
-                <h2 id="mcp-creds-title">Update Credentials</h2>
-                <button class="modal-close" onclick="closeMcpCredentialsModal()">&times;</button>
+                <h2 id="mcp-creds-title">Update credentials</h2>
+                <button class="modal-close" aria-label="Close" onclick="closeMcpCredentialsModal()"><svg class="icon" aria-hidden="true"><use href="#icon-close"></use></svg></button>
             </div>
             <div class="modal-body">
-                <p class="text-muted" style="margin-bottom:12px;">
+                <p class="modal-hint">
                     Enter new values to update stored secrets. Leave a field blank to keep the existing value.
                 </p>
                 <input type="hidden" id="mcp-creds-server-id">
-                <div id="mcp-creds-headers-section" style="display:none;">
-                    <label style="font-weight:600;">Auth Headers</label>
-                    <div id="mcp-creds-headers-list" style="margin-top:8px;"></div>
+                <div id="mcp-creds-headers-section" hidden>
+                    <label class="form-label">Auth headers</label>
+                    <div id="mcp-creds-headers-list" class="mt-1"></div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -559,22 +576,22 @@
     </div>
 
     <!-- Edit MCP Server Modal (display_name + intent_keywords + backstory) -->
-    <div id="mcpEditModal" class="modal" style="display: none;">
-        <div class="modal-content" style="max-width:480px;">
+    <div id="mcpEditModal" class="modal">
+        <div class="modal-content measure-sm">
             <div class="modal-header">
-                <h2>Edit MCP Server</h2>
-                <button class="modal-close" onclick="closeMcpEditModal()">&times;</button>
+                <h2>Edit MCP server</h2>
+                <button class="modal-close" aria-label="Close" onclick="closeMcpEditModal()"><svg class="icon" aria-hidden="true"><use href="#icon-close"></use></svg></button>
             </div>
             <div class="modal-body">
                 <input type="hidden" id="mcp-edit-server-id">
                 <div class="form-group">
-                    <label for="mcp-edit-display-name">Display Name</label>
+                    <label for="mcp-edit-display-name">Display name</label>
                     <input type="text" id="mcp-edit-display-name" class="form-input" maxlength="100">
                 </div>
                 <div class="form-group">
-                    <label for="mcp-edit-keywords">Intent Keywords <span class="text-muted">(comma-separated)</span></label>
+                    <label for="mcp-edit-keywords">Intent keywords <span class="text-muted">(comma-separated)</span></label>
                     <input type="text" id="mcp-edit-keywords" class="form-input" placeholder="email, send, compose">
-                    <small class="text-muted">A message containing any of these words activates this server's tools.</small>
+                    <small class="form-hint">A message containing any of these words activates this server's tools.</small>
                 </div>
                 <div class="form-group">
                     <label for="mcp-edit-backstory">Backstory <span class="text-muted">(optional)</span></label>

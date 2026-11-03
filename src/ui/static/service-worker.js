@@ -14,7 +14,14 @@
 // resolves the theme pre-paint. Bump forces stale clients to fetch both.
 // v6: Browser integration card gained the "Authenticated sessions" section
 // (settings.js + common.css). Bump forces stale clients to fetch both.
-const CACHE_VERSION = 'v6';
+// v7: new design system - css/ split into tokens/base/components/common/
+// mobile + pages/*, self-hosted Inter in static/fonts, new brand mark and
+// icons. Bump forces stale clients to drop the old green theme.
+// v8: Lucide icon sprite, Geist Mono for code, calmer (less green) states,
+// restyled offline page.
+// v9: design feedback pass - trash icon buttons, in-app confirm dialogs,
+// right-aligned actions, softer input focus. Bump so clients refetch CSS/JS.
+const CACHE_VERSION = 'v9';
 const CACHE_NAME = `personal-assistant-${CACHE_VERSION}`;
 
 // Derive base path from the SW's own registration scope.
@@ -27,8 +34,15 @@ const STATIC_ASSETS = [
     BASE_PATH + '/',
     BASE_PATH + '/settings',
     BASE_PATH + '/monitoring',
+    BASE_PATH + '/static/css/tokens.css',
+    BASE_PATH + '/static/css/base.css',
+    BASE_PATH + '/static/css/components.css',
     BASE_PATH + '/static/css/common.css',
+    BASE_PATH + '/static/css/mobile.css',
+    BASE_PATH + '/static/css/pages/chat.css',
+    BASE_PATH + '/static/fonts/inter-latin-wght-normal.woff2',
     BASE_PATH + '/static/js/theme.js',
+    BASE_PATH + '/static/js/components.js',
     BASE_PATH + '/static/js/common.js',
     BASE_PATH + '/static/js/chat.js',
     BASE_PATH + '/static/js/settings.js',
@@ -188,51 +202,89 @@ async function networkFirst(request) {
                     <meta name="viewport" content="width=device-width, initial-scale=1.0">
                     <title>Offline - Open Assistant</title>
                     <style>
+                        /* Mirrors css/tokens.css; self-contained because the
+                           network (and so every stylesheet) is unavailable. */
+                        :root {
+                            color-scheme: light dark;
+                            --bg: #f7f7f5; --surface: #ffffff; --border: #e1e1dc;
+                            --text: #1c1c1a; --text-2: #585853;
+                            --accent: #1c1c1a; --on-accent: #ffffff;
+                        }
+                        @media (prefers-color-scheme: dark) {
+                            :root {
+                                --bg: #121211; --surface: #1b1b19; --border: #2f2f2c;
+                                --text: #ededea; --text-2: #b5b5af;
+                                --accent: #ededea; --on-accent: #121211;
+                            }
+                        }
                         body {
-                            font-family: 'Courier New', monospace;
-                            background: #0a0a0a;
-                            color: #00ff00;
+                            font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+                            background: var(--bg);
+                            color: var(--text);
                             display: flex;
                             justify-content: center;
                             align-items: center;
-                            height: 100vh;
+                            min-height: 100vh;
                             margin: 0;
+                            padding: 20px;
+                            box-sizing: border-box;
                             text-align: center;
+                            -webkit-font-smoothing: antialiased;
                         }
                         .offline-container {
-                            padding: 20px;
+                            max-width: 380px;
+                            padding: 40px 32px 32px;
+                            background: var(--surface);
+                            border: 1px solid var(--border);
+                            border-radius: 20px;
+                        }
+                        .offline-icon {
+                            display: inline-flex;
+                            align-items: center;
+                            justify-content: center;
+                            width: 48px;
+                            height: 48px;
+                            margin-bottom: 16px;
+                            border-radius: 999px;
+                            background: var(--bg);
+                            color: var(--text-2);
                         }
                         h1 {
-                            font-size: 2rem;
-                            margin-bottom: 1rem;
-                            text-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+                            font-size: 1.25rem;
+                            font-weight: 600;
+                            letter-spacing: -0.015em;
+                            margin: 0 0 8px;
                         }
                         p {
-                            font-size: 1.2rem;
-                            color: #ffffff;
+                            font-size: 0.9375rem;
+                            line-height: 1.55;
+                            color: var(--text-2);
+                            margin: 0;
                         }
                         button {
-                            margin-top: 2rem;
-                            padding: 12px 24px;
-                            background: rgba(0, 255, 0, 0.1);
-                            color: #00ff00;
-                            border: 2px solid #00ff00;
-                            border-radius: 8px;
+                            margin-top: 24px;
+                            height: 40px;
+                            padding: 0 20px;
+                            background: var(--accent);
+                            color: var(--on-accent);
+                            border: none;
+                            border-radius: 10px;
                             cursor: pointer;
-                            font-size: 1rem;
-                            font-family: inherit;
-                        }
-                        button:hover {
-                            background: rgba(0, 255, 0, 0.2);
+                            font: inherit;
+                            font-size: 0.875rem;
+                            font-weight: 500;
                         }
                     </style>
                 </head>
                 <body>
                     <div class="offline-container">
-                        <h1>📡 You're Offline</h1>
-                        <p>No internet connection detected.</p>
-                        <p>Some features may not be available.</p>
-                        <button onclick="window.location.reload()">Retry</button>
+                        <span class="offline-icon">
+                            <!-- Lucide "wifi-off" (ISC) -->
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h.01"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/><path d="M5 12.859a10 10 0 0 1 5.17-2.69"/><path d="M19 12.859a10 10 0 0 0-2.007-1.523"/><path d="M2 8.82a15 15 0 0 1 4.177-2.643"/><path d="M22 8.82a15 15 0 0 0-11.288-3.764"/><path d="m2 2 20 20"/></svg>
+                        </span>
+                        <h1>You're offline</h1>
+                        <p>We can't reach your assistant right now. Check your connection and try again.</p>
+                        <button onclick="window.location.reload()">Try again</button>
                     </div>
                 </body>
                 </html>`,

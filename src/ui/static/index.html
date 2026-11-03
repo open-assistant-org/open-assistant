@@ -13,11 +13,10 @@
          proxy doesn't auth-gate it and trigger a CSP/redirect violation. -->
     <link rel="manifest" href="/static/manifest.json">
 
-    <!-- Theme Colors -->
-    <meta name="theme-color" content="#00ff00">
-    <meta name="msapplication-TileColor" content="#0a0a0a">
-    <meta name="msapplication-navbutton-color" content="#00ff00">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <!-- Theme Colors (theme.js keeps theme-color in sync with light/dark) -->
+    <meta name="theme-color" content="#f7f7f5">
+    <meta name="msapplication-TileColor" content="#f7f7f5">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
 
     <!-- PWA Meta Tags -->
     <meta name="mobile-web-app-capable" content="yes">
@@ -36,660 +35,17 @@
     <link rel="apple-touch-icon" sizes="384x384" href="/static/icons/icon-384x384.png">
     <link rel="apple-touch-icon" sizes="512x512" href="/static/icons/icon-512x512.png">
 
-    <!-- Stylesheets -->
+    <!-- Design system -->
     <script src="/static/js/theme.js"></script>
+    <link rel="preload" href="/static/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="/static/css/tokens.css">
+    <link rel="stylesheet" href="/static/css/base.css">
+    <link rel="stylesheet" href="/static/css/components.css">
     <link rel="stylesheet" href="/static/css/common.css">
     <link rel="stylesheet" href="/static/css/mobile.css">
-    <style>
-        .chat-container {
-            background: var(--card-background);
-            border-radius: 0 16px 16px 0;
-            box-shadow: var(--shadow);
-            border: 1px solid var(--border-color);
-            width: 100%;
-            height: 100%;
-            min-height: 0;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        .chat-layout:not(.sidebar-open) .chat-container {
-            border-radius: 16px;
-        }
-
-        .chat-header {
-            background: var(--card-background);
-            color: var(--text-secondary);
-            padding: 14px 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        .chat-header-title {
-            font-size: 1.05rem;
-            font-weight: 600;
-            color: var(--color-text);
-        }
-
-        .chat-header-actions {
-            display: flex;
-            gap: 12px;
-            align-items: center;
-        }
-
-        .conversation-id {
-            font-size: 0.82rem;
-            color: var(--text-muted);
-        }
-
-        #newConversationBtn {
-            background: transparent;
-            color: var(--text-secondary);
-            border: 1px solid var(--border-color);
-            padding: 6px 14px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 0.85rem;
-            transition: all 0.2s;
-        }
-
-        #newConversationBtn:hover {
-            color: var(--primary-color);
-            border-color: var(--primary-color);
-            background: color-mix(in srgb, var(--color-primary) 8%, transparent);
-        }
-
-        .chat-messages {
-            flex: 1;
-            overflow-y: auto;
-            padding: 20px;
-            background: var(--background-color);
-        }
-
-        .message {
-            margin-bottom: 16px;
-            display: flex;
-            animation: slideIn 0.3s ease-out;
-        }
-
-        .message.user {
-            justify-content: flex-end;
-        }
-
-        .message-content {
-            max-width: 70%;
-            padding: 12px 16px;
-            border-radius: 12px;
-            font-size: 0.9rem;
-            line-height: 1.6;
-            word-wrap: break-word;
-            white-space: pre-wrap;
-        }
-
-        .message.user .message-content {
-            background: color-mix(in srgb, var(--color-primary) 10%, transparent);
-            color: var(--color-text);
-            border: 1px solid color-mix(in srgb, var(--color-primary) 25%, transparent);
-        }
-
-        .message.assistant .message-content {
-            background: var(--card-background);
-            color: var(--text-secondary);
-            border: 1px solid var(--border-color);
-        }
-
-        .message.error .message-content {
-            background: var(--error-background);
-            color: var(--error-color);
-            border: 1px solid var(--error-color);
-        }
-
-        .chat-input-container {
-            padding: 20px;
-            background: var(--card-background);
-            border-top: 1px solid var(--border-color);
-            display: flex;
-            gap: 12px;
-        }
-
-        #messageInput {
-            flex: 1;
-            padding: 12px 16px;
-            border: 1px solid var(--border-color);
-            border-radius: 24px;
-            font-size: 0.9rem;
-            outline: none;
-            transition: all 0.3s;
-            resize: none;
-            font-family: inherit;
-            max-height: 120px;
-            background: var(--background-darker);
-            color: var(--text-secondary);
-        }
-
-        #messageInput:focus {
-            border-color: var(--primary-color);
-            box-shadow: 0 0 8px var(--primary-glow);
-            color: var(--color-text);
-        }
-
-        #sendButton {
-            padding: 10px 22px;
-            background: color-mix(in srgb, var(--color-primary) 10%, transparent);
-            color: var(--primary-color);
-            border: 1px solid var(--primary-color);
-            border-radius: 24px;
-            font-size: 0.9rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        #sendButton:hover:not(:disabled) {
-            background: color-mix(in srgb, var(--color-primary) 20%, transparent);
-            transform: translateY(-2px);
-            box-shadow: 0 0 12px var(--primary-glow);
-        }
-
-        #sendButton:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .typing-indicator {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 12px 16px;
-            background: var(--card-background);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-        }
-
-        .typing-dot {
-            width: 8px;
-            height: 8px;
-            background: var(--primary-color);
-            border-radius: 50%;
-            animation: typing 1.4s infinite;
-            box-shadow: 0 0 4px var(--primary-glow);
-        }
-
-        .typing-dot:nth-child(2) {
-            animation-delay: 0.2s;
-        }
-
-        .typing-dot:nth-child(3) {
-            animation-delay: 0.4s;
-        }
-
-        @keyframes typing {
-            0%, 60%, 100% {
-                transform: translateY(0);
-            }
-            30% {
-                transform: translateY(-10px);
-            }
-        }
-
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        /* Tool call progress cards */
-        .tool-trace-container {
-            margin: 4px 0 8px 0;
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            animation: slideIn 0.2s ease-out;
-        }
-
-        .tool-call-card {
-            display: flex;
-            align-items: flex-start;
-            gap: 8px;
-            padding: 6px 10px;
-            border-left: 3px solid var(--border-color);
-            background: color-mix(in srgb, var(--color-text) 3%, transparent);
-            border-radius: 0 6px 6px 0;
-            font-size: 0.82rem;
-            transition: border-color 0.3s ease;
-        }
-
-        .tool-call-card.running {
-            border-color: var(--color-info);
-        }
-
-        .tool-call-card.done {
-            border-color: var(--color-success);
-        }
-
-        .tool-call-card.failed {
-            border-color: var(--color-error);
-        }
-
-        .tool-call-icon {
-            font-size: 0.9rem;
-            line-height: 1.4;
-            flex-shrink: 0;
-        }
-
-        .tool-call-body {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .tool-call-name {
-            font-family: monospace;
-            font-weight: 600;
-            color: var(--color-text);
-            word-break: break-all;
-        }
-
-        .tool-call-args {
-            color: var(--text-muted);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            max-width: 100%;
-        }
-
-        .tool-call-status {
-            flex-shrink: 0;
-            color: var(--text-muted);
-            font-size: 0.78rem;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        .tool-spinner {
-            display: inline-block;
-            width: 10px;
-            height: 10px;
-            border: 2px solid var(--color-border);
-            border-top-color: var(--color-info);
-            border-radius: 50%;
-            animation: spin 0.7s linear infinite;
-            vertical-align: middle;
-        }
-
-        /* Markdown rendering for assistant messages */
-        .message.assistant .message-content {
-            white-space: normal;
-        }
-
-        .message.assistant .message-content > *:first-child { margin-top: 0; }
-        .message.assistant .message-content > *:last-child { margin-bottom: 0; }
-
-        .message.assistant .message-content h1,
-        .message.assistant .message-content h2,
-        .message.assistant .message-content h3,
-        .message.assistant .message-content h4,
-        .message.assistant .message-content h5,
-        .message.assistant .message-content h6 {
-            margin: 0.75em 0 0.3em;
-            font-weight: 700;
-            line-height: 1.3;
-            color: var(--color-text);
-        }
-
-        .message.assistant .message-content h1 { font-size: 1.35em; border-bottom: 1px solid var(--border-color); padding-bottom: 0.2em; }
-        .message.assistant .message-content h2 { font-size: 1.2em; }
-        .message.assistant .message-content h3 { font-size: 1.05em; }
-
-        .message.assistant .message-content p {
-            margin: 0.45em 0;
-            line-height: 1.65;
-        }
-
-        .message.assistant .message-content strong {
-            font-weight: 700;
-            color: var(--color-text);
-        }
-
-        .message.assistant .message-content em {
-            font-style: italic;
-        }
-
-        .message.assistant .message-content code {
-            font-family: 'Courier New', Courier, monospace;
-            background: color-mix(in srgb, var(--color-primary) 8%, transparent);
-            border: 1px solid color-mix(in srgb, var(--color-primary) 20%, transparent);
-            padding: 0.1em 0.35em;
-            border-radius: 3px;
-            font-size: 0.88em;
-            color: var(--primary-color);
-        }
-
-        .message.assistant .message-content pre {
-            background: var(--background-darker);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            padding: 12px 14px;
-            overflow-x: auto;
-            margin: 0.6em 0;
-        }
-
-        .message.assistant .message-content pre code {
-            background: none;
-            border: none;
-            padding: 0;
-            color: var(--text-secondary);
-            font-size: 0.85em;
-            white-space: pre;
-        }
-
-        .message.assistant .message-content ul,
-        .message.assistant .message-content ol {
-            margin: 0.35em 0 0.35em 1.6em;
-            padding: 0;
-        }
-
-        .message.assistant .message-content li {
-            margin: 0.2em 0;
-            line-height: 1.55;
-        }
-
-        .message.assistant .message-content li > ul,
-        .message.assistant .message-content li > ol {
-            margin-top: 0.15em;
-            margin-bottom: 0.15em;
-        }
-
-        .message.assistant .message-content table {
-            border-collapse: collapse;
-            margin: 0.6em 0;
-            font-size: 0.9em;
-            overflow-x: auto;
-            display: block;
-            max-width: 100%;
-        }
-
-        .message.assistant .message-content th,
-        .message.assistant .message-content td {
-            border: 1px solid var(--border-color);
-            padding: 6px 12px;
-            text-align: left;
-            white-space: nowrap;
-        }
-
-        .message.assistant .message-content th {
-            background: color-mix(in srgb, var(--color-primary) 8%, transparent);
-            font-weight: 600;
-            color: var(--color-text);
-        }
-
-        .message.assistant .message-content tr:nth-child(even) td {
-            background: rgba(255, 255, 255, 0.02);
-        }
-
-        .message.assistant .message-content blockquote {
-            border-left: 3px solid var(--primary-color);
-            margin: 0.5em 0;
-            padding: 0.3em 0 0.3em 1em;
-            color: var(--text-secondary);
-            background: color-mix(in srgb, var(--color-primary) 4%, transparent);
-            border-radius: 0 4px 4px 0;
-        }
-
-        .message.assistant .message-content blockquote p { margin: 0.2em 0; }
-
-        .message.assistant .message-content a {
-            color: var(--primary-color);
-            text-decoration: underline;
-            text-underline-offset: 2px;
-        }
-
-        .message.assistant .message-content hr {
-            border: none;
-            border-top: 1px solid var(--border-color);
-            margin: 0.75em 0;
-        }
-
-        .message.assistant .message-content del {
-            text-decoration: line-through;
-            opacity: 0.7;
-        }
-
-        /* ── File upload UI ── */
-        .chat-input-inner {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            min-width: 0;
-        }
-
-        .attach-btn {
-            background: none;
-            border: none;
-            cursor: pointer;
-            padding: 8px;
-            color: var(--border-color);
-            border-radius: 50%;
-            transition: color 0.2s, background 0.2s;
-            flex-shrink: 0;
-            align-self: flex-end;
-            margin-bottom: 4px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .attach-btn:hover:not(:disabled) {
-            color: var(--primary-color);
-            background: color-mix(in srgb, var(--color-primary) 8%, transparent);
-        }
-
-        .attach-btn:disabled {
-            opacity: 0.4;
-            cursor: not-allowed;
-        }
-
-        .attach-btn svg {
-            width: 20px;
-            height: 20px;
-            display: block;
-        }
-
-        .attachment-chips {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-            padding: 6px 0 4px 4px;
-        }
-
-        .attachment-chip {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            background: color-mix(in srgb, var(--color-primary) 10%, transparent);
-            border: 1px solid var(--primary-color);
-            border-radius: 14px;
-            padding: 3px 10px 3px 8px;
-            font-size: 0.8rem;
-            color: var(--primary-color);
-            max-width: 220px;
-        }
-
-        .attachment-chip-name {
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            flex: 1;
-            min-width: 0;
-        }
-
-        .attachment-chip-size {
-            font-size: 0.72rem;
-            opacity: 0.7;
-            flex-shrink: 0;
-        }
-
-        .attachment-chip-remove {
-            background: none;
-            border: none;
-            cursor: pointer;
-            color: var(--primary-color);
-            font-size: 0.9rem;
-            padding: 0;
-            line-height: 1;
-            flex-shrink: 0;
-            opacity: 0.8;
-        }
-
-        .attachment-chip-remove:hover {
-            opacity: 1;
-        }
-
-        .attachment-chip.uploading {
-            opacity: 0.6;
-        }
-
-        /* User messages that include a file attachment banner */
-        .message.user .attachment-banner {
-            font-size: 0.78rem;
-            opacity: 0.75;
-            margin-bottom: 4px;
-        }
-
-        /* ── Cancel button ──────────────────────────────────────── */
-        .cancel-btn {
-            padding: 10px 18px;
-            background: color-mix(in srgb, var(--color-error) 10%, transparent);
-            color: var(--color-error);
-            border: 1px solid var(--color-error);
-            border-radius: 24px;
-            font-size: 0.9rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            white-space: nowrap;
-        }
-
-        .cancel-btn:hover {
-            background: rgba(239, 68, 68, 0.22);
-            box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
-            transform: translateY(-1px);
-        }
-
-        /* ── Confirmation modal ─────────────────────────────────── */
-        .modal-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(0, 0, 0, 0.65);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-            backdrop-filter: blur(3px);
-            animation: fadeIn 0.15s ease-out;
-        }
-
-        .modal-overlay.hidden {
-            display: none;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to   { opacity: 1; }
-        }
-
-        .modal-card {
-            background: var(--card-background);
-            border: 1px solid var(--border-color);
-            border-radius: 14px;
-            padding: 28px 32px;
-            max-width: 380px;
-            width: 90%;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
-            animation: slideUp 0.18s ease-out;
-        }
-
-        /* This shadow was never themed - a flat 60% black drop shadow
-           reads fine on a dark page but harsh/dated on white. Light mode
-           gets the softer layered elevation from common.css instead. */
-        :root[data-theme="light"] .modal-card {
-            box-shadow: var(--shadow-xl);
-        }
-
-        @keyframes slideUp {
-            from { opacity: 0; transform: translateY(16px); }
-            to   { opacity: 1; transform: translateY(0);    }
-        }
-
-        .modal-icon {
-            font-size: 2rem;
-            margin-bottom: 12px;
-        }
-
-        .modal-title {
-            font-size: 1.15rem;
-            font-weight: 700;
-            color: var(--color-text);
-            margin-bottom: 8px;
-        }
-
-        .modal-body {
-            font-size: 0.92rem;
-            color: var(--text-secondary);
-            line-height: 1.55;
-            margin-bottom: 24px;
-        }
-
-        .modal-actions {
-            display: flex;
-            gap: 10px;
-            justify-content: flex-end;
-        }
-
-        .modal-btn-secondary {
-            padding: 9px 18px;
-            background: transparent;
-            color: var(--text-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            font-size: 0.9rem;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .modal-btn-secondary:hover {
-            background: var(--background-color);
-            color: var(--color-text);
-        }
-
-        .modal-btn-danger {
-            padding: 9px 18px;
-            background: color-mix(in srgb, var(--color-error) 12%, transparent);
-            color: var(--color-error);
-            border: 1px solid var(--color-error);
-            border-radius: 8px;
-            font-size: 0.9rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .modal-btn-danger:hover {
-            background: rgba(239, 68, 68, 0.25);
-            box-shadow: 0 0 8px rgba(239, 68, 68, 0.35);
-        }
-    </style>
+    <link rel="stylesheet" href="/static/css/pages/chat.css">
 </head>
-<body>
+<body class="page-chat">
     <!-- Navigation (rendered by js/components.js) -->
     <div id="navbar-root"></div>
 
@@ -706,12 +62,12 @@
                     </button>
                 </div>
                 <div class="sidebar-filters">
-                    <input type="text" id="conversationSearch" placeholder="Search messages..." />
+                    <input type="text" id="conversationSearch" placeholder="Search messages" aria-label="Search messages" />
                     <select id="dateFilter">
-                        <option value="all">All Time</option>
+                        <option value="all">All time</option>
                         <option value="today">Today</option>
-                        <option value="week">This Week</option>
-                        <option value="month">This Month</option>
+                        <option value="week">This week</option>
+                        <option value="month">This month</option>
                         <option value="older">Older</option>
                     </select>
                 </div>
@@ -719,7 +75,7 @@
                     <!-- Conversation cards rendered by JS -->
                 </div>
                 <div class="sidebar-footer">
-                    <button id="loadMoreConversations" class="btn-secondary">Load More</button>
+                    <button id="loadMoreConversations">Load more</button>
                 </div>
             </div>
 
@@ -727,14 +83,17 @@
             <div class="chat-container">
                 <div class="chat-header">
                     <div class="chat-header-left">
-                        <button id="toggleSidebarBtn" class="sidebar-toggle-btn" title="Toggle conversation history">
-                            <svg class="icon" aria-hidden="true"><use href="#icon-menu"></use></svg>
+                        <button id="toggleSidebarBtn" class="sidebar-toggle-btn" title="Conversation history" aria-label="Toggle conversation history">
+                            <svg class="icon icon-md" aria-hidden="true"><use href="#icon-history"></use></svg>
                         </button>
                         <div class="chat-header-title">Chat</div>
+                        <span class="conversation-id" id="conversationIdDisplay">New conversation</span>
                     </div>
                     <div class="chat-header-actions">
-                        <span class="conversation-id" id="conversationIdDisplay">New Conversation</span>
-                        <button id="newConversationBtn">New Chat</button>
+                        <button id="newConversationBtn" class="btn btn-secondary btn-sm">
+                            <svg class="icon" aria-hidden="true"><use href="#icon-plus"></use></svg>
+                            New chat
+                        </button>
                     </div>
                 </div>
 
@@ -747,25 +106,34 @@
                 </div>
 
                 <div class="chat-input-container">
-                    <!-- Hidden file picker — triggered by the paperclip button -->
-                    <input type="file" id="fileInput" multiple style="display:none" />
-                    <button id="attachButton" title="Attach file(s)" class="attach-btn" aria-label="Attach file">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M21.44 11.05L12.25 20.24a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66L9.41 17.41a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
-                        </svg>
-                    </button>
-                    <div class="chat-input-inner">
-                        <!-- Attached file chips appear here before the textarea -->
-                        <div id="attachmentChips" class="attachment-chips" style="display:none"></div>
-                        <textarea
-                            id="messageInput"
-                            placeholder="Type your message..."
-                            rows="1"
-                            autocomplete="off"
-                        ></textarea>
+                    <!-- Hidden file picker - triggered by the paperclip button -->
+                    <input type="file" id="fileInput" multiple hidden />
+                    <div class="composer">
+                        <!-- Attached file chips appear above the textarea -->
+                        <div id="attachmentChips" class="attachment-chips" hidden></div>
+                        <div class="composer-row">
+                            <button id="attachButton" class="composer-btn attach-btn" title="Attach files" aria-label="Attach files">
+                                <svg class="icon" aria-hidden="true"><use href="#icon-paperclip"></use></svg>
+                            </button>
+                            <div class="chat-input-inner">
+                                <label for="messageInput" class="sr-only">Message</label>
+                                <textarea
+                                    id="messageInput"
+                                    placeholder="Ask me anything…"
+                                    rows="1"
+                                    autocomplete="off"
+                                ></textarea>
+                            </div>
+                            <button id="cancelButton" class="composer-btn cancel-btn" hidden title="Stop ongoing work">
+                                <svg class="icon" aria-hidden="true"><use href="#icon-stop"></use></svg>
+                                Stop
+                            </button>
+                            <button id="sendButton" class="composer-btn send-btn" title="Send message" aria-label="Send message">
+                                <svg class="icon" aria-hidden="true"><use href="#icon-send"></use></svg>
+                            </button>
+                        </div>
                     </div>
-                    <button id="cancelButton" class="cancel-btn" hidden title="Stop ongoing work">Stop</button>
-                    <button id="sendButton">Send</button>
+                    <p class="composer-hint"><kbd>Enter</kbd> to send · <kbd>Shift</kbd> + <kbd>Enter</kbd> for a new line</p>
                 </div>
             </div>
         </div>
@@ -776,7 +144,7 @@
     <div class="modal-overlay hidden" id="cancelModal" role="dialog" aria-modal="true" aria-labelledby="cancelModalTitle">
         <div class="modal-card">
             <div class="modal-icon">
-                <svg class="icon" style="width:1.6em;height:1.6em;color:var(--color-error)" aria-hidden="true"><use href="#icon-alert"></use></svg>
+                <svg class="icon" aria-hidden="true"><use href="#icon-alert"></use></svg>
             </div>
             <div class="modal-title" id="cancelModalTitle">Stop ongoing work?</div>
             <div class="modal-body">
@@ -784,8 +152,8 @@
                 You can send a new request straight away.
             </div>
             <div class="modal-actions">
-                <button class="modal-btn-secondary" id="cancelModalDismiss">Keep waiting</button>
-                <button class="modal-btn-danger" id="cancelModalConfirm">Yes, stop it</button>
+                <button class="btn btn-secondary" id="cancelModalDismiss">Keep waiting</button>
+                <button class="btn btn-destructive" id="cancelModalConfirm">Yes, stop it</button>
             </div>
         </div>
     </div>

@@ -1,6 +1,8 @@
-<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'>
-    <rect x='2' y='2' width='28' height='28' rx='5' fill='#0a0a0a' stroke='#00ff00' stroke-width='2'/>
-    <text x='16' y='21' font-family='monospace' font-size='12' font-weight='bold' fill='#00ff00' text-anchor='middle'>
-        OA
-    </text>
+<svg width="256" height="256" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <!-- Open Assistant mark: a rounded tile with a simple, friendly face.
+       Same geometry as LOGO_MARK in js/components.js. -->
+  <rect width="32" height="32" rx="9" fill="#1c1c1a"/>
+  <circle cx="11.5" cy="13.5" r="2" fill="#ffffff"/>
+  <circle cx="20.5" cy="13.5" r="2" fill="#ffffff"/>
+  <path d="M10.5 19.5c1.4 1.9 3.3 2.8 5.5 2.8s4.1-.9 5.5-2.8" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round"/>
 </svg>

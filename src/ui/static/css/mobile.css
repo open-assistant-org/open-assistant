@@ -1,195 +1,46 @@
-/**
- * Mobile-specific enhancements for PWA
- * Better touch targets, improved spacing, mobile gestures
- */
+/* ==========================================================================
+   Open Assistant - MOBILE & PWA
+   Touch targets, safe areas, the mobile top bar menu and small-screen
+   adjustments. Breakpoint: <= 768px (matches common.css).
+   ========================================================================== */
 
-/* ============================================================================
-   MOBILE TOUCH TARGETS
-   ============================================================================ */
-
-/* Ensure all interactive elements meet minimum touch target size (44x44px) */
-@media (max-width: 768px) {
-    /* Buttons */
-    .btn,
-    .nav-link,
-    .tab,
-    button {
-        min-height: 44px;
-        min-width: 44px;
-        padding: 12px 16px;
-    }
-
-    /* Input fields */
-    .form-input,
-    .form-textarea,
-    .form-select,
-    #messageInput {
-        min-height: 44px;
-        font-size: 16px; /* Prevents zoom on iOS */
-    }
-
-    /* Increase tap target for small icons */
-    .sidebar-toggle-btn,
-    .sidebar-close-btn,
-    #newConversationBtn {
-        min-width: 44px;
-        min-height: 44px;
-    }
-
-    /* Make conversation cards easier to tap */
-    .conversation-card {
-        padding: 16px;
-        margin-bottom: 12px;
-    }
-
-    /* Larger pin buttons */
-    .pin-button {
-        width: 32px;
-        height: 32px;
-        font-size: 1.3rem;
-    }
-
-    /* Send button larger on mobile */
-    #sendButton {
-        min-width: 80px;
-        padding: 12px 20px;
-    }
-}
-
-/* ============================================================================
-   SAFE AREA INSETS (for notched devices)
-   ============================================================================ */
-
-@supports (padding: max(0px)) {
-    /* Navbar safe area */
-    .navbar {
-        padding-left: max(0px, env(safe-area-inset-left));
-        padding-right: max(0px, env(safe-area-inset-right));
-    }
-
-    .navbar-content {
-        padding-left: max(20px, env(safe-area-inset-left));
-        padding-right: max(20px, env(safe-area-inset-right));
-    }
-
-    /* Chat input safe area */
-    .chat-input-container {
-        padding-left: max(20px, env(safe-area-inset-left));
-        padding-right: max(20px, env(safe-area-inset-right));
-        padding-bottom: max(20px, env(safe-area-inset-bottom));
-    }
-
-    /* Main container safe area */
-    .main-container {
-        padding-left: max(12px, env(safe-area-inset-left));
-        padding-right: max(12px, env(safe-area-inset-right));
-    }
-}
-
-/* ============================================================================
-   MOBILE SCROLLING IMPROVEMENTS
-   ============================================================================ */
-
-/* Smooth momentum scrolling on iOS */
-.chat-messages,
-.sidebar-content,
-.settings-container,
-.monitoring-container {
-    -webkit-overflow-scrolling: touch;
-}
-
-/* Prevent overscroll bounce on fixed elements */
-body.is-pwa {
-    overscroll-behavior-y: contain;
-}
-
-.chat-messages {
-    overscroll-behavior-y: contain;
-}
-
-/* ============================================================================
-   MOBILE KEYBOARD HANDLING
-   ============================================================================ */
-
-@media (max-width: 768px) {
-    /* Adjust layout when keyboard is visible */
-    .chat-container {
-        height: 100vh;
-        max-height: -webkit-fill-available;
-    }
-
-    /* Ensure input stays visible when keyboard opens */
-    .chat-input-container {
-        position: sticky;
-        bottom: 0;
-        background: var(--card-background);
-        z-index: 100;
-    }
-
-    /* Reduce message input max height on mobile */
-    #messageInput {
-        max-height: 100px;
-    }
-}
-
-/* ============================================================================
-   MOBILE NAVIGATION IMPROVEMENTS
-   ============================================================================ */
-
-/* Hamburger button — hidden on desktop */
+/* --------------------------------------------------------------------------
+   Hamburger (hidden on desktop, see common.css)
+   -------------------------------------------------------------------------- */
 .navbar-hamburger {
     display: none;
-    flex-direction: column;
     justify-content: center;
     align-items: center;
-    gap: 5px;
     width: 40px;
     height: 40px;
-    padding: 8px;
-    background: none;
-    border: none;
-    cursor: pointer;
-    border-radius: 8px;
-    transition: background 0.2s;
     flex-shrink: 0;
+    border: none;
+    border-radius: var(--radius-md);
+    background: none;
+    cursor: pointer;
+    transition: background-color var(--duration-fast) ease;
 }
 
 .navbar-hamburger:hover {
-    background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+    background: var(--color-fill-hover);
 }
 
-.navbar-hamburger span {
-    display: block;
+.navbar-hamburger .icon {
     width: 22px;
-    height: 2px;
-    background: var(--color-text);
-    border-radius: 2px;
-    transition: transform 0.25s ease, opacity 0.25s ease;
-    transform-origin: center;
+    height: 22px;
+    color: var(--color-text);
 }
 
-/* Animate to X when open */
-.navbar-hamburger.open span:nth-child(1) {
-    transform: translateY(7px) rotate(45deg);
+.navbar-hamburger-close,
+.navbar-hamburger.open .navbar-hamburger-open {
+    display: none;
 }
 
-.navbar-hamburger.open span:nth-child(2) {
-    opacity: 0;
-    transform: scaleX(0);
-}
-
-.navbar-hamburger.open span:nth-child(3) {
-    transform: translateY(-7px) rotate(-45deg);
+.navbar-hamburger.open .navbar-hamburger-close {
+    display: block;
 }
 
 @media (max-width: 768px) {
-    /* Brand logo slightly smaller on mobile */
-    .navbar-logo {
-        width: 28px;
-        height: 28px;
-    }
-
-    /* Show hamburger, hide inline links */
     .navbar-hamburger {
         display: flex;
     }
@@ -197,337 +48,248 @@ body.is-pwa {
     .navbar-links {
         display: none;
         position: absolute;
-        top: 60px;
+        top: calc(var(--topbar-h) - 1px);
         left: 0;
         right: 0;
-        background: var(--color-surface);
-        border-bottom: 1px solid var(--color-border);
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+        z-index: var(--z-nav);
         flex-direction: column;
-        gap: 4px;
-        padding: 8px 16px 12px;
-        z-index: 999;
-    }
-
-    /* Unthemed flat black shadow - softer layered elevation in light. */
-    :root[data-theme="light"] .navbar-links {
-        box-shadow: var(--shadow-hover);
+        gap: var(--space-1);
+        padding: var(--space-2) var(--space-3) var(--space-3);
+        background: var(--color-bg);
+        border-bottom: 1px solid var(--color-border);
+        box-shadow: var(--shadow-md);
     }
 
     .navbar-links.open {
         display: flex;
+        animation: oa-rise-in var(--duration-base) var(--ease-out);
     }
 
     .nav-link {
-        padding: 12px 16px;
-        font-size: 1rem;
-        border-radius: 8px;
-        width: 100%;
-        box-sizing: border-box;
+        min-height: 44px;
+        font-size: var(--text-base);
+    }
+
+    .navbar-collapse-btn {
+        display: none;
     }
 }
 
-/* ============================================================================
-   MOBILE MODAL IMPROVEMENTS
-   ============================================================================ */
-
+/* --------------------------------------------------------------------------
+   Touch targets (WCAG 2.5.5 - 44px on touch screens)
+   -------------------------------------------------------------------------- */
 @media (max-width: 768px) {
-    /* Full screen modals on mobile */
-    .modal-content {
-        width: 100%;
-        max-width: 100%;
-        max-height: 100vh;
-        border-radius: 0;
-        margin: 0;
+    .btn {
+        min-height: 44px;
     }
 
-    /* Sticky modal header */
-    .modal-header {
-        position: sticky;
-        top: 0;
-        background: var(--card-background);
-        z-index: 10;
+    .btn-sm {
+        min-height: 38px;
     }
 
-    /* Sticky modal footer */
-    .modal-footer {
-        position: sticky;
-        bottom: 0;
-        background: var(--card-background);
-        z-index: 10;
-        padding-bottom: max(24px, env(safe-area-inset-bottom));
+    .btn-icon,
+    .icon-btn,
+    .sidebar-toggle-btn,
+    .sidebar-close-btn,
+    .modal-close,
+    .modal-close-btn {
+        width: 44px;
+        height: 44px;
+        min-width: 44px;
+        min-height: 44px;
     }
 
-    .modal-body {
-        padding: 16px;
-        padding-bottom: max(16px, env(safe-area-inset-bottom));
-    }
-}
-
-/* ============================================================================
-   MOBILE CHAT IMPROVEMENTS
-   ============================================================================ */
-
-@media (max-width: 768px) {
-    /* Better message layout on mobile */
-    .message-content {
-        max-width: 85%;
-        font-size: 0.95rem;
-    }
-
-    .chat-messages {
-        padding: 16px 12px;
-    }
-
-    /* Header adjustments */
-    .chat-header-title {
-        font-size: 1.1rem;
-    }
-
-    .conversation-id {
-        display: none; /* Hide on very small screens */
-    }
-
-    @media (min-width: 480px) {
-        .conversation-id {
-            display: inline;
-        }
-    }
-}
-
-/* ============================================================================
-   MOBILE SETTINGS IMPROVEMENTS
-   ============================================================================ */
-
-@media (max-width: 768px) {
-    .settings-container {
-        padding: 16px;
-        border-radius: 0;
-        min-height: 100vh;
-    }
-
-    .settings-header h1 {
-        font-size: 1.5rem;
-    }
-
-    /* Scrollable tabs on mobile */
-    .tabs {
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: none; /* Firefox */
-        -ms-overflow-style: none; /* IE/Edge */
-    }
-
-    .tabs::-webkit-scrollbar {
-        display: none; /* Chrome/Safari */
+    /* Icon buttons stay square: small ones match .btn-sm's 38px */
+    .btn.btn-icon.btn-sm,
+    .icon-btn-sm {
+        width: 38px;
+        height: 38px;
+        min-width: 38px;
+        min-height: 38px;
     }
 
     .tab {
-        flex-shrink: 0;
-        padding: 10px 16px;
-        font-size: 0.9rem;
+        min-height: 38px;
     }
 
-    /* Integration cards stack better on mobile */
-    .integration-actions {
-        flex-direction: column;
+    /* 16px prevents iOS from zooming into focused inputs */
+    .form-input,
+    .form-textarea,
+    .form-select,
+    .form-control,
+    .sidebar-filters input,
+    .sidebar-filters select,
+    #messageInput {
+        min-height: 44px;
+        font-size: var(--text-md); /* 16px: stops iOS zooming on focus */
     }
 
-    .integration-actions .btn {
-        width: 100%;
+    .form-textarea,
+    textarea.form-input {
+        min-height: 96px;
     }
 
-    /* Form improvements */
-    .form-group {
-        margin-bottom: 20px;
+    .conversation-card {
+        padding: var(--space-3);
     }
 
-    .form-label {
-        font-size: 0.95rem;
-    }
-}
-
-/* ============================================================================
-   PULL-TO-REFRESH STYLING
-   ============================================================================ */
-
-@media (max-width: 768px) {
-    /* Prevent pull-to-refresh from interfering with scrolling */
-    body.is-pwa {
-        overscroll-behavior-y: contain;
-    }
-
-    /* Style for pull-to-refresh indicator */
-    .ptr-element {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        color: var(--primary-color);
-        text-align: center;
-        padding: 10px;
-        opacity: 0;
-        transition: opacity 0.3s;
-    }
-
-    .ptr-element.ptr-refresh {
+    .pin-button {
+        width: 36px;
+        height: 36px;
         opacity: 1;
     }
 }
 
-/* ============================================================================
-   MOBILE TOAST NOTIFICATIONS
-   ============================================================================ */
+/* --------------------------------------------------------------------------
+   Safe-area insets (notched devices)
+   -------------------------------------------------------------------------- */
+@supports (padding: max(0px)) {
+    @media (max-width: 768px) {
+        .navbar-content {
+            padding-left: max(var(--space-4), env(safe-area-inset-left));
+            padding-right: max(var(--space-4), env(safe-area-inset-right));
+        }
 
+        .main-container {
+            padding-left: max(var(--space-4), env(safe-area-inset-left));
+            padding-right: max(var(--space-4), env(safe-area-inset-right));
+        }
+
+        .chat-input-container {
+            padding-bottom: max(var(--space-3), env(safe-area-inset-bottom));
+        }
+    }
+}
+
+/* --------------------------------------------------------------------------
+   Scrolling
+   -------------------------------------------------------------------------- */
+.chat-messages,
+.sidebar-content,
+.page-content {
+    -webkit-overflow-scrolling: touch;
+}
+
+.chat-messages,
+body.is-pwa {
+    overscroll-behavior-y: contain;
+}
+
+/* --------------------------------------------------------------------------
+   Modals become bottom sheets on phones
+   -------------------------------------------------------------------------- */
+@media (max-width: 768px) {
+    .modal,
+    .modal-overlay {
+        align-items: flex-end;
+        padding: 0;
+    }
+
+    .modal-content,
+    .modal-card,
+    .modal-overlay > .modal {
+        max-width: 100% !important;
+        max-height: 92vh;
+        border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+        border-bottom: none;
+        animation: oa-sheet-up var(--duration-slow) var(--ease-out);
+    }
+
+    .modal-header {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        padding: var(--space-4) var(--space-5) var(--space-2);
+        background: var(--color-surface-raised);
+    }
+
+    .modal-body {
+        padding: 0 var(--space-5) var(--space-5);
+    }
+
+    .modal-footer {
+        padding: var(--space-3) var(--space-5) max(var(--space-4), env(safe-area-inset-bottom));
+    }
+
+    .modal-card {
+        padding: var(--space-6) var(--space-5) max(var(--space-6), env(safe-area-inset-bottom));
+    }
+
+    .modal-card .modal-actions .btn,
+    .modal-footer .btn {
+        flex: 1;
+    }
+
+    .modal-footer .btn-icon {
+        flex: 0 0 auto;
+    }
+
+    .device-code-content {
+        padding: var(--space-6) var(--space-5);
+    }
+}
+
+@keyframes oa-sheet-up {
+    from { transform: translateY(24px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+/* --------------------------------------------------------------------------
+   Toasts span the width on phones
+   -------------------------------------------------------------------------- */
 @media (max-width: 768px) {
     .toast-container {
-        top: max(70px, env(safe-area-inset-top));
-        right: 12px;
-        left: 12px;
+        top: auto;
+        bottom: max(var(--space-4), env(safe-area-inset-bottom));
+        left: var(--space-3);
+        right: var(--space-3);
     }
 
     .toast {
-        min-width: auto;
+        min-width: 0;
+        max-width: none;
         width: 100%;
-        font-size: 0.9rem;
     }
 }
 
-/* ============================================================================
-   MOBILE LOADING STATES
-   ============================================================================ */
-
-@media (max-width: 768px) {
-    .spinner {
-        width: 32px;
-        height: 32px;
-        border-width: 2px;
-    }
-
-    .typing-indicator {
-        padding: 10px 14px;
-    }
-
-    .typing-dot {
-        width: 6px;
-        height: 6px;
-    }
-}
-
-/* ============================================================================
-   LANDSCAPE MODE ADJUSTMENTS
-   ============================================================================ */
-
+/* --------------------------------------------------------------------------
+   Landscape phones - reclaim vertical space
+   -------------------------------------------------------------------------- */
 @media (max-width: 768px) and (orientation: landscape) {
-    /* Reduce navbar height in landscape */
-    .navbar {
-        height: 48px;
+    :root {
+        --topbar-h: 48px;
     }
 
-    .navbar-brand {
-        font-size: 1rem;
-    }
-
-    .nav-link {
-        padding: 6px 10px;
-        font-size: 0.85rem;
-    }
-
-    /* Reduce chat header height */
-    .chat-header {
-        padding: 12px 16px;
-    }
-
-    .chat-header-title {
-        font-size: 1rem;
-    }
-
-    /* Optimize vertical space */
     .chat-messages {
-        padding: 12px;
-    }
-
-    .chat-input-container {
-        padding: 12px 16px;
-    }
-
-    .message-content {
-        padding: 10px 14px;
-        font-size: 0.9rem;
+        padding-top: var(--space-3);
     }
 }
 
-/* ============================================================================
-   INSTALL BUTTON STYLING
-   ============================================================================ */
-
-#installAppBtn {
-    animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-    0%, 100% {
-        box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-primary) 40%, transparent);
-    }
-    50% {
-        box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-primary) 0%, transparent);
-    }
-}
-
-/* Hide install button when already installed */
-body.is-pwa #installAppBtn {
-    display: none !important;
-}
-
-/* ============================================================================
-   HAPTIC FEEDBACK HELPER
-   ============================================================================ */
-
-/* Add visual feedback for touch interactions */
+/* --------------------------------------------------------------------------
+   Touch feedback
+   -------------------------------------------------------------------------- */
 @media (hover: none) and (pointer: coarse) {
-    button:active,
-    .btn:active,
+    .btn:active:not(:disabled),
     .nav-link:active,
     .tab:active,
     .conversation-card:active {
         transform: scale(0.98);
-        transition: transform 0.1s;
+        transition: transform 80ms ease;
     }
 }
 
-/* ============================================================================
-   MOBILE-SPECIFIC UTILITIES
-   ============================================================================ */
+/* PWA install entry: hide once installed */
+body.is-pwa #installAppBtn {
+    display: none !important;
+}
 
+/* --------------------------------------------------------------------------
+   Responsive visibility helpers
+   -------------------------------------------------------------------------- */
 @media (max-width: 768px) {
-    /* Hide on mobile */
-    .hide-mobile {
-        display: none !important;
-    }
-
-    /* Show only on mobile */
-    .show-mobile {
-        display: block !important;
-    }
-
-    /* Full width on mobile */
-    .mobile-full-width {
-        width: 100% !important;
-    }
-
-    /* Text size adjustments */
-    .mobile-text-sm {
-        font-size: 0.85rem !important;
-    }
-
-    .mobile-text-base {
-        font-size: 0.95rem !important;
-    }
+    .hide-mobile { display: none !important; }
 }
 
-/* Show only on desktop */
 @media (min-width: 769px) {
-    .show-mobile {
-        display: none !important;
-    }
+    .show-mobile { display: none !important; }
 }

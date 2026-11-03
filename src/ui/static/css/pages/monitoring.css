@@ -1,0 +1,701 @@
+/* ==========================================================================
+   Monitoring page
+   ========================================================================== */
+
+.monitoring-container .tab-content > .card + .card {
+    margin-top: var(--space-5);
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: var(--space-5);
+    margin-bottom: var(--space-5);
+}
+
+.card-header-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.card-header-meta {
+    color: var(--color-text-tertiary);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-regular);
+}
+
+/* Jobs tables sit flush inside their card */
+.monitoring-container .card .jobs-table-wrap {
+    margin: 0 calc(var(--space-6) * -1) calc(var(--space-6) * -1);
+    width: calc(100% + var(--space-6) * 2);
+}
+
+.monitoring-container .card:has(.jobs-table) {
+    overflow: hidden;
+}
+
+.jobs-table .cell-sub {
+    color: var(--color-text-tertiary);
+    font-size: var(--text-xs);
+}
+
+.job-name {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+/* "Run now" sits with the other row actions on desktop... */
+@container table (min-width: 641px) {
+    .job-name .job-run-btn {
+        display: none;
+    }
+}
+
+/* ...and on phones it moves to the card's first row (the name cell, see
+   components.css): the job name on the left, "Run now" on the right. */
+@container table (max-width: 640px) {
+    .job-name {
+        flex: 1;
+        justify-content: space-between;
+    }
+
+    .job-actions .job-run-btn {
+        display: none;
+    }
+}
+
+/* Tighter inner cells so wide job rows fit before they need to scroll.
+   Only while the table is a table: once it stacks into cards (see
+   components.css), every cell keeps the same zero side padding. */
+@container table (min-width: 641px) {
+    .jobs-table th,
+    .jobs-table td {
+        padding-left: var(--space-3);
+        padding-right: var(--space-3);
+    }
+
+    .jobs-table th:first-child,
+    .jobs-table td:first-child {
+        padding-left: var(--space-6);
+    }
+
+    .jobs-table th:last-child,
+    .jobs-table td:last-child {
+        padding-right: var(--space-6);
+    }
+}
+
+.jobs-table th {
+    border-radius: 0 !important;
+    border-top: 1px solid var(--color-border-subtle);
+}
+
+.jobs-table code {
+    font-family: var(--font-sans);
+    font-size: var(--text-xs);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow-wrap: normal;
+}
+
+/* --------------------------------------------------------------------------
+   System tab
+   -------------------------------------------------------------------------- */
+.status-indicator {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin-right: var(--space-2);
+    border-radius: 50%;
+    vertical-align: middle;
+    background: var(--color-neutral-solid);
+}
+
+.status-healthy { background: var(--color-success-solid); }
+.status-degraded { background: var(--color-warning-solid); }
+.status-unhealthy { background: var(--color-danger-solid); }
+
+#healthStatus > div,
+.metric-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--color-border-subtle);
+    color: var(--color-text-secondary);
+    font-size: var(--text-sm);
+}
+
+#healthStatus > div {
+    justify-content: flex-start;
+}
+
+#healthStatus > div:last-child,
+.metric-row:last-child {
+    border-bottom: none;
+}
+
+.metric-row strong {
+    color: var(--color-text);
+    font-size: var(--text-md);
+    font-weight: var(--weight-semibold);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Agent action log */
+.log-entry {
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid var(--color-border-subtle);
+    color: var(--color-text);
+    font-size: var(--text-sm);
+}
+
+.log-entry:last-child {
+    border-bottom: none;
+}
+
+.log-entry pre {
+    margin: var(--space-1) 0;
+    font-size: var(--text-xs);
+}
+
+.log-entry-toggle {
+    cursor: pointer;
+}
+
+.log-entry-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.log-entry-status {
+    display: inline-flex;
+    margin-right: var(--space-2);
+    vertical-align: -3px;
+}
+
+.log-entry-sep {
+    margin: 0 var(--space-2);
+    color: var(--color-text-tertiary);
+}
+
+.log-entry-meta {
+    margin-left: var(--space-2);
+    color: var(--color-text-secondary);
+    font-size: var(--text-xs);
+}
+
+.log-timestamp {
+    color: var(--color-text-tertiary);
+    font-size: var(--text-xs);
+}
+
+.execution-details {
+    margin-top: var(--space-2);
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-md);
+    background: var(--color-sunken);
+    font-size: var(--text-sm);
+}
+
+.execution-details pre {
+    margin: var(--space-2) 0;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    background: var(--color-surface);
+}
+
+/* --------------------------------------------------------------------------
+   Logs terminal
+   -------------------------------------------------------------------------- */
+.logs-terminal {
+    height: 580px;
+    overflow-y: auto;
+    padding: var(--space-3) var(--space-4);
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-md);
+    background: var(--color-bg);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    line-height: 1.6;
+}
+
+.log-stream-entry {
+    display: flex;
+    gap: var(--space-3);
+    padding: 1px var(--space-1);
+    border-radius: var(--radius-xs);
+    word-break: break-all;
+}
+
+.log-stream-entry:hover {
+    background: var(--color-fill-hover);
+}
+
+.log-stream-time {
+    flex-shrink: 0;
+    color: var(--color-text-tertiary);
+    user-select: none;
+}
+
+.log-stream-level {
+    flex-shrink: 0;
+    min-width: 64px;
+    font-weight: var(--weight-semibold);
+}
+
+.log-stream-module {
+    flex-shrink: 0;
+    max-width: 180px;
+    overflow: hidden;
+    color: var(--color-text-tertiary);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.log-stream-msg {
+    flex: 1;
+    color: var(--color-text);
+}
+
+.log-stream-raw {
+    flex: 1;
+    color: var(--color-text-secondary);
+}
+
+.log-level-debug { color: var(--color-text-tertiary); }
+.log-level-info { color: var(--color-text-secondary); }
+.log-level-warning { color: var(--color-warning-fg); }
+.log-level-error { color: var(--color-danger-fg); }
+.log-level-critical { color: var(--color-danger-fg); text-decoration: underline; text-underline-offset: 3px; }
+.log-level-unknown { color: var(--color-text-secondary); }
+
+.log-stream-status { padding: var(--space-1) 0; color: var(--color-text-tertiary); }
+.log-stream-status.log-stream-status-error { color: var(--color-danger-fg); }
+
+.logs-status {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1-5);
+    color: var(--color-text-tertiary);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-regular);
+}
+
+.logs-status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--color-text);
+    animation: oa-pulse 2s ease-in-out infinite;
+}
+
+.logs-status-dot.disconnected {
+    background: var(--color-neutral-solid);
+    animation: none;
+}
+
+/* --------------------------------------------------------------------------
+   Recipe editor (Edit recipe modal)
+   -------------------------------------------------------------------------- */
+.recipe-modal-content {
+    max-width: 640px;
+}
+
+.recipe-job-name {
+    margin-bottom: var(--space-4);
+    color: var(--color-text);
+    font-weight: var(--weight-medium);
+}
+
+.recipe-steps {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+}
+
+/* One editable step in the recipe modal: a compact, denser form */
+.recipe-step {
+    padding: var(--space-4);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-bg);
+}
+
+.recipe-step-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-2);
+    font-size: var(--text-sm);
+}
+
+.recipe-step > .form-group {
+    margin-bottom: var(--space-2);
+}
+
+.recipe-step > .form-group:last-child {
+    margin-bottom: 0;
+}
+
+.recipe-step .form-input,
+.recipe-step .form-textarea {
+    font-size: var(--text-sm);
+}
+
+.recipe-step .form-textarea {
+    min-height: 80px;
+}
+
+/* --------------------------------------------------------------------------
+   Recipe graph
+   -------------------------------------------------------------------------- */
+.recipe-graph-modal-content {
+    max-width: 760px;
+}
+
+.recipe-graph-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-bottom: var(--space-5);
+}
+
+.graph-meta-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1-5);
+    height: 28px;
+    padding: 0 var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-full);
+    background: var(--color-surface);
+    color: var(--color-text-secondary);
+    font-size: var(--text-xs);
+}
+
+.graph-meta-chip code {
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--color-text);
+    font-size: var(--text-xs);
+}
+
+.recipe-graph {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.graph-node {
+    width: 100%;
+    padding: var(--space-4);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-xs);
+}
+
+.graph-node--trigger,
+.graph-node--delivery {
+    border-style: dashed;
+    border-color: var(--color-border-strong);
+    background: var(--color-bg);
+    box-shadow: none;
+}
+
+.graph-node-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2-5);
+}
+
+.graph-step-num {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--color-accent);
+    color: var(--color-on-accent);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semibold);
+}
+
+.graph-node-title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex: 1;
+    min-width: 120px;
+    color: var(--color-text);
+    font-weight: var(--weight-semibold);
+    word-break: break-word;
+}
+
+.graph-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    height: 22px;
+    padding: 0 var(--space-2);
+    border-radius: var(--radius-full);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
+    white-space: nowrap;
+}
+
+.graph-badge code {
+    padding: 0;
+    border: none;
+    background: none;
+    color: inherit;
+}
+
+.graph-badge--tool {
+    background: var(--color-neutral-bg);
+    color: var(--color-neutral-fg);
+}
+
+.graph-badge--llm {
+    border: 1px solid var(--color-border-strong);
+    background: transparent;
+    color: var(--color-text-secondary);
+}
+
+.graph-node-detail {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    margin: var(--space-3) 0 0 calc(26px + var(--space-2-5));
+}
+
+.graph-field-label {
+    margin-bottom: var(--space-1);
+    color: var(--color-text-tertiary);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
+}
+
+.graph-tool-name {
+    display: inline-block;
+    padding: var(--space-0-5) var(--space-2);
+    border-radius: var(--radius-sm);
+    background: var(--color-sunken);
+    color: var(--color-text);
+    font-size: var(--text-xs);
+    word-break: break-all;
+}
+
+.graph-params {
+    overflow: hidden;
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-md);
+}
+
+.graph-param-row {
+    display: flex;
+    gap: var(--space-3);
+    padding: var(--space-1-5) var(--space-3);
+    border-bottom: 1px solid var(--color-border-subtle);
+    font-size: var(--text-xs);
+}
+
+.graph-param-row:last-child {
+    border-bottom: none;
+}
+
+.graph-param-key {
+    flex-shrink: 0;
+    color: var(--color-text-tertiary);
+    font-weight: var(--weight-medium);
+}
+
+.graph-param-val {
+    color: var(--color-text);
+    word-break: break-word;
+}
+
+.graph-prompt {
+    position: relative;
+    padding: var(--space-2-5) var(--space-3);
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-md);
+    background: var(--color-sunken);
+    color: var(--color-text-secondary);
+    font-size: var(--text-xs);
+    line-height: var(--leading-normal);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.graph-prompt.collapsed {
+    max-height: 7em;
+    overflow: hidden;
+}
+
+.graph-prompt.collapsed::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 2.4em;
+    background: linear-gradient(transparent, var(--color-sunken));
+}
+
+.graph-prompt-toggle {
+    align-self: flex-start;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--color-text-secondary);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+}
+
+.graph-prompt-toggle:hover {
+    color: var(--color-text);
+}
+
+.graph-vars {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1-5);
+}
+
+/* Variable chips are neutral: the variable name is the identifier. */
+.graph-var-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    height: 24px;
+    padding: 0 var(--space-2);
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-full);
+    background: var(--color-surface);
+    color: var(--color-text-secondary);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
+}
+
+.graph-var-chip code {
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--color-text);
+    font-size: var(--text-xs);
+}
+
+.graph-connector {
+    position: relative;
+    flex-shrink: 0;
+    width: 1.5px;
+    height: 32px;
+    background: var(--color-border-strong);
+}
+
+.graph-connector::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid var(--color-border-strong);
+}
+
+.graph-connector-label {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    padding: 1px var(--space-2);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-full);
+    background: var(--color-surface-raised);
+    color: var(--color-text-tertiary);
+    font-size: var(--text-xs);
+    white-space: nowrap;
+}
+
+.graph-connector-label code {
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--color-text);
+}
+
+.graph-empty {
+    padding: var(--space-6);
+    color: var(--color-text-tertiary);
+    text-align: center;
+}
+
+/* Card headers reflow with the card's width (container query) */
+@container card (max-width: 560px) {
+    .card-header-actions {
+        width: 100%;
+    }
+
+    .card-header-actions .form-control {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+}
+
+/* --------------------------------------------------------------------------
+   Mobile
+   -------------------------------------------------------------------------- */
+@media (max-width: 768px) {
+    .graph-node-detail {
+        margin-left: 0;
+    }
+
+    .logs-terminal {
+        height: 60vh;
+    }
+
+
+    .monitoring-container .card .jobs-table-wrap {
+        margin: 0;
+        width: 100%;
+    }
+
+    .monitoring-container .card:has(.jobs-table) {
+        overflow: visible;
+    }
+
+}
+
+/* Lucide icons inside graph chips, badges and node titles */
+.graph-meta-chip .icon,
+.graph-badge .icon,
+.graph-var-chip .icon,
+.graph-node-title .icon {
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+}
+
+.graph-node-title .icon {
+    width: 16px;
+    height: 16px;
+    color: var(--color-text-secondary);
+}

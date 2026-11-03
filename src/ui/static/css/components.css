@@ -1,0 +1,1667 @@
+/* ==========================================================================
+   Open Assistant design system - COMPONENTS
+   Reusable, page-agnostic building blocks. Every rule here consumes
+   semantic tokens from tokens.css only. See /static/design-system.html
+   for a live reference of each component.
+
+   Contents
+     1. Icon            7. Badge & status dot     13. Spinner & skeleton
+     2. Button          8. Alert                  14. Empty state
+     3. Form controls   9. Modal                  15. Page header
+     4. Toggle         10. Tabs (segmented)       16. Utilities
+     5. Checkbox/radio 11. Table
+     6. Card           12. Toast
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. ICON - Lucide (https://lucide.dev), sprite in components.js
+   <svg class="icon"><use href="#icon-name"></use></svg>  or  icon('name') in JS
+   -------------------------------------------------------------------------- */
+.icon {
+    display: inline-block;
+    width: 1.15em;
+    height: 1.15em;
+    flex-shrink: 0;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.75;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vertical-align: middle;
+}
+
+/* Solid variant for closed shapes, e.g. icon('play', 'icon-filled') */
+.icon-filled {
+    fill: currentColor;
+}
+
+.icon-sprite {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+}
+
+.icon-spin {
+    animation: spin 1s linear infinite;
+}
+
+.icon-sm { width: 16px; height: 16px; }
+.icon-md { width: 20px; height: 20px; }
+.icon-lg { width: 24px; height: 24px; }
+
+/* --------------------------------------------------------------------------
+   2. BUTTON
+   .btn + one variant (.btn-primary | .btn-secondary | .btn-ghost |
+   .btn-danger | .btn-destructive) + optional size (.btn-sm | .btn-lg),
+   .btn-block, and .btn-icon for a square icon-only button. Icons go inside
+   as <svg class="icon">.
+
+   Every variant only sets the private --_btn-* properties; the base rule
+   is the only place that paints. Order matters: base, then .btn-icon
+   (quiet defaults), then the variants, so a variant always wins over the
+   icon-button defaults without any :not() chains.
+   -------------------------------------------------------------------------- */
+.btn,
+.btn-icon,
+.icon-btn,
+.job-action-btn {
+    --_btn-bg: var(--color-surface);
+    --_btn-fg: var(--color-text);
+    --_btn-border: var(--color-border-strong);
+    --_btn-bg-hover: var(--color-sunken);
+    --_btn-fg-hover: var(--_btn-fg);
+    --_btn-border-hover: var(--color-border-control);
+    --_btn-shadow: none;
+    --_btn-ring: var(--color-focus-ring);
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    min-height: var(--control-h-md);
+    padding: 0 var(--space-4);
+    border: 1px solid var(--_btn-border);
+    border-radius: var(--radius-md);
+    background: var(--_btn-bg);
+    color: var(--_btn-fg);
+    box-shadow: var(--_btn-shadow);
+    font-family: inherit;
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    line-height: 1.2;
+    text-align: center;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color var(--duration-fast) ease,
+                border-color var(--duration-fast) ease,
+                color var(--duration-fast) ease,
+                box-shadow var(--duration-fast) ease,
+                transform var(--duration-fast) ease;
+}
+
+:is(.btn, .btn-icon, .icon-btn, .job-action-btn):hover:not(:disabled) {
+    background: var(--_btn-bg-hover);
+    border-color: var(--_btn-border-hover);
+    color: var(--_btn-fg-hover);
+}
+
+.btn:active:not(:disabled) {
+    transform: translateY(1px);
+}
+
+:is(.btn, .btn-icon, .icon-btn, .job-action-btn):focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--_btn-ring);
+}
+
+:is(.btn, .btn-icon, .icon-btn, .job-action-btn):disabled,
+.btn[aria-disabled="true"] {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+:is(.btn, .btn-icon, .icon-btn, .job-action-btn) .icon {
+    width: 16px;
+    height: 16px;
+}
+
+/* Square icon-only button, with or without .btn. On its own it is quiet
+   (ghost); add a variant (.btn .btn-danger .btn-icon) to colour it. */
+.btn-icon,
+.icon-btn {
+    --_btn-bg: transparent;
+    --_btn-fg: var(--color-text-secondary);
+    --_btn-border: transparent;
+    --_btn-bg-hover: var(--color-fill-hover);
+    --_btn-fg-hover: var(--color-text);
+    --_btn-border-hover: transparent;
+
+    flex-shrink: 0;
+    width: var(--control-h-md);
+    min-width: var(--control-h-md);
+    height: var(--control-h-md);
+    padding: 0;
+    line-height: 1;
+}
+
+/* Variants */
+.btn-primary {
+    --_btn-bg: var(--color-accent);
+    --_btn-fg: var(--color-on-accent);
+    --_btn-border: var(--color-accent);
+    --_btn-bg-hover: var(--color-accent-hover);
+    --_btn-fg-hover: var(--color-on-accent);
+    --_btn-border-hover: var(--color-accent-hover);
+    --_btn-shadow: var(--shadow-xs);
+}
+
+.btn-secondary {
+    --_btn-bg: var(--color-surface);
+    --_btn-fg: var(--color-text);
+    --_btn-border: var(--color-border-strong);
+    --_btn-bg-hover: var(--color-sunken);
+    --_btn-fg-hover: var(--color-text);
+    --_btn-border-hover: var(--color-border-control);
+    --_btn-shadow: var(--shadow-xs);
+}
+
+.btn-ghost {
+    --_btn-bg: transparent;
+    --_btn-fg: var(--color-text-secondary);
+    --_btn-border: transparent;
+    --_btn-bg-hover: var(--color-fill-hover);
+    --_btn-fg-hover: var(--color-text);
+    --_btn-border-hover: transparent;
+}
+
+.btn-danger {
+    --_btn-bg: var(--color-danger-bg);
+    --_btn-fg: var(--color-danger-fg);
+    --_btn-border: var(--color-danger-border);
+    --_btn-bg-hover: color-mix(in oklab, var(--color-danger-bg) 70%, var(--color-danger-border));
+    --_btn-fg-hover: var(--color-danger-fg);
+    --_btn-border-hover: var(--color-danger-fg);
+}
+
+/* Destructive confirmation: the one place red is a solid fill. Use it
+   for the confirm button of a "delete / reset / stop" dialog only. */
+.btn-destructive {
+    --_btn-bg: var(--color-danger-emphasis);
+    --_btn-fg: var(--color-on-danger);
+    --_btn-border: var(--color-danger-emphasis);
+    --_btn-bg-hover: var(--color-danger-emphasis-hover);
+    --_btn-fg-hover: var(--color-on-danger);
+    --_btn-border-hover: var(--color-danger-emphasis-hover);
+    --_btn-shadow: var(--shadow-xs);
+    --_btn-ring: color-mix(in oklab, var(--color-danger-emphasis) 30%, transparent);
+}
+
+/* Sizes */
+.btn-sm {
+    min-height: var(--control-h-sm);
+    padding: 0 var(--space-3);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-sm);
+    gap: var(--space-1-5);
+}
+
+.btn-lg {
+    min-height: var(--control-h-lg);
+    padding: 0 var(--space-6);
+    font-size: var(--text-base);
+}
+
+.btn-block {
+    display: flex;
+    width: 100%;
+}
+
+.btn-icon.btn-sm,
+.icon-btn-sm {
+    width: var(--control-h-sm);
+    min-width: var(--control-h-sm);
+    height: var(--control-h-sm);
+    min-height: var(--control-h-sm);
+    padding: 0;
+    border-radius: var(--radius-sm);
+}
+
+/* Inside an input group the icon button sits next to a bordered input,
+   so it gets a matching border. */
+.input-group .btn-icon {
+    --_btn-border: var(--color-border-strong);
+    --_btn-bg: var(--color-surface);
+    filter: grayscale(1);
+}
+
+.button-group,
+.btn-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: var(--space-2);
+}
+
+/* --------------------------------------------------------------------------
+   3. FORM CONTROLS
+   -------------------------------------------------------------------------- */
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1-5);
+    margin-bottom: var(--space-5);
+}
+
+.form-group:last-child {
+    margin-bottom: 0;
+}
+
+.form-label,
+.form-group > label:not(.toggle-label):not(.checkbox-label) {
+    display: block;
+    color: var(--color-text);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    line-height: var(--leading-snug);
+}
+
+.form-label .text-muted,
+.form-group > label .text-muted {
+    font-weight: var(--weight-regular);
+}
+
+.form-hint,
+.form-group > small {
+    display: block;
+    color: var(--color-text-tertiary);
+    font-size: var(--text-sm);
+    line-height: var(--leading-snug);
+}
+
+.form-hint.text-danger,
+.form-group > small.text-danger,
+.form-hint.text-error {
+    color: var(--color-danger-fg);
+}
+
+.required {
+    color: var(--color-danger-fg);
+    margin-left: 2px;
+}
+
+.form-input,
+.form-select,
+.form-textarea,
+.form-control {
+    display: block;
+    width: 100%;
+    min-height: var(--control-h-md);
+    padding: 0 var(--space-3);
+    /* Softer than --color-border-control so fields don't read harsh;
+       hover darkens it to the full control contrast. */
+    border: 1px solid color-mix(in oklab, var(--color-border-control) 50%, var(--color-border-strong));
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-family: inherit;
+    font-size: var(--text-base);
+    line-height: var(--leading-snug);
+    transition: border-color var(--duration-fast) ease, box-shadow var(--duration-fast) ease, background-color var(--duration-fast) ease;
+}
+
+textarea.form-input,
+.form-textarea {
+    min-height: 96px;
+    padding: var(--space-2-5) var(--space-3);
+    line-height: var(--leading-normal);
+    resize: vertical;
+}
+
+.form-input:hover,
+.form-select:hover,
+.form-textarea:hover,
+.form-control:hover {
+    border-color: var(--color-text-tertiary);
+}
+
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus,
+.form-control:focus {
+    outline: none;
+    border-color: var(--color-focus-border);
+    box-shadow: 0 0 0 3px var(--color-focus-ring-soft);
+}
+
+.form-input:disabled,
+.form-select:disabled,
+.form-textarea:disabled,
+.form-control:disabled,
+.form-input[readonly] {
+    background: var(--color-sunken);
+    color: var(--color-text-secondary);
+    border-color: var(--color-border-strong);
+}
+
+.form-input[aria-invalid="true"],
+.form-input.is-invalid {
+    border-color: var(--color-danger-fg);
+}
+
+.form-input[aria-invalid="true"]:focus,
+.form-input.is-invalid:focus {
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-danger-fg) 12%, transparent);
+}
+
+select.form-select,
+select.form-control,
+select.form-input {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: var(--space-8);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238e8e87' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 16px;
+    cursor: pointer;
+}
+
+/* Compact control, e.g. filters in a card header */
+.form-control-sm,
+.form-select-sm {
+    min-height: var(--control-h-sm);
+    font-size: var(--text-sm);
+    border-radius: var(--radius-sm);
+    width: auto;
+}
+
+.input-group {
+    display: flex;
+    gap: var(--space-2);
+    align-items: stretch;
+}
+
+.input-group > .form-input,
+.input-group > input {
+    flex: 1;
+    min-width: 0;
+}
+
+.help-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    color: var(--color-text-secondary);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    text-decoration: underline;
+    text-decoration-color: var(--color-border-strong);
+    text-underline-offset: 3px;
+}
+
+.help-link:hover {
+    color: var(--color-text);
+    text-decoration-color: currentColor;
+}
+
+.help-link .icon {
+    width: 14px;
+    height: 14px;
+}
+
+/* Short inline result, e.g. "Saved" next to a button */
+.inline-status {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+}
+
+.inline-status .icon {
+    width: 15px;
+    height: 15px;
+}
+
+/* Range slider */
+.slider-group {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+}
+
+.form-slider {
+    flex: 1;
+    height: 6px;
+    border-radius: var(--radius-full);
+    background: var(--color-border);
+    accent-color: var(--color-accent);
+    -webkit-appearance: none;
+    appearance: none;
+    cursor: pointer;
+}
+
+.form-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--color-surface);
+    border: 2px solid var(--color-accent);
+    box-shadow: var(--shadow-sm);
+}
+
+.form-slider::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--color-surface);
+    border: 2px solid var(--color-accent);
+    box-shadow: var(--shadow-sm);
+}
+
+.form-slider:focus-visible {
+    box-shadow: 0 0 0 3px var(--color-focus-ring);
+    outline: none;
+}
+
+.slider-value {
+    min-width: 44px;
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+    background: var(--color-sunken);
+    color: var(--color-text);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+}
+
+/* --------------------------------------------------------------------------
+   4. TOGGLE SWITCH
+   <label class="toggle-label">
+     <input type="checkbox" class="toggle-input">
+     <span class="toggle-slider"></span>
+     <span class="toggle-text">Enabled</span>
+   </label>
+   -------------------------------------------------------------------------- */
+.toggle-label {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-3);
+    cursor: pointer;
+    user-select: none;
+}
+
+/* Visually hidden but still focusable (was display:none, which made the
+   switch unreachable by keyboard). */
+.toggle-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.toggle-slider {
+    position: relative;
+    flex-shrink: 0;
+    width: 40px;
+    height: 24px;
+    border-radius: var(--radius-full);
+    background: var(--color-border-strong);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-border-control) 45%, transparent);
+    transition: background-color var(--duration-base) var(--ease-out), box-shadow var(--duration-base) ease;
+}
+
+.toggle-slider::before {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--color-knob);
+    box-shadow: var(--shadow-knob);
+    transition: transform var(--duration-base) var(--ease-out);
+}
+
+.toggle-label:hover .toggle-slider {
+    box-shadow: inset 0 0 0 1px var(--color-border-control);
+}
+
+.toggle-input:checked + .toggle-slider {
+    background: var(--color-accent);
+    box-shadow: none;
+}
+
+.toggle-input:checked + .toggle-slider::before {
+    transform: translateX(16px);
+    background: var(--color-on-accent);
+}
+
+.toggle-input:focus-visible + .toggle-slider {
+    box-shadow: 0 0 0 3px var(--color-focus-ring);
+}
+
+.toggle-input:disabled + .toggle-slider {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.toggle-text {
+    color: var(--color-text-secondary);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+}
+
+/* --------------------------------------------------------------------------
+   5. CHECKBOX & RADIO - native controls, accent-tinted
+   -------------------------------------------------------------------------- */
+input[type="checkbox"]:not(.toggle-input),
+input[type="radio"] {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    accent-color: var(--color-accent);
+    cursor: pointer;
+}
+
+.checkbox-label,
+.radio-label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--color-text);
+    font-size: var(--text-base);
+    cursor: pointer;
+}
+
+.radio-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-5);
+}
+
+/* --------------------------------------------------------------------------
+   6. CARD
+   -------------------------------------------------------------------------- */
+.card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-xs);
+    padding: var(--space-6);
+}
+
+/* Size containers. Component layout that depends on available width uses
+   @container queries against these instead of viewport media queries:
+     card   - every card-like surface (card-level reflow, see common.css)
+     table  - table wrappers (row stacking, see section 11) */
+.card,
+.settings-section,
+.agent-card,
+.integration-card {
+    container: card / inline-size;
+}
+
+.card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+    color: var(--color-text);
+    font-size: var(--text-md);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-tight);
+}
+
+.card-title {
+    font-size: var(--text-md);
+    font-weight: var(--weight-semibold);
+}
+
+.card-description {
+    color: var(--color-text-secondary);
+    font-size: var(--text-sm);
+    margin-top: var(--space-1);
+}
+
+.card-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-2);
+    margin-top: var(--space-5);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--color-border-subtle);
+}
+
+/* Flush card: for tables/lists that run edge to edge */
+.card-flush {
+    padding: 0;
+    overflow: hidden;
+}
+
+.card-flush > .card-header {
+    margin: 0;
+    padding: var(--space-4) var(--space-6);
+    border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.card-stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+}
+
+/* Stat tile */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: var(--space-4);
+    margin-bottom: var(--space-6);
+}
+
+.stat-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-5);
+}
+
+.stat-label,
+.stat-card .stat-label {
+    color: var(--color-text-secondary);
+    font-size: var(--text-sm);
+    margin-bottom: var(--space-1);
+}
+
+.stat-value,
+.stat-card .stat-value {
+    color: var(--color-text);
+    font-size: var(--text-2xl);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-tight);
+    font-variant-numeric: tabular-nums;
+    line-height: var(--leading-tight);
+}
+
+/* --------------------------------------------------------------------------
+   7. BADGE & STATUS DOT
+   .badge + a tone: .badge-{success|warning|danger|neutral} for outcomes,
+   .badge-on / .badge-off for states. .badge-sm for dense rows. For job
+   and run statuses use statusBadgeClass(status) from components.js.
+   -------------------------------------------------------------------------- */
+.badge {
+    --_badge-bg: var(--color-neutral-bg);
+    --_badge-fg: var(--color-neutral-fg);
+    --_badge-border: transparent;
+
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1-5);
+    height: 22px;
+    padding: 0 var(--space-2-5);
+    border: 1px solid var(--_badge-border);
+    border-radius: var(--radius-full);
+    background: var(--_badge-bg);
+    color: var(--_badge-fg);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
+    line-height: 1;
+    letter-spacing: 0;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+.badge-sm {
+    height: 20px;
+    padding: 0 var(--space-2);
+}
+
+/* Outcomes */
+.badge-success {
+    --_badge-bg: var(--color-success-bg);
+    --_badge-fg: var(--color-success-fg);
+}
+
+.badge-warning {
+    --_badge-bg: var(--color-warning-bg);
+    --_badge-fg: var(--color-warning-fg);
+}
+
+.badge-danger {
+    --_badge-bg: var(--color-danger-bg);
+    --_badge-fg: var(--color-danger-fg);
+}
+
+.badge-neutral {
+    --_badge-bg: var(--color-neutral-bg);
+    --_badge-fg: var(--color-neutral-fg);
+}
+
+/* States: "on" (enabled, running, public, saved) is not a success, so it
+   stays monochrome and reads as the stronger of the two neutrals. */
+.badge-on {
+    --_badge-bg: var(--color-accent-subtle);
+    --_badge-fg: var(--color-text);
+    --_badge-border: var(--color-border);
+}
+
+/* "Off" (disabled, private, not configured) */
+.badge-off,
+.badge-outline {
+    --_badge-bg: transparent;
+    --_badge-fg: var(--color-text-tertiary);
+    --_badge-border: var(--color-border-strong);
+}
+
+.status-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.status-dot-success { color: var(--color-success-solid); }
+.status-dot-warning { color: var(--color-warning-solid); }
+.status-dot-danger { color: var(--color-danger-solid); }
+.status-dot-neutral { color: var(--color-neutral-solid); }
+
+.status-dot-live {
+    animation: oa-pulse 2s ease-in-out infinite;
+}
+
+/* --------------------------------------------------------------------------
+   8. ALERT / CALLOUT
+   .alert + .alert-{info|success|warning|danger}; optional <strong> title.
+   -------------------------------------------------------------------------- */
+.alert {
+    --_alert-bg: var(--color-neutral-bg);
+    --_alert-fg: var(--color-text);
+    --_alert-border: var(--color-neutral-border);
+
+    display: flex;
+    gap: var(--space-3);
+    align-items: flex-start;
+    padding: var(--space-3) var(--space-4);
+    margin-bottom: var(--space-4);
+    border: 1px solid var(--_alert-border);
+    border-radius: var(--radius-md);
+    background: var(--_alert-bg);
+    color: var(--_alert-fg);
+    font-size: var(--text-sm);
+    line-height: var(--leading-normal);
+}
+
+.alert > .icon {
+    width: 16px;
+    height: 16px;
+    margin-top: 2px;
+}
+
+.alert strong {
+    font-weight: var(--weight-semibold);
+}
+
+.alert-success {
+    --_alert-bg: var(--color-success-bg);
+    --_alert-fg: var(--color-success-fg);
+    --_alert-border: var(--color-success-border);
+}
+
+.alert-warning {
+    --_alert-bg: var(--color-warning-bg);
+    --_alert-fg: var(--color-warning-fg);
+    --_alert-border: var(--color-warning-border);
+}
+
+.alert-danger {
+    --_alert-bg: var(--color-danger-bg);
+    --_alert-fg: var(--color-danger-fg);
+    --_alert-border: var(--color-danger-border);
+}
+
+/* Inline result line (e.g. "Test connection") */
+.test-result {
+    margin-top: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-md);
+    background: var(--color-sunken);
+    font-size: var(--text-sm);
+}
+
+.test-result .success,
+.text-success { color: var(--color-success-fg); }
+
+.test-result .error,
+.text-error,
+.text-danger,
+.error-text { color: var(--color-danger-fg); }
+
+.test-result .warning,
+.text-warning { color: var(--color-warning-fg); }
+
+/* --------------------------------------------------------------------------
+   9. MODAL
+   Three entry points share one look:
+     - static:  <div class="modal" style="display:none"> > .modal-content
+                (shown by setting display:flex or adding .active)
+     - dynamic: ModalManager in common.js: .modal-overlay > .modal
+     - simple:  .modal-overlay(.hidden) > .modal-card
+   -------------------------------------------------------------------------- */
+.modal,
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-modal);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-4);
+    background: var(--color-overlay);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    animation: oa-fade-in var(--duration-base) ease-out;
+}
+
+.modal-overlay.is-leaving {
+    animation: oa-fade-in var(--duration-base) ease-out reverse forwards;
+}
+
+.modal.active,
+.modal-overlay {
+    display: flex;
+}
+
+.modal-overlay.hidden {
+    display: none;
+}
+
+/* The panel */
+.modal-content,
+.modal-card,
+.modal-overlay > .modal {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 560px;
+    max-height: min(86vh, 900px);
+    overflow: auto;
+    background: var(--color-surface-raised);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-lg);
+    animation: oa-scale-in var(--duration-slow) var(--ease-out);
+    inset: auto;
+    padding: 0;
+}
+
+.modal-overlay > .modal .modal-body p + p {
+    margin-top: var(--space-3);
+}
+
+.modal-overlay > .modal {
+    max-width: 460px;
+    align-items: stretch;
+    justify-content: flex-start;
+    background: var(--color-surface-raised);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+
+.modal-card {
+    max-width: 420px;
+    padding: var(--space-6);
+}
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-5) var(--space-6) 0;
+    color: var(--color-text);
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-tight);
+}
+
+.modal-header h2,
+.modal-header h3 {
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semibold);
+}
+
+.modal-body {
+    /* Small top gap: the description reads as part of the title */
+    padding: var(--space-2) var(--space-6) var(--space-5);
+    color: var(--color-text-secondary);
+}
+
+/* A form gets a little more room under the title than a description */
+.modal-body > .form-group:first-of-type {
+    margin-top: var(--space-2);
+}
+
+.modal-body > :not(.form-group):not(div) {
+    color: var(--color-text-secondary);
+}
+
+.modal-footer,
+.modal-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: var(--space-2);
+    padding: var(--space-4) var(--space-6);
+    border-top: 1px solid var(--color-border-subtle);
+    background: var(--color-surface-raised);
+    position: sticky;
+    bottom: 0;
+}
+
+.modal-close,
+.modal-close-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    margin-right: calc(var(--space-2) * -1);
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--color-text-tertiary);
+    line-height: 1;
+    cursor: pointer;
+    transition: background-color var(--duration-fast) ease, color var(--duration-fast) ease;
+}
+
+.modal-close .icon,
+.modal-close-btn .icon {
+    width: 18px;
+    height: 18px;
+}
+
+.modal-close:hover,
+.modal-close-btn:hover {
+    background: var(--color-fill-hover);
+    color: var(--color-text);
+}
+
+.modal-hint {
+    margin: 0 0 var(--space-3);
+    color: var(--color-text-secondary);
+    font-size: var(--text-sm);
+}
+
+/* Simple confirmation card (.modal-card) */
+.modal-card .modal-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    margin-bottom: var(--space-4);
+    border-radius: var(--radius-full);
+    background: var(--color-danger-bg);
+    color: var(--color-danger-fg);
+}
+
+.modal-card .modal-icon .icon {
+    width: 22px;
+    height: 22px;
+}
+
+.modal-card .modal-title {
+    color: var(--color-text);
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-tight);
+    margin-bottom: var(--space-2);
+}
+
+.modal-card .modal-body {
+    padding: 0;
+    margin-bottom: var(--space-6);
+    color: var(--color-text-secondary);
+    line-height: var(--leading-normal);
+}
+
+.modal-card .modal-actions {
+    padding: 0;
+    border: none;
+    background: none;
+    position: static;
+}
+
+/* --------------------------------------------------------------------------
+   10. TABS - segmented control
+   <div class="tabs"><button class="tab active" data-tab="x">..</button></div>
+   -------------------------------------------------------------------------- */
+.tabs {
+    display: flex;
+    width: fit-content;
+    max-width: 100%;
+    gap: var(--space-0-5);
+    padding: var(--space-1);
+    margin-bottom: var(--space-6);
+    border-radius: var(--radius-md);
+    background: var(--color-sunken);
+    border: 1px solid var(--color-border-subtle);
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+    display: none;
+}
+
+.tab {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1-5);
+    min-height: 32px;
+    padding: 0 var(--space-3-5);
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color var(--duration-fast) ease, color var(--duration-fast) ease, box-shadow var(--duration-fast) ease;
+}
+
+.tab:hover {
+    color: var(--color-text);
+}
+
+.tab.active {
+    background: var(--color-tab-active);
+    color: var(--color-text);
+    box-shadow: var(--shadow-sm);
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+    animation: oa-rise-in var(--duration-base) var(--ease-out);
+}
+
+/* --------------------------------------------------------------------------
+   11. TABLE
+   .table (plus legacy .jobs-table / .audit-table / .billing-table)
+   Wrap in .table-scroll (or .card-flush) for horizontal overflow.
+   -------------------------------------------------------------------------- */
+.table,
+.jobs-table,
+.audit-table,
+.billing-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: var(--text-sm);
+}
+
+.table th,
+.jobs-table th,
+.audit-table th,
+.billing-table th {
+    padding: var(--space-2-5) var(--space-4);
+    background: var(--color-sunken);
+    border-bottom: 1px solid var(--color-border);
+    color: var(--color-text-secondary);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
+    letter-spacing: var(--tracking-wide);
+    text-align: left;
+    white-space: nowrap;
+}
+
+.table th:first-child,
+.jobs-table th:first-child,
+.audit-table th:first-child,
+.billing-table th:first-child {
+    border-top-left-radius: var(--radius-sm);
+}
+
+.table th:last-child,
+.jobs-table th:last-child,
+.audit-table th:last-child,
+.billing-table th:last-child {
+    border-top-right-radius: var(--radius-sm);
+}
+
+.table td,
+.jobs-table td,
+.audit-table td,
+.billing-table td {
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--color-border-subtle);
+    color: var(--color-text);
+    vertical-align: middle;
+}
+
+/* A switch on its own in a cell: as a block it centres with the rest of
+   the row (inline, it sits on the text baseline and rides ~3px high). */
+.table td > .toggle-label,
+.jobs-table td > .toggle-label {
+    display: flex;
+    width: fit-content;
+}
+
+.table tr:last-child td,
+.jobs-table tr:last-child td,
+.audit-table tr:last-child td,
+.billing-table tr:last-child td {
+    border-bottom: none;
+}
+
+.table tbody tr,
+.jobs-table tbody tr,
+.audit-table tbody tr {
+    transition: background-color var(--duration-fast) ease;
+}
+
+.table tbody tr:hover,
+.jobs-table tbody tr:hover,
+.audit-table tbody tr:hover {
+    background: var(--color-fill-hover);
+}
+
+.table-scroll,
+.jobs-table-wrap,
+.audit-log {
+    container: table / inline-size;
+    /* Contains the visually-hidden <thead> of a stacked table, which is
+       absolutely positioned and would otherwise escape the page's scroll
+       container (rows can now stack in a narrow card on a wide screen). */
+    position: relative;
+    width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Desktop column sizing: data columns hug their content and never wrap;
+   the last column takes up the remaining width (its actions sit flush
+   right). When the content is wider than the container, the wrapper
+   above scrolls horizontally instead of squashing the columns. */
+@container table (min-width: 641px) {
+    .table th:not(:last-child),
+    .table td:not(:last-child),
+    .jobs-table th:not(:last-child),
+    .jobs-table td:not(:last-child),
+    .audit-table th:not(:last-child),
+    .audit-table td:not(:last-child) {
+        white-space: nowrap;
+    }
+
+    .table th:last-child,
+    .table td:last-child,
+    .jobs-table th:last-child,
+    .jobs-table td:last-child,
+    .audit-table th:last-child,
+    .audit-table td:last-child {
+        width: 100%;
+    }
+
+    /* An actions column is right-aligned, header included */
+    .table td:last-child:has(> .row-actions, > .job-actions),
+    .jobs-table td:last-child:has(> .row-actions, > .job-actions),
+    .table:has(td:last-child > .row-actions, td:last-child > .job-actions) th:last-child,
+    .jobs-table:has(td:last-child > .row-actions, td:last-child > .job-actions) th:last-child {
+        text-align: right;
+    }
+}
+
+/* Inline row actions - always right-aligned */
+.job-actions,
+.row-actions {
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: var(--space-1-5);
+}
+
+/* Compact row action inside tables. It shares the button base (and its
+   variants, e.g. .job-action-btn.btn-danger); this rule only sets size. */
+.job-action-btn {
+    gap: var(--space-1);
+    min-height: 28px;
+    padding: 0 var(--space-2-5);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-xs);
+}
+
+/* Square icon-only row action (e.g. the trash button) */
+.job-action-icon {
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+}
+
+/* A solid glyph reads heavier than outline icons: match the label size */
+.job-action-btn .icon-filled {
+    width: 12px;
+    height: 12px;
+}
+
+.job-action-icon .icon {
+    width: 14px;
+    height: 14px;
+}
+
+/* Responsive "stacked" table: add .table-stack (or use .jobs-table) and
+   data-label="" on each <td>. Rows become cards when the table's wrapper
+   (.table-scroll / .jobs-table-wrap, a size container) is narrower than
+   640px - so a table in a narrow column stacks even on a wide screen. */
+@container table (max-width: 640px) {
+    .table-stack,
+    .table-stack thead,
+    .table-stack tbody,
+    .table-stack tr,
+    .table-stack td,
+    .jobs-table,
+    .jobs-table thead,
+    .jobs-table tbody,
+    .jobs-table tr,
+    .jobs-table td {
+        display: block;
+        width: 100%;
+    }
+
+    .table-stack thead,
+    .jobs-table thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+    }
+
+    .table-stack tr,
+    .jobs-table tr {
+        margin-bottom: var(--space-3);
+        padding: var(--space-1) var(--space-4);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        background: var(--color-surface);
+    }
+
+    .table-stack tbody tr:hover,
+    .jobs-table tbody tr:hover {
+        background: var(--color-surface);
+    }
+
+    .table-stack td,
+    .jobs-table td {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: var(--space-3);
+        padding: var(--space-2-5) 0;
+        border-bottom: 1px solid var(--color-border-subtle);
+        text-align: right;
+    }
+
+    .table-stack tr td:last-child,
+    .jobs-table tr td:last-child {
+        border-bottom: none;
+    }
+
+    .table-stack td[data-label]::before,
+    .jobs-table td[data-label]::before {
+        content: attr(data-label);
+        flex-shrink: 0;
+        color: var(--color-text-secondary);
+        font-weight: var(--weight-medium);
+        text-align: left;
+        white-space: nowrap;
+    }
+
+    .jobs-table td[colspan] {
+        text-align: left;
+    }
+
+    /* A cell without data-label is the row's name: in the card it is the
+       first row, with no label, even when a column (e.g. an Enabled
+       switch) comes before it on desktop. */
+    .table-stack tr:has(> td:not([data-label])),
+    .jobs-table tr:has(> td:not([data-label])) {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .table-stack td:not([data-label]),
+    .jobs-table td:not([data-label]) {
+        order: -1;
+        text-align: left;
+    }
+
+    /* A row with no actions (only a "—" .cell-placeholder) drops the
+       actions row from its card; the row above becomes the last one. */
+    .table-stack td:has(> :is(.row-actions, .job-actions) > .cell-placeholder:only-child),
+    .jobs-table td:has(> :is(.row-actions, .job-actions) > .cell-placeholder:only-child) {
+        display: none;
+    }
+
+    .table-stack tr:has(> td > :is(.row-actions, .job-actions) > .cell-placeholder:only-child) > td:nth-last-child(2),
+    .jobs-table tr:has(> td > :is(.row-actions, .job-actions) > .cell-placeholder:only-child) > td:nth-last-child(2) {
+        border-bottom: none;
+    }
+
+    /* An actions cell needs no "Actions" label: the buttons speak for
+       themselves and get the full width of the card. */
+    .table-stack td:has(> .row-actions, > .job-actions)::before,
+    .jobs-table td:has(> .row-actions, > .job-actions)::before {
+        content: none;
+    }
+
+    .job-actions,
+    .row-actions {
+        flex: 1;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .job-action-btn {
+        min-height: 36px;
+    }
+
+    .job-action-icon {
+        width: 36px;
+        height: 36px;
+    }
+}
+
+/* --------------------------------------------------------------------------
+   12. TOAST  (ToastManager in common.js: .toast-container > .toast.{type})
+   -------------------------------------------------------------------------- */
+.toast-container {
+    position: fixed;
+    top: var(--space-5);
+    right: var(--space-5);
+    z-index: var(--z-toast);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    pointer-events: none;
+}
+
+.toast {
+    --_toast-dot: var(--color-neutral-solid);
+
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+    min-width: 280px;
+    max-width: 420px;
+    padding: var(--space-3) var(--space-4);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface-raised);
+    box-shadow: var(--shadow-lg);
+    color: var(--color-text);
+    font-size: var(--text-sm);
+    line-height: var(--leading-snug);
+    pointer-events: auto;
+    animation: oa-slide-in-right var(--duration-slow) var(--ease-out);
+}
+
+.toast.is-leaving {
+    animation: oa-slide-in-right var(--duration-slow) var(--ease-out) reverse forwards;
+}
+
+.toast::before {
+    content: '';
+    flex-shrink: 0;
+    width: 8px;
+    height: 8px;
+    margin-top: 5px;
+    border-radius: 50%;
+    background: var(--_toast-dot);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--_toast-dot) 18%, transparent);
+}
+
+.toast.success { --_toast-dot: var(--color-success-solid); }
+.toast.warning { --_toast-dot: var(--color-warning-solid); }
+.toast.error { --_toast-dot: var(--color-danger-solid); }
+
+/* --------------------------------------------------------------------------
+   13. SPINNER & SKELETON
+   -------------------------------------------------------------------------- */
+.spinner {
+    width: 28px;
+    height: 28px;
+    margin: var(--space-5) auto;
+    border: 2.5px solid var(--color-border);
+    border-top-color: var(--color-accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+.spinner-sm {
+    width: 14px;
+    height: 14px;
+    margin: 0;
+    border-width: 2px;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.skeleton {
+    display: block;
+    height: 12px;
+    border-radius: var(--radius-xs);
+    background: linear-gradient(90deg, var(--color-sunken), var(--color-border-subtle), var(--color-sunken));
+    background-size: 200% 100%;
+    animation: oa-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes oa-shimmer {
+    from { background-position: 200% 0; }
+    to { background-position: -200% 0; }
+}
+
+/* --------------------------------------------------------------------------
+   14. EMPTY STATE
+   -------------------------------------------------------------------------- */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-12) var(--space-6);
+    color: var(--color-text-secondary);
+    text-align: center;
+    font-size: var(--text-sm);
+}
+
+.empty-state-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    margin-bottom: var(--space-2);
+    border-radius: var(--radius-full);
+    background: var(--color-sunken);
+    color: var(--color-text-tertiary);
+}
+
+.empty-state-title {
+    color: var(--color-text);
+    font-size: var(--text-base);
+    font-weight: var(--weight-semibold);
+}
+
+/* --------------------------------------------------------------------------
+   15. PAGE LAYOUT HELPERS
+   -------------------------------------------------------------------------- */
+.page {
+    width: 100%;
+    max-width: var(--content-max);
+    margin: 0 auto;
+}
+
+.page-header,
+.settings-header,
+.monitoring-header,
+.artifacts-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+    margin-bottom: var(--space-6);
+}
+
+.page-header h1,
+.settings-header h1,
+.monitoring-header h1,
+.artifacts-header h1 {
+    color: var(--color-text);
+    font-size: var(--text-2xl);
+    font-weight: var(--weight-semibold);
+    letter-spacing: -0.02em;
+}
+
+.page-header p,
+.page-description {
+    max-width: 60ch;
+    margin-top: var(--space-1);
+    color: var(--color-text-secondary);
+    font-size: var(--text-base);
+}
+
+.section-title {
+    color: var(--color-text);
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-tight);
+    margin-bottom: var(--space-1);
+}
+
+/* Small uppercase-free eyebrow label */
+.eyebrow,
+.overline {
+    color: var(--color-text-tertiary);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
+    letter-spacing: var(--tracking-wide);
+}
+
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1-5);
+    height: 28px;
+    padding: 0 var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-full);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-size: var(--text-sm);
+    white-space: nowrap;
+}
+
+.divider {
+    height: 1px;
+    margin: var(--space-6) 0;
+    border: none;
+    background: var(--color-border-subtle);
+}
+
+/* --------------------------------------------------------------------------
+   16. UTILITIES
+   -------------------------------------------------------------------------- */
+.text-muted,
+.text-secondary {
+    color: var(--color-text-secondary);
+}
+
+p.text-muted {
+    font-size: var(--text-sm);
+}
+
+.text-tertiary { color: var(--color-text-tertiary); }
+.text-center { text-align: center; }
+.text-sm { font-size: var(--text-sm); }
+.text-xs { font-size: var(--text-xs); }
+.font-medium { font-weight: var(--weight-medium); }
+.font-mono { font-family: var(--font-mono); }
+.tabular { font-variant-numeric: tabular-nums; }
+
+.mt-0 { margin-top: 0; }
+.mt-1 { margin-top: var(--space-2); }
+.mt-2 { margin-top: var(--space-4); }
+.mt-3 { margin-top: var(--space-6); }
+.mb-1 { margin-bottom: var(--space-2); }
+.mb-2 { margin-bottom: var(--space-4); }
+.mb-3 { margin-bottom: var(--space-6); }
+.mb-0 { margin-bottom: 0; }
+
+.flex { display: flex; }
+.flex-col { display: flex; flex-direction: column; }
+.flex-wrap { flex-wrap: wrap; }
+.items-center { align-items: center; }
+.flex-gap { gap: var(--space-3); }
+.gap-1 { gap: var(--space-1); }
+.gap-2 { gap: var(--space-2); }
+.gap-3 { gap: var(--space-3); }
+.gap-4 { gap: var(--space-4); }
+.flex-center { justify-content: center; align-items: center; }
+.flex-between { justify-content: space-between; align-items: center; }
+.grow { flex: 1; min-width: 0; }
+.self-start { align-self: flex-start; }
+
+/* Two equal columns; a lone field keeps its half width */
+.form-grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+}
+
+.form-grid-2 > .form-group {
+    margin: 0;
+}
+
+/* Constrained form widths inside cards and modals */
+.measure-sm { max-width: 480px; }
+.measure-md { max-width: 600px; }
+.measure-lg { max-width: 680px; }
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}

@@ -119,7 +119,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "bootstrap.encryption_key": SettingDefinition(
         key="bootstrap.encryption_key",
-        display_name="Encryption Key",
+        display_name="Encryption key",
         description="Fernet encryption key for sensitive data. Generate with: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'",
         value_type=SettingValueType.STRING,
         category=ConfigCategory.BOOTSTRAP,
@@ -146,7 +146,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "application.data_dir": SettingDefinition(
         key="application.data_dir",
-        display_name="Data Directory",
+        display_name="Data directory",
         description="Directory for storing application data",
         value_type=SettingValueType.STRING,
         category=ConfigCategory.APPLICATION,
@@ -158,7 +158,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "application.message_retention_days": SettingDefinition(
         key="application.message_retention_days",
-        display_name="Message Retention (days)",
+        display_name="Message retention (days)",
         description=(
             "Age threshold for the nightly compaction job. Messages and LLM "
             "consumption rows older than this are collapsed into summary rows "
@@ -177,7 +177,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     # ========================================================================
     "logging.log_level": SettingDefinition(
         key="logging.log_level",
-        display_name="Log Level",
+        display_name="Log level",
         description="Minimum log level to record",
         value_type=SettingValueType.STRING,
         category=ConfigCategory.LOGGING,
@@ -189,7 +189,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "logging.rotation_days": SettingDefinition(
         key="logging.rotation_days",
-        display_name="Log Rotation Days",
+        display_name="Log rotation days",
         description="Number of daily log files to keep",
         value_type=SettingValueType.INT,
         category=ConfigCategory.LOGGING,
@@ -202,7 +202,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "logging.rotation_when": SettingDefinition(
         key="logging.rotation_when",
-        display_name="Log Rotation Timing",
+        display_name="Log rotation timing",
         description="When to rotate logs (midnight, S=seconds, M=minutes, H=hours, D=days, W0-W6=weekday)",
         value_type=SettingValueType.STRING,
         category=ConfigCategory.LOGGING,
@@ -226,7 +226,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     # ========================================================================
     "memory.max_tokens": SettingDefinition(
         key="memory.max_tokens",
-        display_name="Max Context Tokens",
+        display_name="Max context tokens",
         description=(
             "Maximum tokens of conversation history to keep in context each turn "
             "(separate from Max Tokens, which caps the response). The default is "
@@ -244,7 +244,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "memory.summarization_threshold": SettingDefinition(
         key="memory.summarization_threshold",
-        display_name="Summarization Threshold",
+        display_name="Summarization threshold",
         description="Message count before summarization is recommended",
         value_type=SettingValueType.INT,
         category=ConfigCategory.MEMORY,
@@ -260,7 +260,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     # ========================================================================
     "web_ui.host": SettingDefinition(
         key="web_ui.host",
-        display_name="Web UI Host",
+        display_name="Web UI host",
         description="Host address for the web server",
         value_type=SettingValueType.STRING,
         category=ConfigCategory.WEB_UI,
@@ -272,7 +272,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "web_ui.port": SettingDefinition(
         key="web_ui.port",
-        display_name="Web UI Port",
+        display_name="Web UI port",
         description="Port number for the web server",
         value_type=SettingValueType.INT,
         category=ConfigCategory.WEB_UI,
@@ -304,7 +304,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     # ========================================================================
     "llm.provider": SettingDefinition(
         key="llm.provider",
-        display_name="LLM Provider",
+        display_name="LLM provider",
         description="LLM provider to use (openrouter, anthropic, groq, ollama, vllm, or custom)",
         value_type=SettingValueType.STRING,
         category=ConfigCategory.LLM,
@@ -316,7 +316,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "llm.api_key": SettingDefinition(
         key="llm.api_key",
-        display_name="API Key",
+        display_name="API key",
         description=(
             "API key for the LLM provider. Not required for local servers like "
             "Ollama or vLLM (leave blank unless vLLM was started with --api-key)."
@@ -377,7 +377,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "llm.max_tokens": SettingDefinition(
         key="llm.max_tokens",
-        display_name="Max Tokens",
+        display_name="Max tokens",
         description="Maximum tokens in the response",
         value_type=SettingValueType.INT,
         category=ConfigCategory.LLM,
@@ -390,7 +390,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "llm.tool_output_max_chars": SettingDefinition(
         key="llm.tool_output_max_chars",
-        display_name="Max Tool Output Chars",
+        display_name="Max tool output chars",
         description=(
             "Tool results larger than this many characters are offloaded to a temp "
             "file and replaced in-context with a compact pointer (schema + sample) "
@@ -408,7 +408,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "llm.context_strategy": SettingDefinition(
         key="llm.context_strategy",
-        display_name="Context Strategy",
+        display_name="Context strategy",
         description=(
             "How to manage conversation context on every turn: 'summarization' keeps long-term "
             "summaries of older messages; 'last_messages' keeps only the most recent N messages "
@@ -424,7 +424,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "llm.context_max_messages": SettingDefinition(
         key="llm.context_max_messages",
-        display_name="Context Max Messages",
+        display_name="Context max messages",
         description=(
             "Maximum number of recent messages to include in context when using the "
             "'last_messages' strategy. Applied on every turn."
@@ -440,7 +440,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "llm.auto_compact": SettingDefinition(
         key="llm.auto_compact",
-        display_name="Auto-Compact Conversations",
+        display_name="Auto-compact conversations",
         description=(
             "Automatically compress conversation history in the background after each turn "
             "using the worker model. Only active when Context Strategy is 'summarization'. "
@@ -455,7 +455,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "llm.tool_context_replay": SettingDefinition(
         key="llm.tool_context_replay",
-        display_name="Remember Tool Results Between Turns",
+        display_name="Remember tool results between turns",
         description=(
             "Keep the results of tool calls (e.g. an email that was just fetched) available "
             "to follow-up messages, so the assistant doesn't have to fetch them again. "
@@ -474,7 +474,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "llm.history_tool_turns": SettingDefinition(
         key="llm.history_tool_turns",
-        display_name="Tool Results Replayed In Full",
+        display_name="Tool results replayed in full",
         description=(
             "How many recent turns have their tool results re-sent in full when "
             "'Remember Tool Results Between Turns' is on. Older turns get a short note."
@@ -490,7 +490,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "llm.history_tool_result_max_chars": SettingDefinition(
         key="llm.history_tool_result_max_chars",
-        display_name="Max Stored Chars Per Tool Result",
+        display_name="Max stored chars per tool result",
         description=(
             "Each tool result kept for later turns is truncated to this many characters "
             "(~4 chars = 1 token)."
@@ -506,7 +506,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "llm.history_tool_trace_max_chars": SettingDefinition(
         key="llm.history_tool_trace_max_chars",
-        display_name="Max Replayed Tool Chars",
+        display_name="Max replayed tool chars",
         description=(
             "Upper bound on the characters of tool results re-sent on each turn "
             "(~4 chars = 1 token; the default 24000 is about 6K tokens). Results that "
@@ -523,7 +523,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "llm.media_model": SettingDefinition(
         key="llm.media_model",
-        display_name="Media Model",
+        display_name="Media model",
         description=(
             "Model used to process non-textual data such as images sent via WhatsApp or Slack. "
             "Defaults to the main model if left empty. "
@@ -539,7 +539,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "llm.worker_model": SettingDefinition(
         key="llm.worker_model",
-        display_name="Worker Model",
+        display_name="Worker model",
         description=(
             "Model used for background worker tasks. Defaults to the main model if left empty. "
             "Ignored for Ollama and vLLM, which always use the main model."
@@ -554,7 +554,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "llm.writer_model": SettingDefinition(
         key="llm.writer_model",
-        display_name="Writer Model",
+        display_name="Writer model",
         description=(
             "Model used for the compose_document tool. Defaults to the main model if left empty. "
             "Ignored for Ollama and vLLM, which always use the main model."
@@ -569,7 +569,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "llm.paused": SettingDefinition(
         key="llm.paused",
-        display_name="LLM Paused",
+        display_name="LLM paused",
         description=(
             "When true, all LLM calls (chat, cron jobs, background tools) are blocked before "
             "they reach the provider. Set externally (e.g. via the managed settings API) to "
@@ -587,7 +587,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     # ========================================================================
     "google.enabled": SettingDefinition(
         key="google.enabled",
-        display_name="Enable Google Services",
+        display_name="Enable Google services",
         description="Enable Google integration (Gmail, Calendar, etc.)",
         value_type=SettingValueType.BOOL,
         category=ConfigCategory.GOOGLE,
@@ -612,7 +612,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "google.client_secret": SettingDefinition(
         key="google.client_secret",
-        display_name="Client Secret",
+        display_name="Client secret",
         description="Google OAuth 2.0 Client Secret from Google Cloud Console",
         value_type=SettingValueType.STRING,
         category=ConfigCategory.GOOGLE,
@@ -667,7 +667,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "outlook.client_secret": SettingDefinition(
         key="outlook.client_secret",
-        display_name="Client Secret",
+        display_name="Client secret",
         description="Outlook/Azure app client secret",
         value_type=SettingValueType.STRING,
         category=ConfigCategory.OUTLOOK,
@@ -706,7 +706,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "notion.api_key": SettingDefinition(
         key="notion.api_key",
-        display_name="API Key",
+        display_name="API key",
         description="Notion integration API key",
         value_type=SettingValueType.STRING,
         category=ConfigCategory.NOTION,
@@ -796,7 +796,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "whatsapp.phone_number": SettingDefinition(
         key="whatsapp.phone_number",
-        display_name="Phone Number / WhatsApp ID",
+        display_name="Phone number / WhatsApp ID",
         description="WhatsApp phone number with country code or full WhatsApp ID (e.g., +1234567890 or 1234567890@lid)",
         value_type=SettingValueType.STRING,
         category=ConfigCategory.WHATSAPP,
@@ -809,7 +809,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "whatsapp.session_dir": SettingDefinition(
         key="whatsapp.session_dir",
-        display_name="Session Directory",
+        display_name="Session directory",
         description="Directory for storing WhatsApp session data",
         value_type=SettingValueType.STRING,
         category=ConfigCategory.WHATSAPP,
@@ -835,7 +835,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "slack.bot_token": SettingDefinition(
         key="slack.bot_token",
-        display_name="Bot Token",
+        display_name="Bot token",
         description="Slack Bot User OAuth Token (xoxb-...). Found under OAuth & Permissions in your Slack app.",
         value_type=SettingValueType.STRING,
         category=ConfigCategory.SLACK,
@@ -848,7 +848,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "slack.signing_secret": SettingDefinition(
         key="slack.signing_secret",
-        display_name="Signing Secret",
+        display_name="Signing secret",
         description="Slack app signing secret for verifying incoming webhook requests. Found under Basic Information.",
         value_type=SettingValueType.STRING,
         category=ConfigCategory.SLACK,
@@ -861,7 +861,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "slack.app_token": SettingDefinition(
         key="slack.app_token",
-        display_name="App-Level Token (Socket Mode)",
+        display_name="App-level token (Socket Mode)",
         description="Slack App-Level Token (xapp-...) for Socket Mode. Optional — only needed if you use Socket Mode instead of HTTP webhooks.",
         value_type=SettingValueType.STRING,
         category=ConfigCategory.SLACK,
@@ -874,7 +874,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "slack.default_channel": SettingDefinition(
         key="slack.default_channel",
-        display_name="Default Channel",
+        display_name="Default channel",
         description="Default Slack channel ID for sending messages (e.g., C01ABCDEF12). You can find this in the channel details.",
         value_type=SettingValueType.STRING,
         category=ConfigCategory.SLACK,
@@ -886,7 +886,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "slack.allowed_user_ids": SettingDefinition(
         key="slack.allowed_user_ids",
-        display_name="Allowed User IDs",
+        display_name="Allowed user IDs",
         description="Comma-separated list of Slack user IDs allowed to interact with the bot. Leave empty to allow all users.",
         value_type=SettingValueType.STRING,
         category=ConfigCategory.SLACK,
@@ -898,7 +898,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "slack.thread_replies": SettingDefinition(
         key="slack.thread_replies",
-        display_name="Reply in Thread",
+        display_name="Reply in thread",
         description="When enabled, Open Assistant replies in a thread under each incoming message instead of posting to the channel root — including background sub-task progress updates. Conversation context is also scoped to the thread, so separate threads in a shared channel no longer share history. When disabled, the whole channel shares one conversation.",
         value_type=SettingValueType.BOOL,
         category=ConfigCategory.SLACK,
@@ -909,7 +909,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "slack.mention_only": SettingDefinition(
         key="slack.mention_only",
-        display_name="Reply Only on Mention",
+        display_name="Reply only on mention",
         description="When enabled, Open Assistant only responds when directly @mentioned. All other channel messages are ignored, letting humans converse freely. Best combined with 'Reply in Thread' so each @mention starts a clean threaded reply.",
         value_type=SettingValueType.BOOL,
         category=ConfigCategory.SLACK,
@@ -920,7 +920,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "slack.thread_ingest_all_messages": SettingDefinition(
         key="slack.thread_ingest_all_messages",
-        display_name="Ingest All Thread Messages",
+        display_name="Ingest all thread messages",
         description="When enabled, every message posted in a thread — not just @mentions, and including messages from other bots — is recorded as context for that thread's conversation, labelled with the speaker's name, even though only @mentions get a reply. This lets other participants, including other agents, post in the same thread and have their messages available whenever Open Assistant is next @mentioned there.",
         value_type=SettingValueType.BOOL,
         category=ConfigCategory.SLACK,
@@ -932,7 +932,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "slack.reply_to_bots": SettingDefinition(
         key="slack.reply_to_bots",
-        display_name="Reply to Bots & Mention Participants",
+        display_name="Reply to bots & mention participants",
         description="When enabled, an @mention from another bot gets a reply, just like one from a human — but only from bots listed under 'Allowed Bot IDs'. Thread participants are also tagged with their Slack mention, so Open Assistant can @mention other bots and humans in its replies. To prevent bot-to-bot loops, at most 3 consecutive bot-triggered replies are sent per thread until a human posts again. Requires 'Reply Only on Mention'.",
         value_type=SettingValueType.BOOL,
         category=ConfigCategory.SLACK,
@@ -944,7 +944,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "slack.allowed_bot_ids": SettingDefinition(
         key="slack.allowed_bot_ids",
-        display_name="Allowed Bot IDs",
+        display_name="Allowed bot IDs",
         description="Comma-separated Slack user IDs (U...) or bot IDs (B...) of the bots allowed to trigger a reply by @mentioning Open Assistant. Unlike the human list, an empty list allows NO bots. Other bots' messages are still recorded as thread context when 'Ingest All Thread Messages' is on.",
         value_type=SettingValueType.STRING,
         category=ConfigCategory.SLACK,
@@ -971,7 +971,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "brave.api_key": SettingDefinition(
         key="brave.api_key",
-        display_name="API Key",
+        display_name="API key",
         description="Brave Search API key. Get one free at https://brave.com/search/api/",
         value_type=SettingValueType.STRING,
         category=ConfigCategory.BRAVE,
@@ -985,7 +985,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "brave.results_limit": SettingDefinition(
         key="brave.results_limit",
-        display_name="Results Limit",
+        display_name="Results limit",
         description="Maximum number of search results to return per query",
         value_type=SettingValueType.INT,
         category=ConfigCategory.BRAVE,
@@ -998,7 +998,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "brave.safe_search": SettingDefinition(
         key="brave.safe_search",
-        display_name="Safe Search",
+        display_name="Safe search",
         description="Safe search filtering level",
         value_type=SettingValueType.STRING,
         category=ConfigCategory.BRAVE,
@@ -1013,7 +1013,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     # ========================================================================
     "browser.enabled": SettingDefinition(
         key="browser.enabled",
-        display_name="Enable Browser",
+        display_name="Enable browser",
         description="Enable web browsing with Playwright and vision-based screenshots",
         value_type=SettingValueType.BOOL,
         category=ConfigCategory.BROWSER,
@@ -1024,7 +1024,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "browser.headless": SettingDefinition(
         key="browser.headless",
-        display_name="Headless Mode",
+        display_name="Headless mode",
         description="Run browser in headless mode (no visible window)",
         value_type=SettingValueType.BOOL,
         category=ConfigCategory.BROWSER,
@@ -1035,7 +1035,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "browser.viewport_width": SettingDefinition(
         key="browser.viewport_width",
-        display_name="Viewport Width",
+        display_name="Viewport width",
         description="Browser viewport width in pixels",
         value_type=SettingValueType.INT,
         category=ConfigCategory.BROWSER,
@@ -1048,7 +1048,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "browser.viewport_height": SettingDefinition(
         key="browser.viewport_height",
-        display_name="Viewport Height",
+        display_name="Viewport height",
         description="Browser viewport height in pixels",
         value_type=SettingValueType.INT,
         category=ConfigCategory.BROWSER,
@@ -1061,7 +1061,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "browser.screenshot_quality": SettingDefinition(
         key="browser.screenshot_quality",
-        display_name="Screenshot Quality",
+        display_name="Screenshot quality",
         description="JPEG screenshot quality (0-100, higher is better but larger)",
         value_type=SettingValueType.INT,
         category=ConfigCategory.BROWSER,
@@ -1074,7 +1074,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "browser.user_agent": SettingDefinition(
         key="browser.user_agent",
-        display_name="User Agent",
+        display_name="User agent",
         description=(
             "Override the browser's User-Agent string. Leave empty for the built-in Chrome UA. "
             "Set this to the exact UA of the browser you exported saved-session cookies from "
@@ -1104,7 +1104,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "google_navigator.places_api_key": SettingDefinition(
         key="google_navigator.places_api_key",
-        display_name="Places / Maps API Key",
+        display_name="Places / Maps API key",
         description="Google API key for Places, Directions, and Geocoding APIs. Create one in Google Cloud Console with Places API (New), Directions API, and Geocoding API enabled.",
         value_type=SettingValueType.STRING,
         category=ConfigCategory.GOOGLE_NAVIGATOR,
@@ -1132,7 +1132,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "whisper.api_key": SettingDefinition(
         key="whisper.api_key",
-        display_name="API Key",
+        display_name="API key",
         description="OpenAI API key for Whisper transcription. If empty, falls back to the main LLM API key.",
         value_type=SettingValueType.STRING,
         category=ConfigCategory.WHISPER,
@@ -1184,7 +1184,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "mistral_ocr.api_key": SettingDefinition(
         key="mistral_ocr.api_key",
-        display_name="API Key",
+        display_name="API key",
         description="Mistral AI API key. If empty, falls back to main LLM API key.",
         value_type=SettingValueType.STRING,
         category=ConfigCategory.MISTRAL_OCR,
@@ -1221,7 +1221,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "mistral_ocr.notion_database_id": SettingDefinition(
         key="mistral_ocr.notion_database_id",
-        display_name="Notion Database ID",
+        display_name="Notion database ID",
         description="Notion database ID where PDF notes should be saved. Get this from your Notion database URL.",
         value_type=SettingValueType.STRING,
         category=ConfigCategory.MISTRAL_OCR,
@@ -1261,7 +1261,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "google_ads.client_secret": SettingDefinition(
         key="google_ads.client_secret",
-        display_name="Client Secret",
+        display_name="Client secret",
         description="Google OAuth 2.0 Client Secret for Google Ads.",
         value_type=SettingValueType.STRING,
         category=ConfigCategory.GOOGLE_ADS,
@@ -1275,7 +1275,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "google_ads.developer_token": SettingDefinition(
         key="google_ads.developer_token",
-        display_name="Developer Token",
+        display_name="Developer token",
         description="Google Ads Developer Token from your Manager Account's API Center.",
         value_type=SettingValueType.STRING,
         category=ConfigCategory.GOOGLE_ADS,
@@ -1302,7 +1302,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "google_ads.login_customer_id": SettingDefinition(
         key="google_ads.login_customer_id",
-        display_name="Login Customer ID",
+        display_name="Login customer ID",
         description="Manager Account (MCC) ID if authenticating via a manager account. Optional.",
         value_type=SettingValueType.STRING,
         category=ConfigCategory.GOOGLE_ADS,
@@ -1374,7 +1374,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "google_news.max_results": SettingDefinition(
         key="google_news.max_results",
-        display_name="Max Results",
+        display_name="Max results",
         description="Maximum number of articles to return per request (1–50). Default is 10.",
         value_type=SettingValueType.INT,
         category=ConfigCategory.GOOGLE_NEWS,
@@ -1406,7 +1406,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "yahoo_finance.request_timeout": SettingDefinition(
         key="yahoo_finance.request_timeout",
-        display_name="Request Timeout",
+        display_name="Request timeout",
         description="Timeout in seconds for Yahoo Finance API requests.",
         value_type=SettingValueType.INT,
         category=ConfigCategory.YAHOO_FINANCE,
@@ -1502,7 +1502,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     ),
     "user.first_day_of_week": SettingDefinition(
         key="user.first_day_of_week",
-        display_name="First Day of Week",
+        display_name="First day of week",
         description=(
             "The day your week starts on. Used by the assistant to interpret "
             "relative date expressions like 'this week' or 'next week'."

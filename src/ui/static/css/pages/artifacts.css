@@ -1,0 +1,75 @@
+/* ==========================================================================
+   Artifacts page
+   ========================================================================== */
+
+.artifact-name {
+    color: var(--color-text);
+    font-weight: var(--weight-medium);
+}
+
+.artifact-file {
+    color: var(--color-text-tertiary);
+    font-size: var(--text-xs);
+}
+
+.lock-badge {
+    display: inline-flex;
+    align-items: center;
+    margin-left: var(--space-1-5);
+    color: var(--color-text-tertiary);
+    vertical-align: middle;
+}
+
+.lock-badge .icon {
+    width: 14px;
+    height: 14px;
+}
+
+.artifact-input {
+    display: block;
+    width: 100%;
+    min-height: var(--control-h-md);
+    padding: 0 var(--space-3);
+    border: 1px solid var(--color-border-control);
+    border-radius: var(--radius-md);
+    background: var(--color-sunken);
+    color: var(--color-text);
+    font-size: var(--text-sm);
+}
+
+.artifact-input:focus {
+    outline: none;
+    border-color: var(--color-focus-border);
+    box-shadow: 0 0 0 3px var(--color-focus-ring-soft);
+}
+
+/* The table runs edge to edge inside .card-flush */
+.card-flush .jobs-table th {
+    border-radius: 0 !important;
+}
+
+.card-flush .jobs-table th:first-child,
+.card-flush .jobs-table td:first-child {
+    padding-left: var(--space-6);
+}
+
+.card-flush .jobs-table th:last-child,
+.card-flush .jobs-table td:last-child {
+    padding-right: var(--space-6);
+}
+
+@media (max-width: 768px) {
+    .card-flush:has(.jobs-table) {
+        padding: 0;
+        border: none;
+        background: transparent;
+        box-shadow: none;
+        overflow: visible;
+    }
+
+    .card-flush .jobs-table td:first-child,
+    .card-flush .jobs-table td:last-child {
+        padding-left: 0;
+        padding-right: 0;
+    }
+}
