@@ -3169,9 +3169,8 @@ async function deleteBrowserSession(id) {
 function _backupStatus(message, type) {
     const el = document.getElementById('backup-status');
     if (!el) return;
-    el.style.display = 'block';
-    el.textContent = message;
-    el.classList.toggle('error', type === 'error');
+    el.hidden = false;
+    el.innerHTML = `<p class="${type === 'error' ? 'error' : 'success'}">${message}</p>`;
 }
 
 async function exportBackup() {

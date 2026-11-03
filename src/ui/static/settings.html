@@ -291,14 +291,14 @@
                         </select>
                     </div>
 
-                    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                    <div class="settings-actions">
                         <button onclick="exportBackup()" class="btn btn-primary">Export Data</button>
                         <button onclick="document.getElementById('backup-import-file').click()" class="btn btn-secondary">Import Data</button>
                         <input type="file" id="backup-import-file" accept=".json,.json.gz,application/json"
-                            style="display:none;" onchange="importBackup(this)" />
+                            hidden onchange="importBackup(this)" />
                     </div>
 
-                    <div id="backup-status" class="backup-status" style="display:none;"></div>
+                    <div id="backup-status" class="test-result" hidden></div>
                 </div>
 
                 <div class="settings-section">
@@ -541,8 +541,8 @@
                 <!-- Auth type selector -->
                 <div class="form-group">
                     <label>Authentication</label>
-                    <div style="display:flex; gap:16px; margin-top:4px; flex-wrap:wrap;">
-                        <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                    <div class="radio-group">
+                        <label class="radio-label">
                             <input type="radio" name="mcp-auth-type" value="none" onchange="onMcpAuthTypeChange(this.value)">
                             None
                         </label>
