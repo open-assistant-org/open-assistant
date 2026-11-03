@@ -89,6 +89,7 @@ nav:
       - Installation & Updates: setup/install-and-update.md
       - Configuration: setup/configuration.md
       - Development: setup/development.md
+      - Backup & Migration: setup/backup-and-migration.md
   - Development Checklist: development-checklist.md
   - Design System: design-system.md
   - Architecture:

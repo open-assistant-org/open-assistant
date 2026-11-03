@@ -18,6 +18,7 @@ from src.api.agents import router as agents_router
 from src.api.artifacts import router as artifacts_router
 from src.api.artifacts import visitor_router as artifact_visitor_router
 from src.api.auth import router as auth_router
+from src.api.backup import router as backup_router
 from src.api.brave import router as brave_router
 from src.api.browser import router as browser_router
 from src.api.chat import router as chat_router
@@ -579,6 +580,7 @@ def create_app() -> FastAPI:
     app.include_router(artifacts_router)
     app.include_router(artifact_visitor_router)
     app.include_router(auth_router)
+    app.include_router(backup_router)
     app.include_router(brave_router)
     app.include_router(browser_router)
     app.include_router(chat_router)

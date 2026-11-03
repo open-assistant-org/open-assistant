@@ -268,6 +268,40 @@
                 </div>
 
                 <div class="settings-section">
+                    <h3 class="section-title">Backup & Migration</h3>
+                    <p class="text-muted">
+                        Export all data (including credentials) to a portable file, or import
+                        a previously exported file to migrate to another server.
+                        <a href="https://github.com/open-assistant-org/open-assistant/blob/main/docs/setup/backup-and-migration.md" target="_blank" class="help-link">Documentation →</a>
+                    </p>
+
+                    <div class="form-group">
+                        <label class="form-label" for="backup-secret">Backend secret (ENCRYPTION_KEY)</label>
+                        <input type="password" id="backup-secret" class="form-input"
+                            placeholder="ENCRYPTION_KEY of this instance"
+                            autocomplete="off" />
+                        <p class="text-muted">For import, use the secret of the instance the file was exported from.</p>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="backup-import-mode">Import mode</label>
+                        <select id="backup-import-mode" class="form-select">
+                            <option value="fail">Fail on conflict (default)</option>
+                            <option value="overwrite">Overwrite existing data</option>
+                        </select>
+                    </div>
+
+                    <div class="settings-actions">
+                        <button onclick="exportBackup()" class="btn btn-primary">Export Data</button>
+                        <button onclick="document.getElementById('backup-import-file').click()" class="btn btn-secondary">Import Data</button>
+                        <input type="file" id="backup-import-file" accept=".json,.json.gz,application/json"
+                            hidden onchange="importBackup(this)" />
+                    </div>
+
+                    <div id="backup-status" class="test-result" hidden></div>
+                </div>
+
+                <div class="settings-section">
                     <h3 class="section-title">Audit log</h3>
                     <p class="text-muted">A history of configuration changes.</p>
 
