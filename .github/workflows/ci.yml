@@ -4,12 +4,15 @@ on:
   pull_request:
     branches: [main]
 
+# Read-only on purpose: pull requests from forks always get a read-only token.
+# The PR comment is posted by coverage-comment.yml, which runs after this
+# workflow with write access and never runs code from the PR.
+permissions:
+  contents: read
+
 jobs:
   lint-and-test:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
 
     steps:
       - name: Checkout code
@@ -32,16 +35,29 @@ jobs:
 
       - name: Coverage Summary
         uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         with:
           script: |
             const fs = require('fs');
             const xml = fs.readFileSync('coverage.xml', 'utf8');
-            const covered = xml.match(/lines-covered="(\d+)"/);
-            const total = xml.match(/lines-valid="(\d+)"/);
-            if (covered && total) {
-              const pct = Math.round((parseInt(covered[1]) / parseInt(total[1])) * 100);
-              console.log(`Coverage: ${pct}% (${covered[1]}/${total[1]} lines)`);
-            }
+            const covered = parseInt(xml.match(/lines-covered="(\d+)"/)?.[1] ?? '', 10);
+            const total = parseInt(xml.match(/lines-valid="(\d+)"/)?.[1] ?? '', 10);
+            const pct = total > 0 ? Math.round((covered / total) * 100) : null;
+            const line = pct === null
+              ? 'Coverage: unknown'
+              : `Coverage: ${pct}% (${covered}/${total} lines)`;
+            console.log(line);
+
+            await core.summary.addHeading('Coverage').addRaw(line).write();
+
+            // Data for coverage-comment.yml, which posts it on the PR.
+            fs.mkdirSync('coverage-comment', { recursive: true });
+            fs.writeFileSync('coverage-comment/coverage.json', JSON.stringify({
+              pr: parseInt(process.env.PR_NUMBER, 10),
+              covered,
+              total,
+            }));
 
       - name: Upload coverage to GitHub
         uses: actions/upload-artifact@v4
@@ -49,23 +65,9 @@ jobs:
           name: coverage
           path: coverage.xml
 
-      - name: Add coverage comment to PR
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
+      - name: Upload coverage comment data
+        uses: actions/upload-artifact@v4
         with:
-          script: |
-            const fs = require('fs');
-            const xml = fs.readFileSync('coverage.xml', 'utf8');
-            const covered = xml.match(/lines-covered="(\d+)"/);
-            const total = xml.match(/lines-valid="(\d+)"/);
-            const pct = covered && total
-              ? Math.round((parseInt(covered[1]) / parseInt(total[1])) * 100)
-              : '?';
-
-            const body = `## Coverage\n\n**${pct}%** (${covered?.[1] || '?'}/${total?.[1] || '?'} lines)`;
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: body
-            });
+          name: coverage-comment
+          path: coverage-comment/coverage.json
+          retention-days: 1
