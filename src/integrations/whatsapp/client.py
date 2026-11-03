@@ -3,6 +3,7 @@
 import requests
 from typing import Any, Dict, Optional
 
+from src.integrations.whatsapp.formatting import markdown_to_whatsapp
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -61,7 +62,7 @@ class WhatsAppClient:
         try:
             logger.info(f"Sending WhatsApp message to {phone_number}")
 
-            payload = {"phone_number": phone_number, "message": message}
+            payload = {"phone_number": phone_number, "message": markdown_to_whatsapp(message)}
 
             response = requests.post(f"{self.bridge_url}/send", json=payload, timeout=10)
             response.raise_for_status()
