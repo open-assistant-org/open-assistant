@@ -260,24 +260,28 @@
                         <a href="https://github.com/open-assistant-org/open-assistant/blob/main/docs/setup/backup-and-migration.md" target="_blank" class="help-link">Documentation →</a>
                     </p>
 
-                    <div class="audit-filters">
+                    <div class="form-group">
+                        <label class="form-label" for="backup-secret">Backend secret (ENCRYPTION_KEY)</label>
                         <input type="password" id="backup-secret" class="form-input"
-                            placeholder="Backend secret (ENCRYPTION_KEY of this instance)"
+                            placeholder="ENCRYPTION_KEY of this instance"
                             autocomplete="off" />
+                        <p class="text-muted">For import, use the secret of the instance the file was exported from.</p>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="backup-import-mode">Import mode</label>
                         <select id="backup-import-mode" class="form-select">
-                            <option value="fail">On conflict: fail (default)</option>
-                            <option value="overwrite">On conflict: overwrite</option>
+                            <option value="fail">Fail on conflict (default)</option>
+                            <option value="overwrite">Overwrite existing data</option>
                         </select>
+                    </div>
+
+                    <div style="display:flex; gap:10px; flex-wrap:wrap;">
                         <button onclick="exportBackup()" class="btn btn-primary">Export Data</button>
                         <button onclick="document.getElementById('backup-import-file').click()" class="btn btn-secondary">Import Data</button>
                         <input type="file" id="backup-import-file" accept=".json,.json.gz,application/json"
                             style="display:none;" onchange="importBackup(this)" />
                     </div>
-
-                    <p class="text-muted" style="font-size:0.82rem;">
-                        For import, the secret is the one the file was exported with (the source instance's key).
-                        Keep the file and the secret confidential — together they contain all your credentials.
-                    </p>
 
                     <div id="backup-status" class="backup-status" style="display:none;"></div>
                 </div>

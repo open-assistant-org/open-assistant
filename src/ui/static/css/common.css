@@ -1824,10 +1824,6 @@ body {
     color: #ff8080;
 }
 
-.audit-filters .form-input {
-    flex: 2;
-}
-
 /* Audit Log */
 .audit-filters {
     display: flex;
