@@ -3232,7 +3232,8 @@ async function importBackup(fileInput) {
         }
         const result = await response.json();
         const totalRows = Object.values(result.tables || {}).reduce((a, b) => a + b, 0);
-        _backupStatus(`Import complete: ${totalRows} rows across ${Object.keys(result.tables || {}).length} tables, ${result.files || 0} files. Reload the page to see migrated data.`, 'success');
+        const warnings = (result.warnings || []).map((w) => `<br>⚠ ${escapeHtml(w)}`).join('');
+        _backupStatus(`Import complete: ${totalRows} rows across ${Object.keys(result.tables || {}).length} tables, ${result.files || 0} files. Restart the instance so scheduled jobs, plugins and MCP servers are reloaded.${warnings}`, 'success');
         toast.success('Backup imported');
     } catch (error) {
         _backupStatus(`Import failed: ${error.message}`, 'error');
