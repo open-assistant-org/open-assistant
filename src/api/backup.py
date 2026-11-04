@@ -1,5 +1,7 @@
 """Backup API for exporting and importing instance data."""
 
+import os
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response
@@ -12,7 +14,20 @@ from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-router = APIRouter(prefix="/api/backup", tags=["backup"])
+
+
+def _block_on_managed_instances() -> None:
+    """Backup bundles contain every credential, which managed-instance users
+    must never be able to read. Treat the endpoints as non-existent there."""
+    if os.getenv("MANAGED_API_KEY"):
+        raise HTTPException(status_code=404, detail="Not Found")
+
+
+router = APIRouter(
+    prefix="/api/backup",
+    tags=["backup"],
+    dependencies=[Depends(_block_on_managed_instances)],
+)
 
 
 def get_backup_service(

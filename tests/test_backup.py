@@ -377,3 +377,26 @@ class TestBundleWireFormat:
 
         plain = json.dumps({"format_version": 1}).encode()
         assert parse_bundle(plain) == {"format_version": 1}
+
+
+def test_backup_endpoints_disabled_on_managed_instances(monkeypatch):
+    """Managed instances must not expose the credential-bearing backup API."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from src.api.backup import router
+
+    app = FastAPI()
+    app.include_router(router)
+    client = TestClient(app)
+
+    monkeypatch.setenv("MANAGED_API_KEY", "managed-key")
+    assert client.post("/api/backup/export", json={"secret": "x"}).status_code == 404
+    assert (
+        client.post(
+            "/api/backup/import",
+            files={"bundle": ("b.json", b"{}")},
+            data={"secret": "x"},
+        ).status_code
+        == 404
+    )

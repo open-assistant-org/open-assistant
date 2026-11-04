@@ -133,7 +133,9 @@ function hideManagedTabs() {
         'section-application-general',
         'section-logging',
         'section-memory',
-        'section-web-ui'
+        'section-web-ui',
+        // Backup bundles contain all credentials - never offered on managed instances
+        'section-backup'
     ];
     sectionsToHide.forEach(sectionId => {
         const section = document.getElementById(sectionId);

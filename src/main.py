@@ -580,7 +580,9 @@ def create_app() -> FastAPI:
     app.include_router(artifacts_router)
     app.include_router(artifact_visitor_router)
     app.include_router(auth_router)
-    app.include_router(backup_router)
+    # Backup export/import dumps all credentials: never exposed on managed instances
+    if not _MANAGED_API_KEY:
+        app.include_router(backup_router)
     app.include_router(brave_router)
     app.include_router(browser_router)
     app.include_router(chat_router)

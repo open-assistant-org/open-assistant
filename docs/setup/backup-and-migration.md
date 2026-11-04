@@ -95,3 +95,9 @@ fails, the target database is left untouched.
   parameter, and is never logged.
 - After migrating, consider rotating credentials if the bundle may have been
   exposed.
+## Managed instances
+
+Backup export and import are disabled on managed instances (`MANAGED_API_KEY`
+set): the endpoints are not registered, return 404 if reached, and the
+Backup & Migration section is hidden in the settings UI, because a bundle
+contains every stored credential.
