@@ -1,9 +1,12 @@
 """LLM client for API calls through OpenRouter, Anthropic, or other providers."""
 
 import logging
+from collections.abc import Callable
+from types import SimpleNamespace
 from typing import Any
 
 from openai import OpenAI
+from openai.types.chat import ChatCompletionMessage
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -196,9 +199,9 @@ class LLMClient:
         Records into the ``llm_consumption`` ledger via the process-level
         :data:`usage_recorder` singleton. If no recorder is wired (tests /
         standalone) or recording raises, the call still returns normally —
-        billing must never break chat. ``stream=True`` calls pass through
-        unchanged (usage arrives on the final stream chunk and is not captured
-        here; no current call path streams the LLM).
+        billing must never break chat. ``stream=True`` calls return a wrapped
+        iterator that records the usage carried on the final chunk once the
+        stream is exhausted (or closed early).
         """
         try:
             from src.core.usage_recorder import usage_recorder
@@ -207,16 +210,32 @@ class LLMClient:
             provider = self.config.provider
             default_model = self.config.model
 
-            def _recording_create(*args, **kwargs):
-                response = original_create(*args, **kwargs)
+            def _record(usage, model):
                 try:
-                    usage_recorder.record(
-                        getattr(response, "usage", None),
-                        provider=provider,
-                        model=kwargs.get("model") or default_model,
-                    )
+                    usage_recorder.record(usage, provider=provider, model=model)
                 except Exception as e:  # noqa: BLE001 - never break the call
                     logger.error(f"usage recording failed (non-fatal): {e}")
+
+            def _recording_stream(stream, model):
+                usage = None
+                try:
+                    for chunk in stream:
+                        # Groq reports streamed usage under x_groq instead of usage.
+                        chunk_usage = getattr(chunk, "usage", None) or getattr(
+                            getattr(chunk, "x_groq", None), "usage", None
+                        )
+                        if chunk_usage is not None:
+                            usage = chunk_usage
+                        yield chunk
+                finally:
+                    _record(usage, model)
+
+            def _recording_create(*args, **kwargs):
+                response = original_create(*args, **kwargs)
+                model = kwargs.get("model") or default_model
+                if kwargs.get("stream"):
+                    return _recording_stream(response, model)
+                _record(getattr(response, "usage", None), model)
                 return response
 
             self._client.chat.completions.create = _recording_create
@@ -404,6 +423,113 @@ class LLMClient:
                     raise retry_e
             logger.error(f"Error calling LLM API with tools: {e}")
             raise
+
+    def stream_completion(
+        self,
+        messages: list[dict[str, Any]],
+        on_text: Callable[[str], None],
+        tools: list[dict[str, Any]] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        tool_choice: str = "auto",
+        model_override: str | None = None,
+    ) -> Any:
+        """
+        Like :meth:`complete_with_tools` (or :meth:`complete` when *tools* is
+        empty), but streams the response and calls *on_text* with each content
+        delta as it arrives.
+
+        The chunks are reassembled into a non-streaming-shaped response, so
+        callers read ``response.choices[0].message`` (``content``,
+        ``tool_calls``, ``model_dump()``) exactly as before.
+
+        Groq is not streamed: its tool_use_failed retry needs the whole
+        response, so the full content is passed to *on_text* in one call.
+        """
+        if self.config.provider == "groq":
+            if tools:
+                response = self.complete_with_tools(
+                    messages=messages,
+                    tools=tools,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    tool_choice=tool_choice,
+                    model_override=model_override,
+                )
+            else:
+                response = self.complete(
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    model_override=model_override,
+                )
+            message = response.choices[0].message if response.choices else None
+            if message and message.content:
+                on_text(message.content)
+            return response
+
+        if self.config.paused:
+            raise LLMPausedError(
+                "LLM is paused — the monthly budget cap has been reached. "
+                "It resumes automatically at the start of the next billing period."
+            )
+        kwargs: dict[str, Any] = {}
+        if tools:
+            kwargs["tools"] = tools
+            kwargs["tool_choice"] = tool_choice
+        try:
+            messages = self._sanitize_messages(messages)
+            stream = self._client.chat.completions.create(
+                model=model_override or self.config.model,
+                messages=messages,
+                temperature=temperature or self.config.temperature,
+                max_tokens=max_tokens or self.config.max_tokens,
+                stream=True,
+                stream_options={"include_usage": True},
+                **kwargs,
+            )
+
+            content_parts: list[str] = []
+            tool_calls: dict[int, dict[str, Any]] = {}
+            finish_reason = None
+            for chunk in stream:
+                if not chunk.choices:
+                    continue  # usage-only final chunk
+                choice = chunk.choices[0]
+                finish_reason = choice.finish_reason or finish_reason
+                delta = choice.delta
+                if delta is None:
+                    continue
+                if delta.content:
+                    content_parts.append(delta.content)
+                    on_text(delta.content)
+                for tc in delta.tool_calls or []:
+                    index = tc.index if tc.index is not None else len(tool_calls)
+                    entry = tool_calls.setdefault(
+                        index,
+                        {"id": "", "type": "function", "function": {"name": "", "arguments": ""}},
+                    )
+                    if tc.id:
+                        entry["id"] = tc.id
+                    if tc.function:
+                        if tc.function.name:
+                            entry["function"]["name"] += tc.function.name
+                        if tc.function.arguments:
+                            entry["function"]["arguments"] += tc.function.arguments
+        except Exception as e:
+            logger.error(f"Error streaming from LLM API: {e}")
+            raise
+
+        message = ChatCompletionMessage.model_validate(
+            {
+                "role": "assistant",
+                "content": "".join(content_parts) or None,
+                "tool_calls": [tool_calls[i] for i in sorted(tool_calls)] or None,
+            }
+        )
+        return SimpleNamespace(
+            choices=[SimpleNamespace(index=0, message=message, finish_reason=finish_reason)]
+        )
 
     def complete_text(
         self,

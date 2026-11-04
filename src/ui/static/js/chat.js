@@ -11,6 +11,11 @@ let attachedFiles = [];
 // can tear it down immediately without waiting for the LLM to finish.
 let activeStreamAbortController = null;
 
+// Assistant text streamed so far for the current LLM call: { textNode, text }.
+// Shown in place of the typing indicator until `complete` replaces it with
+// the final message, or `text_reset` withdraws it.
+let streamingDraft = null;
+
 // DOM Elements
 const chatMessages = document.getElementById('chatMessages');
 const messageInput = document.getElementById('messageInput');
@@ -108,6 +113,7 @@ async function executeCancel() {
 
     // 2. Snap the UI back to idle right away — don't wait for the backend.
     hideTypingIndicator();
+    removeStreamingDraft();
     setStreamingState(false);
 
     // 3. Tell the backend to stop all running tasks; display the acknowledgement.
@@ -497,6 +503,7 @@ async function sendMessage() {
                 aborted = true;
             } else {
                 hideTypingIndicator();
+                removeStreamingDraft();
                 console.error('Streaming error:', error);
                 toast.error(error.message || 'Failed to get response');
                 addMessageToUI('Sorry, I encountered an error. Please try again.', 'error');
@@ -598,31 +605,21 @@ async function sendMessageStreaming(message, imageAttachment) {
 
             if (event.type === 'iteration_start') {
                 // Ensure we have a container for tool call cards
-                if (!toolTraceContainer) {
-                    toolTraceContainer = document.createElement('div');
-                    toolTraceContainer.className = 'tool-trace-container';
-                    // Insert before the typing indicator
-                    const indicator = document.getElementById('typingIndicator');
-                    if (indicator) {
-                        chatMessages.insertBefore(toolTraceContainer, indicator);
-                    } else {
-                        chatMessages.appendChild(toolTraceContainer);
-                    }
-                }
+                toolTraceContainer = toolTraceContainer || createToolTraceContainer();
 
             } else if (event.type === 'tool_call') {
-                if (!toolTraceContainer) {
-                    toolTraceContainer = document.createElement('div');
-                    toolTraceContainer.className = 'tool-trace-container';
-                    const indicator = document.getElementById('typingIndicator');
-                    if (indicator) {
-                        chatMessages.insertBefore(toolTraceContainer, indicator);
-                    } else {
-                        chatMessages.appendChild(toolTraceContainer);
-                    }
-                }
+                toolTraceContainer = toolTraceContainer || createToolTraceContainer();
                 renderToolCallCard(toolTraceContainer, event);
                 chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            } else if (event.type === 'text_delta') {
+                appendStreamingDraft(event.delta);
+
+            } else if (event.type === 'text_reset') {
+                // The streamed text wasn't the final answer (tool calls follow,
+                // or the backend asked the model to keep going).
+                removeStreamingDraft();
+                if (!document.getElementById('typingIndicator')) showTypingIndicator();
 
             } else if (event.type === 'tool_result') {
                 if (toolTraceContainer) {
@@ -632,6 +629,7 @@ async function sendMessageStreaming(message, imageAttachment) {
             } else if (event.type === 'complete') {
                 activeStreamAbortController = null;
                 hideTypingIndicator();
+                removeStreamingDraft();
                 if (event.conversation_id) {
                     conversationId = event.conversation_id;
                     storage.set('current_conversation_id', conversationId);
@@ -646,11 +644,58 @@ async function sendMessageStreaming(message, imageAttachment) {
             } else if (event.type === 'error') {
                 activeStreamAbortController = null;
                 hideTypingIndicator();
+                removeStreamingDraft();
                 toast.error(event.error || 'Failed to get response');
                 addMessageToUI('Sorry, I encountered an error. Please try again.', 'error');
             }
         }
     }
+}
+
+// Create the tool call card container, placed before the typing indicator
+// (or the streaming draft that replaces it) so cards stay above the reply.
+function createToolTraceContainer() {
+    const container = document.createElement('div');
+    container.className = 'tool-trace-container';
+    const anchor = document.getElementById('typingIndicator') || document.getElementById('streamingDraft');
+    if (anchor) {
+        chatMessages.insertBefore(container, anchor);
+    } else {
+        chatMessages.appendChild(container);
+    }
+    return container;
+}
+
+// Append streamed text to the draft assistant bubble, creating it on first use
+function appendStreamingDraft(delta) {
+    if (!delta) return;
+    if (!streamingDraft) {
+        hideTypingIndicator();
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'message assistant';
+        messageDiv.id = 'streamingDraft';
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'message-content';
+        const textNode = document.createElement('div');
+        contentDiv.appendChild(textNode);
+        messageDiv.appendChild(contentDiv);
+        chatMessages.appendChild(messageDiv);
+        streamingDraft = { textNode, text: '' };
+    }
+    streamingDraft.text += delta;
+    const html = renderMarkdown(streamingDraft.text);
+    if (html !== null) {
+        streamingDraft.textNode.innerHTML = html;
+    } else {
+        streamingDraft.textNode.textContent = streamingDraft.text;
+    }
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function removeStreamingDraft() {
+    const draft = document.getElementById('streamingDraft');
+    if (draft) draft.remove();
+    streamingDraft = null;
 }
 
 // Create a new tool call card in the trace container
