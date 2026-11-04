@@ -38,7 +38,12 @@ def _set_key(key: str):
 
 def _make_service(tmp_path: Path, key: str) -> BackupService:
     _set_key(key)
-    return BackupService(_make_db(tmp_path), data_dir=str(tmp_path / "data"))
+    return BackupService(
+        _make_db(tmp_path),
+        data_dir=str(tmp_path / "data"),
+        artifacts_dir=str(tmp_path / "data" / "artifacts"),
+        outlook_token_cache_path=str(tmp_path / "data" / "outlook_token_cache.json"),
+    )
 
 
 @pytest.fixture
@@ -95,9 +100,27 @@ class TestExport:
         # secrets are NOT in plain tables
         assert "service_credentials" not in bundle["tables"]
         assert bundle["encrypted_secrets"]
-        # run-history tables excluded
-        for t in ("job_executions", "llm_consumption", "search_index", "audit_log"):
+        # history tables travel too (full move); migration bookkeeping does not
+        for t in ("job_executions", "llm_consumption", "audit_log", "search_index"):
+            assert t in bundle["tables"]
+        assert len(bundle["tables"]["job_executions"]) == 1
+        for t in ("schema_migrations", "sqlite_sequence"):
             assert t not in bundle["tables"]
+
+    def test_export_includes_only_memory_rows_of_search_index(self, tmp_path, key_a):
+        svc = _make_service(tmp_path, key_a)
+        conn = svc.db_manager.get_connection()
+        conn.execute(
+            "INSERT INTO search_index (source, source_id, content, embedding) "
+            "VALUES ('memory', 'memory_facts_2026-01-01', 'likes tea', ?), "
+            "('conversations', 'c1', 'derived', NULL)",
+            (b"\x00\x01\xff",),
+        )
+        conn.commit()
+        conn.close()
+        rows = svc.export_data(key_a)["tables"]["search_index"]
+        assert [r["source"] for r in rows] == ["memory"]
+        json.dumps(rows)  # BLOB embedding is JSON-safe
 
     def test_exported_bundle_has_no_plaintext_secrets(self, tmp_path, key_a):
         svc = _make_service(tmp_path, key_a)
@@ -123,8 +146,8 @@ class TestImport:
         dst = _make_service(tmp_path / "dst", key_b)
         summary = dst.import_data(bundle, key_a, mode="fail")
 
-        # fresh target pre-seeds 10 default agents; our test agent imported on top
-        assert summary["tables"]["agent_definitions"] == 1
+        # 10 pre-seeded defaults (updated in place) + our test agent
+        assert summary["tables"]["agent_definitions"] == 11
         assert summary["tables"]["service_credentials"] == 1
 
         # Credential decrypts correctly with the TARGET key
@@ -157,6 +180,96 @@ class TestImport:
         n = conn.execute("SELECT COUNT(*) FROM agent_definitions").fetchone()[0]
         conn.close()
         assert n == 10  # no duplicates of pre-seeded defaults
+
+    def test_import_ignores_columns_unknown_to_target(self, tmp_path, key_a):
+        """Bundles from a newer schema (extra columns) still import."""
+        src = _make_service(tmp_path / "src", key_a)
+        _seed(src.db_manager, key_a)
+        bundle = src.export_data(key_a)
+        for row in bundle["tables"]["agent_definitions"]:
+            row["column_from_newer_version"] = "x"
+        dst = _make_service(tmp_path / "dst", key_a)
+        summary = dst.import_data(bundle, key_a, mode="fail")
+        assert summary["tables"]["agent_definitions"] == 11
+        assert summary["ignored_columns"] == {"agent_definitions": ["column_from_newer_version"]}
+        assert any("column_from_newer_version" in w for w in summary["warnings"])
+
+    def test_import_rejects_sql_in_column_names(self, tmp_path, key_a):
+        src = _make_service(tmp_path / "src", key_a)
+        bundle = src.export_data(key_a)
+        bundle["tables"]["settings"] = [{'x") VALUES (1); DROP TABLE settings; --': 1}]
+        dst = _make_service(tmp_path / "dst", key_a)
+        dst.import_data(bundle, key_a, mode="overwrite")
+        conn = dst.db_manager.get_connection()
+        conn.execute("SELECT COUNT(*) FROM settings").fetchone()  # table still exists
+        conn.close()
+
+    def test_customised_default_row_is_not_dropped(self, tmp_path, key_a):
+        """A pre-seeded row edited on the source must win over the target's default."""
+        src = _make_service(tmp_path / "src", key_a)
+        conn = src.db_manager.get_connection()
+        conn.execute("UPDATE agent_definitions SET goal = 'custom goal' WHERE name = 'coordinator'")
+        conn.commit()
+        conn.close()
+        bundle = src.export_data(key_a)
+
+        dst = _make_service(tmp_path / "dst", key_a)
+        dst.import_data(bundle, key_a, mode="fail")
+        conn = dst.db_manager.get_connection()
+        goal = conn.execute(
+            "SELECT goal FROM agent_definitions WHERE name = 'coordinator'"
+        ).fetchone()[0]
+        conn.close()
+        assert goal == "custom goal"
+
+    def test_memory_facts_and_history_migrate(self, tmp_path, key_a):
+        src = _make_service(tmp_path / "src", key_a)
+        _seed(src.db_manager, key_a)
+        conn = src.db_manager.get_connection()
+        conn.execute(
+            "INSERT INTO search_index (source, source_id, content, embedding) "
+            "VALUES ('memory', 'memory_facts_2026-01-01', 'likes tea', ?)",
+            (b"\x00\x01\xff",),
+        )
+        conn.commit()
+        conn.close()
+        bundle = src.export_data(key_a)
+
+        dst = _make_service(tmp_path / "dst", key_a)
+        # target already ran a job and indexed something of its own
+        conn = dst.db_manager.get_connection()
+        conn.execute(
+            "INSERT INTO job_executions (job_id, job_type, started_at, status) "
+            "VALUES ('local', 'cron', datetime('now'), 'ok')"
+        )
+        conn.execute(
+            "INSERT INTO search_index (source, source_id, content) VALUES ('conversations', 'x', 'y')"
+        )
+        conn.commit()
+        conn.close()
+
+        dst.import_data(bundle, key_a, mode="fail")
+        dst.import_data(bundle, key_a, mode="fail")  # re-import does not duplicate
+        conn = dst.db_manager.get_connection()
+        mem = conn.execute(
+            "SELECT content, embedding FROM search_index WHERE source = 'memory'"
+        ).fetchall()
+        jobs = conn.execute("SELECT job_id FROM job_executions ORDER BY job_id").fetchall()
+        derived = conn.execute(
+            "SELECT COUNT(*) FROM search_index WHERE source = 'conversations'"
+        ).fetchone()[0]
+        conn.close()
+        assert [(r[0], r[1]) for r in mem] == [("likes tea", b"\x00\x01\xff")]
+        assert [r[0] for r in jobs] == ["j1", "local"]
+        assert derived == 1  # target's own derived index rows untouched
+
+    def test_import_reports_version_mismatch(self, tmp_path, key_a):
+        svc = _make_service(tmp_path, key_a)
+        bundle = svc.export_data(key_a)
+        bundle["app_version"] = "0.0.1"
+        summary = svc.import_data(bundle, key_a, mode="overwrite")
+        assert any("0.0.1" in w for w in summary["warnings"])
+        assert summary["restart_required"] is True
 
     def test_import_overwrite_mode_replaces(self, tmp_path, key_a):
         svc = _make_service(tmp_path, key_a)
@@ -206,6 +319,33 @@ class TestDataFiles:
         count = dst.import_data(bundle, key_a)["files"]
         assert count == 1
         assert (dst_root / "data" / "plugins" / "myplug.json").read_text() == "{}"
+
+    def test_binary_artifacts_and_outlook_cache_roundtrip(self, tmp_path, key_a):
+        src_root = tmp_path / "src"
+        svc = _make_service(src_root, key_a)
+        art = src_root / "data" / "artifacts" / "a1"
+        art.mkdir(parents=True)
+        png = b"\x89PNG\r\n\x1a\n\x00\xff\xfe"
+        (art / "img.png").write_bytes(png)
+        (src_root / "data" / "outlook_token_cache.json").write_text('{"RefreshToken": "rt-secret"}')
+        bundle = svc.export_data(key_a)
+        assert "rt-secret" not in json.dumps(bundle)  # token cache is encrypted
+
+        dst_root = tmp_path / "dst"
+        dst = _make_service(dst_root, key_a)
+        count = dst.import_data(bundle, key_a)["files"]
+        assert count == 2
+        assert (dst_root / "data" / "artifacts" / "a1" / "img.png").read_bytes() == png
+        assert "rt-secret" in (dst_root / "data" / "outlook_token_cache.json").read_text()
+
+    def test_v1_text_files_still_import(self, tmp_path, key_a):
+        dst_root = tmp_path / "dst"
+        dst = _make_service(dst_root, key_a)
+        n = dst.import_data(
+            {"format_version": 1, "tables": {}, "files": {"plugins/p.json": "{}"}}, key_a
+        )["files"]
+        assert n == 1
+        assert (dst_root / "data" / "plugins" / "p.json").read_text() == "{}"
 
     def test_unsafe_paths_skipped(self, tmp_path, key_a):
         dst_root = tmp_path / "dst4"

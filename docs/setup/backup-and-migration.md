@@ -8,13 +8,24 @@ migrate from one server to another.
 
 - **Export** (`POST /api/backup/export`) dumps every data table (conversations,
   messages, agent definitions, tasks, cron jobs, prompts, settings, artifacts,
-  …) plus the files under `data/plugins/` and `data/mcp_servers/` into one JSON
-  bundle that is downloaded to your machine.
-- Run-history and derived data (`job_executions`, `llm_consumption`,
-  `search_index`, `audit_log`) are intentionally **not** included.
-- Secrets (`service_credentials`) are decrypted with the source instance's
-  `ENCRYPTION_KEY` and stored **re-encrypted with a key derived from your
-  backend secret** (PBKDF2). The bundle never contains plaintext secrets.
+  run history, LLM consumption, audit log, …), the long-term memory facts, and
+  the files under `data/plugins/`, `data/mcp_servers/` and the artifacts
+  directory into one bundle that is downloaded to your machine.
+- Only the derived part of the search index is left out; the target rebuilds it
+  automatically on first search. Memory facts (which live only in the search
+  index) are included.
+- Secrets (`service_credentials` and the Outlook token cache) are decrypted with
+  the source instance's `ENCRYPTION_KEY` and stored **re-encrypted with a key
+  derived from your backend secret** (PBKDF2). The bundle never contains
+  plaintext secrets.
+
+### Not included
+
+- **`.env` / environment variables** (API keys and settings configured through
+  the environment). Copy them to the target yourself, but keep the target's own
+  `ENCRYPTION_KEY`.
+- **WhatsApp session** (`data/whatsapp_session`): it is a browser profile bound
+  to the machine. Re-link WhatsApp by scanning the QR code on the target.
 - **Import** (`POST /api/backup/import`) re-encrypts the credentials with the
   *target* instance's `ENCRYPTION_KEY`, so migrating between instances with
   different keys works out of the box.
@@ -52,19 +63,29 @@ curl -X POST http://old-server:8080/api/backup/export \
 curl -X POST http://new-server:8080/api/backup/import \
   -F "bundle=@open-assistant-backup.json.gz" \
   -F "secret=$SOURCE_KEY"
+
+# 3. Restart the target so cron jobs, future tasks, plugins and MCP servers
+#    are loaded from the imported data.
 ```
+
+Run the **same app version** on both instances. If the versions differ, the
+import still succeeds, but columns that don't exist on the target are dropped;
+the import response lists them under `warnings` / `ignored_columns`.
 
 ### Conflict modes
 
 - `mode=fail` (default): the import is aborted if the target contains rows that
   are **not** in the bundle (data that would be lost). A freshly set-up target
-  instance whose pre-seeded defaults are also in the bundle imports cleanly —
-  matching default rows are skipped, not duplicated.
+  instance imports cleanly: its pre-seeded default rows are replaced by the
+  bundle's version (so customised defaults carry over), and history tables
+  (`job_executions`, `llm_consumption`, `audit_log`) are merged, not treated as
+  conflicts.
 - `mode=overwrite`: clears all included tables on the target first, then imports
-  the bundle verbatim. Use this to force a full replacement.
+  the bundle verbatim. Use this to force a full replacement. Files already on
+  the target that are not in the bundle are left in place.
 
-Import runs in a single transaction: if anything fails, the target database is
-left untouched.
+The database part of the import runs in a single transaction: if anything
+fails, the target database is left untouched.
 
 ## Security notes
 
