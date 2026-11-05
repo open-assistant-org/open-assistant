@@ -276,6 +276,7 @@ class ConversationService:
         self,
         query: Optional[str] = None,
         date_filter: str = "all",
+        channel: Optional[str] = None,
         limit: int = 20,
         offset: int = 0,
     ) -> Dict[str, Any]:
@@ -285,6 +286,7 @@ class ConversationService:
         Args:
             query: Search query for message content (optional)
             date_filter: Date filter (all, today, week, month, older)
+            channel: Filter by channel (optional)
             limit: Number of conversations per page
             offset: Pagination offset
 
@@ -321,7 +323,7 @@ class ConversationService:
 
         # Get all conversations (we'll filter in memory for complex logic)
         all_conversations = self.conversation_repo.list_conversations(
-            channel=None, limit=1000, offset=0  # Get enough to filter
+            channel=channel, limit=1000, offset=0  # Get enough to filter
         )
 
         # Filter by search results
