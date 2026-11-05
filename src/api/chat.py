@@ -135,6 +135,11 @@ async def chat_stream(
     final ``complete`` (or ``error``) frame containing the full response.
     The browser reads this with fetch + ReadableStream so the user sees
     tool activity in real time without waiting for the full response.
+
+    Assistant text streams as ``text_delta`` frames while the LLM writes it.
+    That text is a draft: a ``text_reset`` frame withdraws it when the loop
+    moves on (tool calls follow, or an internal check rejects the answer),
+    and ``complete.response`` is always the authoritative final text.
     """
     api_key = settings_service.get_config_with_fallback("llm.api_key")
     if not api_key:

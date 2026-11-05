@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 import re
+import time
 from collections import Counter, deque
 from datetime import datetime, timezone
 from pathlib import Path
@@ -106,6 +107,64 @@ class MessageHandler:
                 await callback(event)
             except Exception:
                 pass
+
+    # Minimum gap between text_delta events. Tokens arriving faster than this
+    # are coalesced, which keeps the SSE frame count (each padded to ~8 KB for
+    # nginx flushing) low without visibly slowing the stream.
+    TEXT_DELTA_INTERVAL = 0.1
+
+    async def _stream_llm(
+        self,
+        llm_client: LLMClient,
+        event_callback: Callable[[dict], Awaitable[None]],
+        **kwargs: Any,
+    ) -> Tuple[Any, bool]:
+        """Run one LLM call with streaming, emitting ``text_delta`` events.
+
+        Returns ``(response, streamed)`` where *streamed* says whether any text
+        reached the client (so the caller knows to emit ``text_reset`` if that
+        text turns out not to be the final answer).
+        """
+        loop = asyncio.get_running_loop()
+        emits: List[asyncio.Future] = []
+        buffer: List[str] = []
+        last_flush = 0.0
+        streamed = False
+
+        def _flush() -> None:
+            nonlocal streamed
+            if not buffer:
+                return
+            event = {"type": "text_delta", "delta": "".join(buffer)}
+            buffer.clear()
+            streamed = True
+            # Called from the LLM worker thread: hand the event to the loop.
+            # Callbacks run FIFO, so deltas keep their order.
+            loop.call_soon_threadsafe(
+                lambda: emits.append(asyncio.ensure_future(self._emit(event_callback, event)))
+            )
+
+        def _on_text(delta: str) -> None:
+            nonlocal last_flush
+            buffer.append(delta)
+            now = time.monotonic()
+            if now - last_flush >= self.TEXT_DELTA_INTERVAL:
+                last_flush = now
+                _flush()
+
+        def _call() -> Any:
+            try:
+                return llm_client.stream_completion(on_text=_on_text, **kwargs)
+            finally:
+                _flush()
+
+        response = await run_llm_blocking(_call)
+        # The executor future resolves via the same thread-safe callback queue,
+        # so every delta has been scheduled by now; wait for them to land
+        # before the caller emits anything else.
+        if emits:
+            await asyncio.gather(*emits)
+        return response, streamed
 
     async def handle_message(
         self,
@@ -1202,9 +1261,17 @@ class MessageHandler:
                 f"max_nudges={max_plan_nudges}"
             )
 
+        # Text from the previous LLM call that the client is showing as a
+        # draft. It's withdrawn (text_reset) once the loop moves past it — a
+        # preamble before tool calls, or an answer a nudge rejected.
+        draft_streamed = False
+
         while iteration < effective_max_iterations:
             iteration += 1
             logger.debug(f"Iteration {iteration}/{self.max_iterations}")
+            if draft_streamed:
+                await self._emit(event_callback, {"type": "text_reset"})
+                draft_streamed = False
             await self._emit(event_callback, {"type": "iteration_start", "iteration": iteration})
 
             # Surface plan variables once they've been populated by the guardrail.
@@ -1234,7 +1301,15 @@ class MessageHandler:
 
             # Call LLM (with tools if available, without if none)
             logger.debug(f"Calling LLM with {len(messages)} messages and {len(tools)} tools")
-            if tools:
+            if event_callback:
+                response, draft_streamed = await self._stream_llm(
+                    llm_client,
+                    event_callback,
+                    messages=messages,
+                    tools=tools or None,
+                    model_override=media_override,
+                )
+            elif tools:
                 response = await run_llm_blocking(
                     llm_client.complete_with_tools,
                     messages=messages,
