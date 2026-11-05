@@ -1,5 +1,7 @@
 """Backup API for exporting and importing instance data."""
 
+import os
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response
@@ -12,7 +14,16 @@ from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-router = APIRouter(prefix="/api/backup", tags=["backup"])
+
+def _forbid_when_managed() -> None:
+    """Backups on platform instances are run by the platform admin, not users."""
+    if os.getenv("MANAGED_API_KEY", ""):
+        raise HTTPException(status_code=403, detail="Backups are managed by the platform")
+
+
+router = APIRouter(
+    prefix="/api/backup", tags=["backup"], dependencies=[Depends(_forbid_when_managed)]
+)
 
 
 def get_backup_service(

@@ -87,6 +87,20 @@ the import response lists them under `warnings` / `ignored_columns`.
 The database part of the import runs in a single transaction: if anything
 fails, the target database is left untouched.
 
+## Managed instances
+
+On instances run by the Open Assistant Platform (`MANAGED_API_KEY` is set) the
+Backup & Migration section is hidden and `/api/backup/*` returns `403`. Backups
+are run by the platform admin instead, through `POST /managed/backup/export`
+and `POST /managed/backup/import` (authenticated with `X-Managed-Key`).
+
+- The bundle's credentials are encrypted with a secret held by the platform
+  (at least 32 characters) instead of the instance `ENCRYPTION_KEY`.
+- `llm_consumption` is **not** exported, and is ignored on import. The target's
+  usage ledger is never changed, so billing is not duplicated or rolled back.
+- After an import the platform re-pushes its credentials and settings and
+  restarts the instance.
+
 ## Security notes
 
 - Keep the bundle file and the backend secret confidential — together they

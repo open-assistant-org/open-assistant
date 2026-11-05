@@ -49,6 +49,12 @@ PARTIAL_TABLES: dict[str, tuple[str, tuple[str, ...]]] = {
 # rows are merged in (exact duplicates skipped) instead of aborting.
 HISTORY_TABLES = {"job_executions", "llm_consumption", "audit_log"}
 
+# Tables left out of platform-driven (managed) transfers. The platform bills
+# each instance from its own ``llm_consumption`` ledger, so copying it to
+# another instance would bill the same tokens twice, and restoring it onto the
+# same instance would roll the current month back.
+MANAGED_EXCLUDED_TABLES = frozenset({"llm_consumption"})
+
 # Directories under data/ included in the bundle (files only, recursive).
 INCLUDED_DATA_DIRS = ["plugins", "mcp_servers", "artifacts"]
 
@@ -145,14 +151,30 @@ class BackupService:
             BackupError: If the secret does not match the instance key.
         """
         self._verify_instance_secret(secret)
-        bundle_key = _derive_fernet_key(secret)
+        return self._build_bundle(secret)
+
+    def export_for_transfer(self, bundle_secret: str) -> dict[str, Any]:
+        """Export a bundle for a platform-driven (managed) transfer.
+
+        The caller is authenticated by the managed API key, so the instance
+        ``ENCRYPTION_KEY`` is not required: the bundle's secrets section is
+        encrypted with a key derived from *bundle_secret* instead. Tables in
+        :data:`MANAGED_EXCLUDED_TABLES` are left out.
+        """
+        return self._build_bundle(bundle_secret, exclude_tables=MANAGED_EXCLUDED_TABLES)
+
+    def _build_bundle(
+        self, bundle_secret: str, exclude_tables: frozenset[str] = frozenset()
+    ) -> dict[str, Any]:
+        """Dump the instance into a bundle whose secrets use *bundle_secret*."""
+        bundle_key = _derive_fernet_key(bundle_secret)
 
         conn = self._connect()
         try:
             tables = self._list_tables(conn)
             bundle_tables: dict[str, Any] = {}
             for table in tables:
-                if table in EXCLUDED_TABLES:
+                if table in EXCLUDED_TABLES or table in exclude_tables:
                     continue
                 bundle_tables[table] = self._dump_table(conn, table)
 
@@ -200,7 +222,11 @@ class BackupService:
     # ------------------------------------------------------------------ #
 
     def import_data(
-        self, bundle: dict[str, Any], secret: str, mode: str = "fail"
+        self,
+        bundle: dict[str, Any],
+        secret: str,
+        mode: str = "fail",
+        exclude_tables: frozenset[str] = frozenset(),
     ) -> dict[str, Any]:
         """Import a bundle into this instance.
 
@@ -213,6 +239,8 @@ class BackupService:
                 (i.e. data would be lost); pre-seeded default rows are fine and
                 are updated to the bundle's version. ``overwrite`` clears
                 included tables before importing.
+            exclude_tables: Tables to skip even if the bundle contains them.
+                They are neither cleared nor written on this instance.
 
         Returns:
             Summary dict with per-table imported row counts, the number of
@@ -244,6 +272,9 @@ class BackupService:
             row["credential_data"] = self.encryption.encrypt_string(row["credential_data"])
 
         tables = dict(bundle["tables"])
+        skipped_tables = sorted(t for t in tables if t in exclude_tables)
+        for table in skipped_tables:
+            del tables[table]
         if secrets is not None:
             tables["service_credentials"] = secrets
 
@@ -273,6 +304,10 @@ class BackupService:
             warnings.append(
                 f"Bundle was exported from version {source_version}, this instance runs "
                 f"{target_version}. Run the same version on both sides for a lossless move."
+            )
+        if skipped_tables:
+            warnings.append(
+                f"Tables skipped for this instance (left unchanged): {', '.join(skipped_tables)}"
             )
         for table, cols in sorted(ignored_columns.items()):
             warnings.append(

@@ -12,9 +12,12 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
+from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import Response
 
 from src import __version__
+from src.core.config import init_config
 from src.core.database import DatabaseManager
 from src.core.encryption import get_encryption_service
 from src.core.repositories.credentials import CredentialsRepository
@@ -28,6 +31,13 @@ from src.models.settings import (
     ManagedConfigResponse,
     SettingsPushRequest,
     SettingsPushResponse,
+)
+from src.services.backup import (
+    MANAGED_EXCLUDED_TABLES,
+    BackupError,
+    BackupService,
+    parse_bundle,
+    serialize_bundle,
 )
 from src.utils.logger import get_logger
 
@@ -260,3 +270,76 @@ async def get_managed_config(
         settings=settings,
         instance_id=os.getenv("INSTANCE_ID"),
     )
+
+
+# Minimum length of the platform-held secret that protects bundle credentials.
+_MIN_BUNDLE_SECRET_LENGTH = 32
+
+
+def _backup_service(db: DatabaseManager) -> BackupService:
+    return BackupService(db, data_dir=init_config().general.data_dir)
+
+
+@router.post("/backup/export")
+async def managed_backup_export(
+    payload: Dict[str, Any],
+    _: None = Depends(_require_managed_key),
+    db: DatabaseManager = Depends(_get_db),
+) -> Response:
+    """Export the instance as a gzip-compressed bundle for the platform.
+
+    Body: ``{"secret": "<platform bundle secret>"}``. The secret encrypts the
+    credentials inside the bundle; the instance ``ENCRYPTION_KEY`` is not
+    needed. ``llm_consumption`` is left out so billing is never duplicated.
+    """
+    secret = (payload or {}).get("secret")
+    if not isinstance(secret, str) or len(secret) < _MIN_BUNDLE_SECRET_LENGTH:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"'secret' must be a string of at least {_MIN_BUNDLE_SECRET_LENGTH} characters",
+        )
+    service = _backup_service(db)
+    try:
+        content = await run_in_threadpool(
+            lambda: serialize_bundle(service.export_for_transfer(secret))
+        )
+    except BackupError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
+    return Response(content=content, media_type="application/gzip")
+
+
+@router.post("/backup/import")
+async def managed_backup_import(
+    bundle: UploadFile = File(...),
+    secret: str = Form(...),
+    mode: str = Form("fail"),
+    _: None = Depends(_require_managed_key),
+    db: DatabaseManager = Depends(_get_db),
+) -> Dict[str, Any]:
+    """Import a bundle produced by ``/managed/backup/export``.
+
+    ``llm_consumption`` in the bundle is ignored and the local ledger is left
+    untouched. The platform must re-push configuration and restart afterwards.
+    """
+    if mode not in ("fail", "overwrite"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="mode must be 'fail' or 'overwrite'",
+        )
+    raw = await bundle.read()
+    try:
+        bundle_data = await run_in_threadpool(parse_bundle, raw)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid bundle file: not JSON"
+        ) from e
+    service = _backup_service(db)
+    try:
+        summary = await run_in_threadpool(
+            service.import_data, bundle_data, secret, mode, MANAGED_EXCLUDED_TABLES
+        )
+    except BackupError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
+    for warning in summary["warnings"]:
+        logger.warning(f"Managed backup import: {warning}")
+    return {"status": "imported", **summary}

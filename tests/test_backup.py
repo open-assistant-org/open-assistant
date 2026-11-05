@@ -377,3 +377,80 @@ class TestBundleWireFormat:
 
         plain = json.dumps({"format_version": 1}).encode()
         assert parse_bundle(plain) == {"format_version": 1}
+
+
+class TestTransfer:
+    """Platform-driven (managed) export/import."""
+
+    BUNDLE_SECRET = "p" * 40
+
+    def _record_usage(self, svc, tokens):
+        from src.core.repositories.llm_consumption import LlmConsumptionRepository
+
+        LlmConsumptionRepository(svc.db_manager).record(
+            provider="openrouter",
+            model="m",
+            prompt_tokens=tokens,
+            completion_tokens=0,
+            total_tokens=tokens,
+        )
+
+    def _ledger_total(self, svc):
+        conn = svc.db_manager.get_connection()
+        try:
+            return conn.execute(
+                "SELECT COALESCE(SUM(total_tokens), 0) FROM llm_consumption"
+            ).fetchone()[0]
+        finally:
+            conn.close()
+
+    def test_transfer_export_needs_no_instance_key_and_skips_ledger(self, tmp_path, key_a):
+        svc = _make_service(tmp_path, key_a)
+        _seed(svc.db_manager, key_a)
+        self._record_usage(svc, 100)
+        bundle = svc.export_for_transfer(self.BUNDLE_SECRET)
+        assert "llm_consumption" not in bundle["tables"]
+        assert "job_executions" in bundle["tables"]
+        assert "topsecret" not in json.dumps(bundle)
+
+    def test_regular_export_still_rejects_wrong_key(self, tmp_path, key_a, key_b):
+        svc = _make_service(tmp_path, key_a)
+        with pytest.raises(BackupError):
+            svc.export_data(key_b)
+
+    @pytest.mark.parametrize("mode", ["fail", "overwrite"])
+    def test_import_with_exclusion_leaves_target_ledger_untouched(
+        self, tmp_path, key_a, key_b, mode
+    ):
+        from src.services.backup import MANAGED_EXCLUDED_TABLES
+
+        source = _make_service(tmp_path / "src", key_a)
+        _seed(source.db_manager, key_a)
+        self._record_usage(source, 5000)
+        bundle = source.export_data(key_a)  # full bundle, includes the ledger
+        assert "llm_consumption" in bundle["tables"]
+
+        target = _make_service(tmp_path / "dst", key_b)
+        self._record_usage(target, 7)
+        summary = target.import_data(
+            bundle, key_a, mode=mode, exclude_tables=MANAGED_EXCLUDED_TABLES
+        )
+        assert self._ledger_total(target) == 7
+        assert any("llm_consumption" in w for w in summary["warnings"])
+
+    def test_transfer_roundtrip_between_instances(self, tmp_path, key_a, key_b):
+        from src.services.backup import MANAGED_EXCLUDED_TABLES
+
+        source = _make_service(tmp_path / "src", key_a)
+        _seed(source.db_manager, key_a, agent_name="moved")
+        bundle = source.export_for_transfer(self.BUNDLE_SECRET)
+
+        target = _make_service(tmp_path / "dst", key_b)
+        summary = target.import_data(
+            bundle, self.BUNDLE_SECRET, exclude_tables=MANAGED_EXCLUDED_TABLES
+        )
+        assert summary["restart_required"] is True
+        conn = target.db_manager.get_connection()
+        names = [r[0] for r in conn.execute("SELECT name FROM agent_definitions")]
+        conn.close()
+        assert "moved" in names

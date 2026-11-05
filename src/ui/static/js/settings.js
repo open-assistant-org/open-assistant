@@ -133,7 +133,8 @@ function hideManagedTabs() {
         'section-application-general',
         'section-logging',
         'section-memory',
-        'section-web-ui'
+        'section-web-ui',
+        'section-backup'
     ];
     sectionsToHide.forEach(sectionId => {
         const section = document.getElementById(sectionId);
