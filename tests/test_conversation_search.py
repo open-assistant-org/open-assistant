@@ -1,4 +1,4 @@
-"""Tests for ConversationService.search_conversations channel filtering.
+"""Tests for channel filtering and titles in ConversationService listings.
 
 The portal's Recent chats rail only wants chats started in the web UI. Without
 a channel filter, a burst of scheduled runs (system), subagents (subtask) or
@@ -53,3 +53,28 @@ def test_no_channel_returns_every_channel(clean_temp_db):
     res = svc.search_conversations()
 
     assert {c["conversation_id"] for c in res["conversations"]} == {"c-web", "c-sys"}
+
+
+def test_list_returns_titles_and_pinned(clean_temp_db):
+    conv_repo, msg_repo, svc = _service(clean_temp_db)
+    conv_repo.create(
+        conversation_id="c-titled",
+        channel="webui",
+        contact_identifier="u1",
+        metadata={"title": "Trip plans", "pinned": True},
+    )
+    conv_repo.create(conversation_id="c-untitled", channel="webui", contact_identifier="u1")
+    msg_repo.create("c-untitled", "user", "what's on my calendar today?")
+    msg_repo.create("c-untitled", "assistant", "two meetings")
+    conv_repo.create(conversation_id="c-sys", channel="system", contact_identifier="cron")
+
+    res = svc.list_conversations(channel="webui")
+
+    by_id = {c["conversation_id"]: c for c in res["conversations"]}
+    assert set(by_id) == {"c-titled", "c-untitled"}
+    assert by_id["c-titled"]["title"] == "Trip plans"
+    assert by_id["c-titled"]["pinned"] is True
+    # Falls back to the first user message, like search
+    assert by_id["c-untitled"]["title"] == "what's on my calendar today?"
+    assert by_id["c-untitled"]["pinned"] is False
+    assert by_id["c-untitled"]["last_message_preview"] == "two meetings"

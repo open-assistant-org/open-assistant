@@ -13,6 +13,30 @@ from src.utils.token_counter import count_tokens
 logger = get_logger(__name__)
 
 
+def _add_title_and_pinned(conv: Dict[str, Any], recent: List[Dict[str, Any]]) -> None:
+    """Set the title (from metadata, else the first user message) and pinned status."""
+    metadata = conv.get("metadata", {})
+    if metadata is None:
+        metadata = {}
+    elif isinstance(metadata, str):
+        import json
+
+        try:
+            metadata = json.loads(metadata)
+        except:
+            metadata = {}
+
+    conv["title"] = metadata.get("title")
+    if not conv["title"] and recent:
+        # Fallback to first user message
+        for msg in recent:
+            if msg["role"] == "user":
+                conv["title"] = msg["content"][:50]
+                break
+
+    conv["pinned"] = metadata.get("pinned", False)
+
+
 class ConversationService:
     """Service for managing conversations and messages."""
 
@@ -194,7 +218,7 @@ class ConversationService:
             channel=channel, limit=limit, offset=offset
         )
 
-        # Enrich with message counts and previews
+        # Enrich with message counts, previews, and titles
         for conv in conversations:
             conv_id = conv["conversation_id"]
 
@@ -202,11 +226,13 @@ class ConversationService:
             conv["message_count"] = self.message_repo.count_messages(conv_id)
 
             # Get last message preview
-            recent = self.message_repo.get_recent_messages(conv_id, count=1)
+            recent = self.message_repo.get_recent_messages(conv_id, count=5)
             if recent:
-                conv["last_message_preview"] = recent[0]["content"][:100]
+                conv["last_message_preview"] = recent[-1]["content"][:100]
             else:
                 conv["last_message_preview"] = None
+
+            _add_title_and_pinned(conv, recent)
 
         total = self.conversation_repo.count_conversations(channel)
 
@@ -388,28 +414,7 @@ class ConversationService:
             else:
                 conv["last_message_preview"] = None
 
-            # Get title from metadata or generate fallback
-            metadata = conv.get("metadata", {})
-            if metadata is None:
-                metadata = {}
-            elif isinstance(metadata, str):
-                import json
-
-                try:
-                    metadata = json.loads(metadata)
-                except:
-                    metadata = {}
-
-            conv["title"] = metadata.get("title")
-            if not conv["title"] and recent:
-                # Fallback to first user message
-                for msg in recent:
-                    if msg["role"] == "user":
-                        conv["title"] = msg["content"][:50]
-                        break
-
-            # Add pinned status
-            conv["pinned"] = metadata.get("pinned", False)
+            _add_title_and_pinned(conv, recent)
 
         return {
             "conversations": conversations,
