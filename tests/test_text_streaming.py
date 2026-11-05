@@ -87,6 +87,107 @@ class TestStreamCompletion:
         assert client.stream_completion(messages=[], on_text=deltas.append) is full
         assert deltas == ["All"]
 
+    def test_stream_options_rejection_retries_without_it(self):
+        # Strict OpenAI-compatible servers (older Ollama, llama.cpp, proxies)
+        # 400 on unknown request fields instead of ignoring them.
+        client, create = _client([_chunk("Hi", finish_reason="stop")])
+        create.side_effect = [
+            Exception("Extra inputs are not permitted: 'stream_options'"),
+            iter([_chunk("Hi", finish_reason="stop")]),
+        ]
+        deltas = []
+        response = client.stream_completion(messages=[], on_text=deltas.append)
+        assert deltas == ["Hi"]
+        assert response.choices[0].message.content == "Hi"
+        assert "stream_options" not in create.call_args.kwargs
+
+    def test_stream_options_unrelated_error_is_not_swallowed(self):
+        client, create = _client([_chunk("Hi", finish_reason="stop")])
+        create.side_effect = Exception("Invalid API key")
+        with pytest.raises(Exception, match="Invalid API key"):
+            client.stream_completion(messages=[], on_text=lambda d: None)
+        assert create.call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# Provider chunk shapes seen through the OpenAI SDK
+# ---------------------------------------------------------------------------
+
+
+def _provider_client(chunks, provider="openrouter"):
+    config = LLMConfig(provider=provider, model="m", api_key="k")
+    with patch("src.core.llm_client.OpenAI") as mock_openai:
+        create = MagicMock(return_value=iter(chunks))
+        mock_openai.return_value.chat.completions.create = create
+        client = LLMClient(config)
+    return client, create
+
+
+class TestProviderChunkShapes:
+    def test_anthropic_compat_stream_reassembles(self):
+        chunks = [
+            _chunk("Hel"),
+            _chunk("lo"),
+            _chunk(
+                tool_calls=[_tc_delta(0, id="toolu_1", name="lookup", arguments='{"q": "x"}')],
+                finish_reason="tool_calls",
+            ),
+            _chunk(choices=False, usage=SimpleNamespace(prompt_tokens=7, completion_tokens=3)),
+        ]
+        client, _ = _provider_client(chunks, provider="anthropic")
+        deltas = []
+        response = client.stream_completion(messages=[], on_text=deltas.append)
+        assert deltas == ["Hel", "lo"]
+        assert response.choices[0].message.content == "Hello"
+        calls = response.choices[0].message.tool_calls
+        assert [(c.id, c.function.name, c.function.arguments) for c in calls] == [
+            ("toolu_1", "lookup", '{"q": "x"}')
+        ]
+
+    def test_ollama_single_chunk_tool_call_without_index_or_usage(self):
+        # Older Ollama builds send the whole tool call in one chunk with no
+        # index and never send a usage chunk.
+        chunks = [
+            _chunk(
+                tool_calls=[_tc_delta(None, id="c1", name="lookup", arguments='{"q": "x"}')],
+                finish_reason="stop",
+            ),
+        ]
+        client, _ = _provider_client(chunks, provider="ollama")
+        deltas = []
+        response = client.stream_completion(messages=[], on_text=deltas.append)
+        assert deltas == []
+        message = response.choices[0].message
+        assert message.content is None
+        calls = message.tool_calls
+        assert [(c.id, c.function.name, c.function.arguments) for c in calls] == [
+            ("c1", "lookup", '{"q": "x"}')
+        ]
+        assert response.choices[0].finish_reason == "stop"
+
+    def test_vllm_tool_delta_without_index(self):
+        chunks = [
+            _chunk("Hi"),
+            _chunk(
+                tool_calls=[_tc_delta(None, name="lookup", arguments='{"a": 1}')],
+                finish_reason="tool_calls",
+            ),
+        ]
+        client, _ = _provider_client(chunks, provider="vllm")
+        response = client.stream_completion(messages=[], on_text=lambda d: None)
+        calls = response.choices[0].message.tool_calls
+        assert [(c.id, c.function.name, c.function.arguments) for c in calls] == [
+            ("", "lookup", '{"a": 1}')
+        ]
+
+    def test_custom_server_without_usage_chunk_still_streams(self):
+        chunks = [_chunk("A"), _chunk("B", finish_reason="stop")]
+        client, _ = _provider_client(chunks, provider="custom")
+        deltas = []
+        response = client.stream_completion(messages=[], on_text=deltas.append)
+        assert deltas == ["A", "B"]
+        assert response.choices[0].message.content == "AB"
+
 
 # ---------------------------------------------------------------------------
 # Conversation loop events

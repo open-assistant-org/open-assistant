@@ -354,6 +354,21 @@ class LLMClient:
         except ImportError:
             return False
 
+    def _is_unsupported_stream_options_error(self, e: Exception) -> bool:
+        """Check if a request failed because the server rejects ``stream_options``.
+
+        Strict OpenAI-compatible servers (older Ollama builds, llama.cpp,
+        LocalAI, some proxies) return 400 for unknown request fields instead
+        of ignoring them, which would otherwise break streaming entirely.
+        """
+        if not isinstance(e, Exception):
+            return False
+        status = getattr(e, "status_code", None)
+        if status is not None and status != 400:
+            return False
+        text = f"{type(e).__name__} {e}".lower()
+        return "stream_options" in text or "unknown field" in text or "unexpected keyword" in text
+
     def complete_with_tools(
         self,
         messages: list[dict[str, Any]],
@@ -479,15 +494,27 @@ class LLMClient:
             kwargs["tool_choice"] = tool_choice
         try:
             messages = self._sanitize_messages(messages)
-            stream = self._client.chat.completions.create(
+            create_kwargs: dict[str, Any] = dict(
                 model=model_override or self.config.model,
                 messages=messages,
                 temperature=temperature or self.config.temperature,
                 max_tokens=max_tokens or self.config.max_tokens,
                 stream=True,
-                stream_options={"include_usage": True},
                 **kwargs,
             )
+            try:
+                stream = self._client.chat.completions.create(
+                    **create_kwargs,
+                    stream_options={"include_usage": True},
+                )
+            except Exception as e:
+                if not self._is_unsupported_stream_options_error(e):
+                    raise
+                logger.warning(
+                    "Provider %s rejected stream_options — retrying without usage reporting",
+                    self.config.provider,
+                )
+                stream = self._client.chat.completions.create(**create_kwargs)
 
             content_parts: list[str] = []
             tool_calls: dict[int, dict[str, Any]] = {}
