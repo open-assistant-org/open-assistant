@@ -23,7 +23,7 @@ def _add_title_and_pinned(conv: Dict[str, Any], recent: List[Dict[str, Any]]) ->
 
         try:
             metadata = json.loads(metadata)
-        except:
+        except json.JSONDecodeError:
             metadata = {}
 
     conv["title"] = metadata.get("title")
