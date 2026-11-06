@@ -1,5 +1,6 @@
 """Conversation service for high-level conversation management."""
 
+import json
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
@@ -19,8 +20,6 @@ def _add_title_and_pinned(conv: Dict[str, Any], recent: List[Dict[str, Any]]) ->
     if metadata is None:
         metadata = {}
     elif isinstance(metadata, str):
-        import json
-
         try:
             metadata = json.loads(metadata)
         except json.JSONDecodeError:
@@ -379,8 +378,6 @@ class ConversationService:
             if metadata is None:
                 metadata = {}
             elif isinstance(metadata, str):
-                import json
-
                 try:
                     metadata = json.loads(metadata)
                 except:
@@ -443,8 +440,6 @@ class ConversationService:
         if metadata is None:
             metadata = {}
         elif isinstance(metadata, str):
-            import json
-
             try:
                 metadata = json.loads(metadata) if metadata else {}
             except:
@@ -523,8 +518,6 @@ Title:"""
                 if metadata is None:
                     metadata = {}
                 elif isinstance(metadata, str):
-                    import json
-
                     try:
                         metadata = json.loads(metadata) if metadata else {}
                     except:

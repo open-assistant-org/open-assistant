@@ -1,5 +1,7 @@
 """Conversations API for managing conversation history."""
 
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from src.core.dependencies import (
@@ -38,7 +40,7 @@ router = APIRouter(prefix="/api/conversations", tags=["conversations"])
 async def search_conversations(
     q: str = "",
     date_filter: str = "all",
-    channel: str = None,
+    channel: Optional[str] = None,
     limit: int = 20,
     offset: int = 0,
     conversation_repo: ConversationRepository = Depends(get_conversation_repo),
@@ -90,7 +92,7 @@ async def search_conversations(
 
 @router.get("", response_model=ConversationListResponse)
 async def list_conversations(
-    channel: str = None,
+    channel: Optional[str] = None,
     limit: int = 20,
     offset: int = 0,
     conversation_repo: ConversationRepository = Depends(get_conversation_repo),
