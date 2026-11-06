@@ -1,5 +1,7 @@
 """Conversations API for managing conversation history."""
 
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from src.core.dependencies import (
@@ -38,6 +40,7 @@ router = APIRouter(prefix="/api/conversations", tags=["conversations"])
 async def search_conversations(
     q: str = "",
     date_filter: str = "all",
+    channel: Optional[str] = None,
     limit: int = 20,
     offset: int = 0,
     conversation_repo: ConversationRepository = Depends(get_conversation_repo),
@@ -53,6 +56,7 @@ async def search_conversations(
     Args:
         q: Search query for message content (optional)
         date_filter: Date filter (all, today, week, month, older)
+        channel: Filter by channel (optional)
         limit: Page size (default: 20)
         offset: Page offset (default: 0)
         conversation_repo: Conversation repository (injected)
@@ -68,7 +72,11 @@ async def search_conversations(
     conversation_service = ConversationService(conversation_repo, message_repo, memory_service)
 
     result = conversation_service.search_conversations(
-        query=q if q else None, date_filter=date_filter, limit=limit, offset=offset
+        query=q if q else None,
+        date_filter=date_filter,
+        channel=channel,
+        limit=limit,
+        offset=offset,
     )
 
     conversations = [ConversationResponse(**conv) for conv in result["conversations"]]
@@ -84,7 +92,7 @@ async def search_conversations(
 
 @router.get("", response_model=ConversationListResponse)
 async def list_conversations(
-    channel: str = None,
+    channel: Optional[str] = None,
     limit: int = 20,
     offset: int = 0,
     conversation_repo: ConversationRepository = Depends(get_conversation_repo),
