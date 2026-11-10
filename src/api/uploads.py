@@ -13,8 +13,15 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.concurrency import run_in_threadpool
 
-from src.core.dependencies import get_audit_repo, get_credentials_repo, get_settings_repo
+from src.core.dependencies import (
+    get_audit_repo,
+    get_credentials_repo,
+    get_settings_repo,
+    get_webui_media_handler,
+)
+from src.services.transcription import is_audio_mimetype
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -80,6 +87,7 @@ def _try_ocr(ocr_service, content: bytes, filename: str) -> Optional[str]:
 async def upload_file(
     file: UploadFile = File(...),
     ocr_service=Depends(get_optional_ocr_service),
+    media_handler=Depends(get_webui_media_handler),
 ) -> Dict[str, Any]:
     """Accept a multipart file upload, persist it under /tmp/uploads/, and
     return metadata the chat UI uses to enrich the message sent to the LLM.
@@ -87,6 +95,9 @@ async def upload_file(
     * **Images** – response includes ``image_base64`` + ``image_mimetype``
       for the frontend to pass to the vision path.
     * **PDFs** – attempts Mistral OCR; returns ``ocr_text`` on success.
+    * **Audio** – transcribed via Whisper (if enabled) and saved as a note to
+      Notion/Nextcloud, like the WhatsApp and Slack channels; returns
+      ``transcription`` and ``note_url``.
     * **Everything else** – returns the saved path for tool-based access.
     """
     _ensure_upload_dir()
@@ -150,5 +161,22 @@ async def upload_file(
         else:
             response["ocr_available"] = False
             logger.info(f"OCR unavailable or returned no text for {original_name}")
+
+    # ── Audio: transcribe via Whisper and save a note (same as other channels) ─
+    elif is_audio_mimetype(base_mime):
+        result = await run_in_threadpool(
+            media_handler.process_media,
+            media_data=base64.b64encode(content).decode("ascii"),
+            mimetype=content_type,
+            filename=original_name,
+            caption=None,
+            contact_id="webui",
+        )
+        response["transcription"] = result.transcription
+        response["note_url"] = result.note_url
+        logger.info(
+            f"Audio {original_name}: transcribed={result.transcription is not None}, "
+            f"note_url={result.note_url}"
+        )
 
     return response

@@ -260,6 +260,8 @@ function renderAttachmentChips() {
             fileIcon.innerHTML = icon('loader', 'icon-spin');
         } else if (f.image_base64) {
             fileIcon.innerHTML = icon('image');
+        } else if (f.transcription !== undefined && f.transcription !== null) {
+            fileIcon.innerHTML = icon('file-text');
         } else if (f.ocr_text || f.content_type === 'application/pdf' || (f.filename && f.filename.toLowerCase().endsWith('.pdf'))) {
             fileIcon.innerHTML = icon('file-text');
         } else {
@@ -335,6 +337,9 @@ async function handleFileSelection(event) {
                     // PDF: backend returns OCR text when Mistral OCR is configured
                     ocr_text: data.ocr_text || null,
                     ocr_available: data.ocr_available ?? null,
+                    // Audio: backend returns Whisper transcription (+ saved note URL)
+                    transcription: data.transcription ?? null,
+                    note_url: data.note_url ?? null,
                 };
             }
         } catch (err) {
@@ -375,6 +380,16 @@ function buildFileContext() {
         );
     }
 
+    // ── Transcribed audio: inject transcription inline ──────────────────────
+    const audioFiles = ready.filter(f => f.transcription);
+    for (const f of audioFiles) {
+        parts.push(
+            `[The user attached an audio file "${f.filename}" (${formatFileSize(f.size)}).]\n` +
+            `[Voice message transcription]: ${f.transcription}` +
+            (f.note_url ? `\n[Transcription saved as note: ${f.note_url}]` : '')
+        );
+    }
+
     // ── PDFs without OCR: fall back to file-path reference ──────────────────
     const pdfNoOcr = ready.filter(
         f => (f.content_type === 'application/pdf' || f.filename.toLowerCase().endsWith('.pdf'))
@@ -397,6 +412,7 @@ function buildFileContext() {
              && f.content_type !== 'application/pdf'
              && !f.filename.toLowerCase().endsWith('.pdf')
              && !f.ocr_text
+             && !f.transcription
     );
     if (otherFiles.length > 0) {
         const lines = otherFiles.map(f =>
