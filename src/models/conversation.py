@@ -24,6 +24,14 @@ class MessageResponse(BaseModel):
     metadata: Optional[Dict[str, Any]] = Field(None, description="Additional metadata")
 
 
+class ChatAttachment(BaseModel):
+    """A file attached to a chat message, as the chat UI shows it in the history."""
+
+    filename: str = Field(..., max_length=255, description="Original file name")
+    size: int = Field(..., ge=0, description="Size in bytes")
+    content_type: Optional[str] = Field(None, max_length=255, description="MIME type")
+
+
 class ChatRequest(BaseModel):
     """Chat request model."""
 
@@ -47,6 +55,30 @@ class ChatRequest(BaseModel):
     image_mimetype: Optional[str] = Field(
         None, description="MIME type of the attached image, e.g. 'image/png'"
     )
+    # Display-only: ``message`` already carries what the LLM needs to know about
+    # attached files. These are stored in the user message's metadata so a chat
+    # UI can show the files and the typed text when it reloads the history.
+    attachments: Optional[List[ChatAttachment]] = Field(
+        None,
+        max_length=50,
+        description="Files the user attached, stored for display in the conversation history",
+    )
+    display_text: Optional[str] = Field(
+        None,
+        description=(
+            "What the user typed, stored for display in the conversation history when "
+            "`message` also carries file context"
+        ),
+    )
+
+    def history_metadata(self, source: str) -> Dict[str, Any]:
+        """Metadata for the stored user message: its source plus any display fields."""
+        metadata: Dict[str, Any] = {"source": source}
+        if self.attachments:
+            metadata["attachments"] = [a.model_dump(exclude_none=True) for a in self.attachments]
+        if self.display_text is not None:
+            metadata["display_text"] = self.display_text
+        return metadata
 
 
 class PendingInput(BaseModel):
