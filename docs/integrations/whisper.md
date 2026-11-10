@@ -125,6 +125,10 @@ WhatsApp voice messages are typically sent as `audio/ogg; codecs=opus`. The foll
 - Path: `/Voice Notes/voice_note_YYYYMMDD_HHMMSS.md`
 - Content: Markdown with heading and transcription text
 
+### Voice Messages From a Chat UI
+
+`POST /api/whisper/transcribe` takes one recording as a multipart `file` upload (up to 25 MB) and returns `{"text": "…"}`. The recording is transcribed once, as a whole, and is not stored; the caller sends the text as an ordinary chat message. It answers `503` while Whisper is disabled or has no API key.
+
 ## Other Media Types
 
 In addition to audio, the WhatsApp integration handles other media types. See the [WhatsApp Integration Guide](whatsapp.md) for full details.
