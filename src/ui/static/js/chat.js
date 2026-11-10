@@ -31,6 +31,7 @@ const dateFilter = document.getElementById('dateFilter');
 const loadMoreBtn = document.getElementById('loadMoreConversations');
 const fileInput = document.getElementById('fileInput');
 const attachButton = document.getElementById('attachButton');
+const micButton = document.getElementById('micButton');
 const attachmentChips = document.getElementById('attachmentChips');
 const cancelModal = document.getElementById('cancelModal');
 const cancelModalDismiss = document.getElementById('cancelModalDismiss');
@@ -88,6 +89,7 @@ function setStreamingState(streaming) {
     sendButton.disabled = streaming;
     cancelButton.hidden = !streaming;
     messageInput.disabled = streaming;
+    if (micButton) micButton.disabled = streaming;
 }
 
 // Show / hide the cancel confirmation modal.
@@ -230,6 +232,12 @@ function setupEventListeners() {
         attachButton.addEventListener('click', () => fileInput.click());
         fileInput.addEventListener('change', handleFileSelection);
     }
+
+    // Voice recording (only where the browser supports it; needs HTTPS/localhost)
+    if (micButton && navigator.mediaDevices?.getUserMedia && window.MediaRecorder) {
+        micButton.hidden = false;
+        micButton.addEventListener('click', toggleRecording);
+    }
 }
 
 // ── File upload helpers ────────────────────────────────────────────────────
@@ -294,10 +302,62 @@ function renderAttachmentChips() {
     });
 }
 
+// ── Voice recording ───────────────────────────────────────────────────────
+
+let mediaRecorder = null;
+let recordedChunks = [];
+
+function pickRecordingMime() {
+    const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
+    return candidates.find(t => MediaRecorder.isTypeSupported(t)) || '';
+}
+
+async function toggleRecording() {
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+        return;
+    }
+
+    let stream;
+    try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (err) {
+        toast.error(`Microphone unavailable: ${err.message}`);
+        return;
+    }
+
+    const mimeType = pickRecordingMime();
+    recordedChunks = [];
+    mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+    mediaRecorder.addEventListener('dataavailable', (e) => {
+        if (e.data && e.data.size > 0) recordedChunks.push(e.data);
+    });
+    mediaRecorder.addEventListener('stop', () => {
+        stream.getTracks().forEach(t => t.stop());
+        micButton.classList.remove('recording');
+        micButton.title = 'Record voice message';
+        const type = (mediaRecorder.mimeType || mimeType || 'audio/webm').split(';')[0];
+        const ext = type.includes('mp4') ? 'm4a' : type.includes('ogg') ? 'ogg' : 'webm';
+        const blob = new Blob(recordedChunks, { type });
+        mediaRecorder = null;
+        if (blob.size === 0) return;
+        const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
+        uploadFiles([new File([blob], `voice-${stamp}.${ext}`, { type })]);
+    });
+
+    mediaRecorder.start();
+    micButton.classList.add('recording');
+    micButton.title = 'Stop recording and attach';
+}
+
 async function handleFileSelection(event) {
     const files = Array.from(event.target.files || []);
     // Reset the input so the same file can be re-selected if needed
     fileInput.value = '';
+    await uploadFiles(files);
+}
+
+async function uploadFiles(files) {
     if (files.length === 0) return;
 
     for (const file of files) {
@@ -476,6 +536,12 @@ async function sendMessage() {
     const hasFiles = attachedFiles.some(f => !f.uploading && f.path);
     if (!message && !hasFiles) return;
 
+    // Don't silently drop an in-progress recording
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+        toast.error('Stop the recording first (click the microphone again).');
+        return;
+    }
+
     // Block send while any file is still uploading
     if (attachedFiles.some(f => f.uploading)) {
         toast.error('Please wait for all files to finish uploading.');
@@ -487,12 +553,20 @@ async function sendMessage() {
 
     // Build the full message that gets sent to the LLM (file context + user text)
     const fileContext = buildFileContext();
-    const fullMessage = fileContext + (message || '(No additional message — please analyze the attached file(s).)');
+    // A voice message with no typed text is the message itself — respond to what was said.
+    const onlyVoice = !message && attachedFiles.length > 0
+        && attachedFiles.every(f => f.transcription);
+    const fullMessage = onlyVoice
+        ? fileContext.trim()
+        : fileContext + (message || '(No additional message — please analyze the attached file(s).)');
 
     // Show the user-facing bubble with just the text they typed (+ file list if any)
     const displayedFiles = attachedFiles.filter(f => !f.uploading && f.path);
     if (displayedFiles.length > 0) {
-        addMessageToUI(message || '(See attached file(s))', 'user', displayedFiles);
+        const voiceText = onlyVoice
+            ? displayedFiles.map(f => f.transcription).join('\n\n')
+            : '';
+        addMessageToUI(message || voiceText || '(See attached file(s))', 'user', displayedFiles);
     } else {
         addMessageToUI(message, 'user');
     }
