@@ -585,6 +585,29 @@ def get_slack_media_handler(
     )
 
 
+def get_webui_media_handler(
+    settings_service=Depends(get_settings_service),
+    mistral_ocr_service=Depends(get_mistral_ocr_service),
+    nextcloud_service=Depends(get_nextcloud_service),
+    notion_service=Depends(get_notion_service),
+):
+    """
+    Get Web UI media handler instance.
+
+    Returns:
+        MediaHandler instance configured for the Web UI
+    """
+    from src.services.whatsapp_media import MediaHandler
+
+    return MediaHandler(
+        settings_service=settings_service,
+        mistral_ocr_service=mistral_ocr_service,
+        nextcloud_service=nextcloud_service,
+        notion_service=notion_service,
+        channel="WebUI",
+    )
+
+
 def get_agent_registry(db: DatabaseManager = Depends(get_db_manager)):
     """
     Get agent registry instance.

@@ -30,6 +30,7 @@ class MediaProcessingResult:
     note_url: Optional[str] = None  # URL to saved note/file (if applicable)
     image_base64: Optional[str] = None  # Image data for vision LLM
     image_mimetype: Optional[str] = None  # Image MIME type
+    transcription: Optional[str] = None  # Raw transcription text (audio only)
 
 
 class MediaHandler:
@@ -173,6 +174,7 @@ class MediaHandler:
             return MediaProcessingResult(
                 effective_message=effective_message,
                 note_url=note_url,
+                transcription=transcription,
             )
 
         except Exception as e:

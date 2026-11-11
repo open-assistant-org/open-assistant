@@ -514,6 +514,21 @@
     cursor: not-allowed;
 }
 
+.mic-btn.recording,
+.mic-btn.recording:hover:not(:disabled) {
+    background: var(--color-danger-bg);
+    color: var(--color-danger-fg);
+}
+
+.mic-btn.recording .icon {
+    animation: oa-mic-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes oa-mic-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.45; }
+}
+
 .send-btn {
     background: var(--color-accent);
     color: var(--color-on-accent);

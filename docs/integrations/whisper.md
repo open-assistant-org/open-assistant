@@ -10,6 +10,8 @@ When enabled, Whisper automatically:
 3. Falls back to uploading a markdown file to Nextcloud if Notion is unavailable
 4. Sends you the URL of the saved note directly in the WhatsApp chat
 
+> **Web UI**: audio files attached in the chat UI (paperclip) are handled the same way — they are transcribed, saved as a note, and the transcription is added to your message.
+
 ## Prerequisites
 
 - An OpenAI API key (or any OpenAI-compatible endpoint that supports the Whisper API)
