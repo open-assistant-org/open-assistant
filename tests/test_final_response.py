@@ -1,13 +1,14 @@
 """The final reply must be self-contained: withdrawn drafts are never "above" for the user."""
 
+import json
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.services.message_handler import UNSEEN_NOTICE, MessageHandler
+from src.services.message_handler import RESUME_NOTICE, UNSEEN_NOTICE, MessageHandler
 from src.services.planner import PlanStep, PlanTracker
-from tests.test_tool_trace_history import TOOLS, _handler, _llm, _msg
+from tests.test_tool_trace_history import TOOLS, _handler, _llm, _msg, _tc
 
 ANSWER = (
     "Here are three ideas: 1) EU AI Act myth-bust. 2) Sovereignty vs speed. 3) Invisible ships. "
@@ -65,6 +66,72 @@ class TestUnrelatedPlan:
         assert nudges
         assert UNSEEN_NOTICE in nudges[0]
         assert "revise_plan" in nudges[0]
+
+
+class TestNudgeLimitKeepsRealAnswer:
+    @pytest.mark.asyncio
+    async def test_earlier_withheld_answer_beats_a_rewrite(self):
+        h = _handler()
+        # Iterative plan: the early-accept guard is off, so the limit is reached.
+        plan = _plan()
+        plan.steps[0].requires_iteration = True
+        plan.steps[0].status = "pending"
+        plan.steps[1].status = "in_progress"
+        llm = _llm(_msg(content=ANSWER), *[_msg(content="ok") for _ in range(5)])
+        llm.complete = MagicMock()
+        result = await _run(h, llm, plan)
+        assert result["response"] == ANSWER
+        llm.complete.assert_not_called()
+
+
+class TestAskUser:
+    @pytest.mark.asyncio
+    async def test_same_turn_text_is_part_of_the_reply(self):
+        h = _handler()
+        call = _tc("c1", "ask_user", json.dumps({"question": "Which one should I draft?"}))
+        llm = _llm(_msg(content="Ideas: 1) A 2) B 3) C", tool_calls=[call]))
+        result = await _run(h, llm)
+        assert result["awaiting_input"]
+        assert result["response"] == "Ideas: 1) A 2) B 3) C\n\nWhich one should I draft?"
+
+    @pytest.mark.asyncio
+    async def test_resume_tells_model_what_the_user_saw(self):
+        h = _handler()
+        h.conversation_service = MagicMock()
+        h._select_skills = lambda msg: []
+        h._get_tools_from_skills = lambda skills: []
+        h._get_llm_client = MagicMock()
+        h._execute_conversation_loop = AsyncMock(
+            return_value={
+                "response": "done",
+                "tools_executed": [],
+                "iterations": 1,
+                "stuck_detected": False,
+            }
+        )
+        state = {
+            "messages": [
+                {"role": "user", "content": "give me tweet ideas"},
+                {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [
+                        {
+                            "id": "c1",
+                            "type": "function",
+                            "function": {"name": "ask_user", "arguments": "{}"},
+                        }
+                    ],
+                },
+                {"role": "tool", "tool_call_id": "c1", "content": "{}"},
+            ],
+            "ask_user_tool_call_id": "c1",
+        }
+        await h._resume_suspended_execution("conv", "i can't see them", state)
+        messages = h._execute_conversation_loop.call_args.kwargs["resume_messages"]
+        tool_result = json.loads(messages[-1]["content"])
+        assert tool_result["user_answer"] == "i can't see them"
+        assert tool_result["note"] == RESUME_NOTICE
 
 
 class TestForcedSummary:

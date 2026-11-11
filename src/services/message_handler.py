@@ -57,6 +57,15 @@ UNSEEN_NOTICE = (
     "to them, so it must restate all results in full."
 )
 
+# Added to the ask_user result when a suspended run resumes: the replayed
+# history still holds drafts the user never saw.
+RESUME_NOTICE = (
+    "The user has only seen the message that asked this question. Anything else "
+    "you wrote earlier in this task was not shown to them; restate it in full in "
+    "your final reply if it is still relevant. If the answer is not a reply to "
+    "your question, treat it as a new request."
+)
+
 # A text-only reply at least this long, given after a plan nudge already fired,
 # is accepted as the answer instead of nudging again.
 SUBSTANTIVE_REPLY_CHARS = 200
@@ -436,7 +445,10 @@ class MessageHandler:
         # Step 8: Optionally generate a plan for complex requests
         plan: Optional[PlanTracker] = None
         try:
-            if tools and Planner.should_plan(message, selected_skills):
+            # Group threads wrap the request in a roster + transcript prompt;
+            # the planner's length/verb heuristics fire on that wrapper rather
+            # than on what was asked, producing plans unrelated to the request.
+            if channel != "group" and tools and Planner.should_plan(message, selected_skills):
                 logger.info("Complex request detected — generating plan")
 
                 # Give the planner ALL enabled skills so it can plan across
@@ -553,7 +565,7 @@ class MessageHandler:
             self._save_suspended_state(
                 conv_id,
                 result["suspended_state"],
-                question=result["pending_input"]["question"],
+                question=result["response"] or result["pending_input"]["question"],
             )
             logger.info(
                 f"Execution suspended for user input: {result['pending_input']['question']}"
@@ -1296,6 +1308,8 @@ class MessageHandler:
         max_running_tasks_nudges = 2
         validation_nudge_count = 0
         running_tasks_nudge_count = 0
+        # Last substantive answer a plan nudge rejected (never shown to the user).
+        best_withheld = ""
 
         # Give iterative plans more room to finish
         effective_max_iterations = self.max_iterations
@@ -1401,6 +1415,19 @@ class MessageHandler:
                             f"Plan nudge limit ({max_plan_nudges}) reached, "
                             "returning response to user"
                         )
+                        # Prefer a real answer the model already wrote over a
+                        # worker-model rewrite of it.
+                        if len(final_response.strip()) < SUBSTANTIVE_REPLY_CHARS and best_withheld:
+                            final_response = best_withheld
+                        if len(final_response.strip()) >= SUBSTANTIVE_REPLY_CHARS:
+                            return self._build_result(
+                                final_response,
+                                tools_executed,
+                                iteration,
+                                stuck_detected,
+                                plan,
+                                _turn_trace(),
+                            )
                         messages.append({"role": "assistant", "content": final_response})
                         final_response = (
                             await self._final_summary(
@@ -1440,6 +1467,8 @@ class MessageHandler:
                             _turn_trace(),
                         )
                     else:
+                        if len(final_response.strip()) >= SUBSTANTIVE_REPLY_CHARS:
+                            best_withheld = final_response
                         logger.info(
                             f"LLM stopped with {len(pending)} plan steps remaining, "
                             f"nudging to continue ({plan_nudge_count}/{max_plan_nudges})"
@@ -1969,9 +1998,10 @@ class MessageHandler:
                 question = ask_user_pending["arguments"].get("question", "")
                 options = ask_user_pending["arguments"].get("options")
                 context_text = ask_user_pending["arguments"].get("context", "")
-                response_text = question
-                if context_text:
-                    response_text = f"{context_text}\n\n{question}"
+                # Text written in the same turn as the ask_user call (often the
+                # actual results) would otherwise be withdrawn as a draft.
+                preamble = ((response_message.content if response_message else None) or "").strip()
+                response_text = "\n\n".join(p for p in (preamble, context_text, question) if p)
 
                 return {
                     "response": response_text,
@@ -2283,6 +2313,7 @@ class MessageHandler:
                         {
                             "status": "user_responded",
                             "user_answer": user_answer,
+                            "note": RESUME_NOTICE,
                         }
                     )
                     break
@@ -2335,7 +2366,7 @@ class MessageHandler:
             self._save_suspended_state(
                 conv_id,
                 result["suspended_state"],
-                question=result["pending_input"]["question"],
+                question=result["response"] or result["pending_input"]["question"],
             )
             return {
                 "response": result["response"],
