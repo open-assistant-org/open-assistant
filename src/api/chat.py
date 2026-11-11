@@ -67,7 +67,7 @@ async def chat(
             conversation_id=request.conversation_id,
             channel=request.channel,
             contact_identifier=request.contact_identifier,
-            metadata={"source": "chat_api"},
+            metadata=request.history_metadata("chat_api"),
             image_base64=request.image_base64,
             image_mimetype=request.image_mimetype,
         )
@@ -183,7 +183,7 @@ async def chat_stream(
                 conversation_id=request.conversation_id,
                 channel=request.channel,
                 contact_identifier=request.contact_identifier,
-                metadata={"source": "chat_api_stream"},
+                metadata=request.history_metadata("chat_api_stream"),
                 event_callback=event_callback,
                 image_base64=request.image_base64,
                 image_mimetype=request.image_mimetype,

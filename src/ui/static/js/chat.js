@@ -441,7 +441,17 @@ async function loadConversationHistory() {
         // Display messages
         chatMessages.innerHTML = '';
         conversationHistory.forEach(msg => {
-            addMessageToUI(msg.content, msg.role);
+            // Messages sent with files keep them, and the typed text, in their metadata;
+            // msg.content also holds the file context the LLM was given.
+            const meta = msg.metadata || {};
+            if (msg.role === 'user' && Array.isArray(meta.attachments) && meta.attachments.length > 0) {
+                const text = typeof meta.display_text === 'string'
+                    ? (meta.display_text || '(See attached file(s))')
+                    : msg.content;
+                addMessageToUI(text, 'user', meta.attachments);
+            } else {
+                addMessageToUI(msg.content, msg.role);
+            }
         });
 
     } catch (error) {
@@ -475,6 +485,17 @@ async function sendMessage() {
 
     // Show the user-facing bubble with just the text they typed (+ file list if any)
     const displayedFiles = attachedFiles.filter(f => !f.uploading && f.path);
+    // Stored with the message so the history can show it the same way after a reload
+    const historyFields = displayedFiles.length > 0
+        ? {
+            attachments: displayedFiles.map(f => ({
+                filename: f.filename,
+                size: f.size,
+                ...(f.content_type ? { content_type: f.content_type } : {}),
+            })),
+            display_text: message,
+        }
+        : {};
     if (displayedFiles.length > 0) {
         addMessageToUI(message || '(See attached file(s))', 'user', displayedFiles);
     } else {
@@ -495,7 +516,7 @@ async function sendMessage() {
     if (typeof ReadableStream !== 'undefined' && typeof TextDecoder !== 'undefined') {
         let aborted = false;
         try {
-            await sendMessageStreaming(fullMessage, imageAttachment);
+            await sendMessageStreaming(fullMessage, imageAttachment, historyFields);
         } catch (error) {
             if (error.name === 'AbortError') {
                 // User-initiated cancel — the UI is already cleaned up by executeCancel();
@@ -525,6 +546,7 @@ async function sendMessage() {
             conversation_id: conversationId,
             channel: 'webui',
             ...(imageAttachment || {}),
+            ...historyFields,
         });
         if (response.conversation_id) {
             conversationId = response.conversation_id;
@@ -549,7 +571,7 @@ async function sendMessage() {
     }
 }
 
-async function sendMessageStreaming(message, imageAttachment) {
+async function sendMessageStreaming(message, imageAttachment, historyFields = {}) {
     const base = window.INSTANCE_BASE_PATH || '';
 
     // Create a fresh AbortController for this stream so the cancel button can
@@ -565,6 +587,7 @@ async function sendMessageStreaming(message, imageAttachment) {
             conversation_id: conversationId,
             channel: 'webui',
             ...(imageAttachment || {}),
+            ...historyFields,
         }),
         signal: activeStreamAbortController.signal,
     });
@@ -778,7 +801,8 @@ function addMessageToUI(content, role, attachments) {
         const banner = document.createElement('div');
         banner.className = 'attachment-banner';
         banner.innerHTML = attachments
-            .map(f => `${icon('paperclip')}<strong>${escapeHtml(f.filename)}</strong> (${formatFileSize(f.size)})`)
+            .map(f => `${icon('paperclip')}<strong>${escapeHtml(f.filename)}</strong>` +
+                (typeof f.size === 'number' ? ` (${formatFileSize(f.size)})` : ''))
             .join('<br>');
         contentDiv.appendChild(banner);
     }

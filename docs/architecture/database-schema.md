@@ -268,7 +268,10 @@ Individual messages within conversations.
   conversation history re-sent to the LLM on subsequent turns. Billing-neutral.
 - `metadata`: Attachments, agent info, etc. (internal rows carry a `kind` tag
   such as `planner`, `memory_summary`, `document`; compacted rows carry
-  `{"compacted": true, ...}`)
+  `{"compacted": true, ...}`). User messages sent from a chat UI with files
+  carry `attachments` (`[{filename, size, content_type}]`) and `display_text`
+  (what the user typed): `content` also holds the file context the LLM was
+  given, so the UI shows these instead when it reloads the history.
 
 **Relationships**:
 - Many-to-one with `conversations`
