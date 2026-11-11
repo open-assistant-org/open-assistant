@@ -2036,9 +2036,13 @@ class MessageHandler:
             llm_client,
             messages,
             "the iteration limit was reached.",
-            "; ".join(f"{s.number}. {s.description}" for s in plan.steps if s.status != "completed")
-            if plan
-            else "",
+            (
+                "; ".join(
+                    f"{s.number}. {s.description}" for s in plan.steps if s.status != "completed"
+                )
+                if plan
+                else ""
+            ),
         )
 
         return self._build_result(
