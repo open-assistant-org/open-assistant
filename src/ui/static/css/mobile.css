@@ -133,7 +133,8 @@
         padding: var(--space-3);
     }
 
-    .pin-button {
+    .pin-button,
+    .archive-button {
         width: 36px;
         height: 36px;
         opacity: 1;

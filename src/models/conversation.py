@@ -121,6 +121,7 @@ class ConversationResponse(BaseModel):
     last_message_preview: Optional[str] = Field(None, description="Last message preview")
     title: Optional[str] = Field(None, description="Conversation title")
     pinned: Optional[bool] = Field(None, description="Whether conversation is pinned")
+    archived: Optional[bool] = Field(None, description="Whether conversation is archived")
     metadata: Optional[Dict[str, Any]] = Field(None, description="Additional metadata")
 
 

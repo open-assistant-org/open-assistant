@@ -43,6 +43,7 @@ async def search_conversations(
     channel: Optional[str] = None,
     limit: int = 20,
     offset: int = 0,
+    archived: bool = False,
     conversation_repo: ConversationRepository = Depends(get_conversation_repo),
     message_repo: MessageRepository = Depends(get_message_repo),
     memory_repo: MemoryRepository = Depends(get_memory_repo),
@@ -59,6 +60,7 @@ async def search_conversations(
         channel: Filter by channel (optional)
         limit: Page size (default: 20)
         offset: Page offset (default: 0)
+        archived: Search archived conversations instead of active ones
         conversation_repo: Conversation repository (injected)
         message_repo: Message repository (injected)
         memory_repo: Memory repository (injected)
@@ -77,6 +79,7 @@ async def search_conversations(
         channel=channel,
         limit=limit,
         offset=offset,
+        archived=archived,
     )
 
     conversations = [ConversationResponse(**conv) for conv in result["conversations"]]
@@ -95,6 +98,7 @@ async def list_conversations(
     channel: Optional[str] = None,
     limit: int = 20,
     offset: int = 0,
+    archived: bool = False,
     conversation_repo: ConversationRepository = Depends(get_conversation_repo),
     message_repo: MessageRepository = Depends(get_message_repo),
     memory_repo: MemoryRepository = Depends(get_memory_repo),
@@ -109,6 +113,7 @@ async def list_conversations(
         channel: Filter by channel (optional)
         limit: Page size (default: 20)
         offset: Page offset (default: 0)
+        archived: List archived conversations instead of active ones
         conversation_repo: Conversation repository (injected)
         message_repo: Message repository (injected)
         memory_repo: Memory repository (injected)
@@ -121,7 +126,9 @@ async def list_conversations(
     )
     conversation_service = ConversationService(conversation_repo, message_repo, memory_service)
 
-    result = conversation_service.list_conversations(channel=channel, limit=limit, offset=offset)
+    result = conversation_service.list_conversations(
+        channel=channel, limit=limit, offset=offset, archived=archived
+    )
 
     conversations = [ConversationResponse(**conv) for conv in result["conversations"]]
 
@@ -370,6 +377,89 @@ async def toggle_pin_conversation(
         raise HTTPException(status_code=404, detail="Conversation not found")
 
     return ConversationResponse(**updated)
+
+
+def _set_archived(
+    conversation_id: str,
+    archived: bool,
+    conversation_repo: ConversationRepository,
+    message_repo: MessageRepository,
+    memory_repo: MemoryRepository,
+    prompts_repo: PromptsRepository,
+    settings_repo: SettingsRepository,
+    db_manager: DatabaseManager,
+) -> ConversationResponse:
+    memory_service = MemoryService(
+        message_repo, memory_repo, conversation_repo, prompts_repo, settings_repo, db_manager
+    )
+    conversation_service = ConversationService(conversation_repo, message_repo, memory_service)
+
+    updated = conversation_service.set_archived(conversation_id, archived)
+
+    if not updated:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    return ConversationResponse(**updated)
+
+
+@router.post("/{conversation_id}/archive", response_model=ConversationResponse)
+async def archive_conversation(
+    conversation_id: str,
+    conversation_repo: ConversationRepository = Depends(get_conversation_repo),
+    message_repo: MessageRepository = Depends(get_message_repo),
+    memory_repo: MemoryRepository = Depends(get_memory_repo),
+    prompts_repo: PromptsRepository = Depends(get_prompts_repo),
+    settings_repo: SettingsRepository = Depends(get_settings_repo),
+    db_manager: DatabaseManager = Depends(get_db_manager),
+) -> ConversationResponse:
+    """
+    Archive a conversation.
+
+    The conversation and its messages are kept, but it no longer shows up in
+    the default conversation list or search (pass ``archived=true`` to see it).
+    Archiving also unpins it. A new user message unarchives it automatically.
+
+    Raises:
+        HTTPException: If conversation not found
+    """
+    return _set_archived(
+        conversation_id,
+        True,
+        conversation_repo,
+        message_repo,
+        memory_repo,
+        prompts_repo,
+        settings_repo,
+        db_manager,
+    )
+
+
+@router.post("/{conversation_id}/unarchive", response_model=ConversationResponse)
+async def unarchive_conversation(
+    conversation_id: str,
+    conversation_repo: ConversationRepository = Depends(get_conversation_repo),
+    message_repo: MessageRepository = Depends(get_message_repo),
+    memory_repo: MemoryRepository = Depends(get_memory_repo),
+    prompts_repo: PromptsRepository = Depends(get_prompts_repo),
+    settings_repo: SettingsRepository = Depends(get_settings_repo),
+    db_manager: DatabaseManager = Depends(get_db_manager),
+) -> ConversationResponse:
+    """
+    Unarchive a conversation, returning it to the default conversation list.
+
+    Raises:
+        HTTPException: If conversation not found
+    """
+    return _set_archived(
+        conversation_id,
+        False,
+        conversation_repo,
+        message_repo,
+        memory_repo,
+        prompts_repo,
+        settings_repo,
+        db_manager,
+    )
 
 
 @router.post("/{conversation_id}/generate-title")

@@ -14,16 +14,20 @@ from src.utils.token_counter import count_tokens
 logger = get_logger(__name__)
 
 
-def _add_title_and_pinned(conv: Dict[str, Any], recent: List[Dict[str, Any]]) -> None:
-    """Set the title (from metadata, else the first user message) and pinned status."""
-    metadata = conv.get("metadata", {})
-    if metadata is None:
-        metadata = {}
-    elif isinstance(metadata, str):
+def _metadata_dict(conv: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a conversation's metadata as a dict, whether stored as JSON text or not."""
+    metadata = conv.get("metadata")
+    if isinstance(metadata, str):
         try:
-            metadata = json.loads(metadata)
+            metadata = json.loads(metadata) if metadata else {}
         except json.JSONDecodeError:
             metadata = {}
+    return metadata if isinstance(metadata, dict) else {}
+
+
+def _add_title_and_pinned(conv: Dict[str, Any], recent: List[Dict[str, Any]]) -> None:
+    """Set the title (from metadata, else the first user message), pinned and archived status."""
+    metadata = _metadata_dict(conv)
 
     conv["title"] = metadata.get("title")
     if not conv["title"] and recent:
@@ -34,6 +38,7 @@ def _add_title_and_pinned(conv: Dict[str, Any], recent: List[Dict[str, Any]]) ->
                 break
 
     conv["pinned"] = metadata.get("pinned", False)
+    conv["archived"] = metadata.get("archived", False)
 
 
 class ConversationService:
@@ -176,6 +181,15 @@ class ConversationService:
         # Update conversation last accessed
         self.conversation_repo.update_last_accessed(conversation_id)
 
+        # A new user message brings an archived conversation back into the list,
+        # the way archived chats work in mail and messaging apps. Without this,
+        # channels that reuse a conversation per contact (WhatsApp, Slack) would
+        # keep writing into a conversation the user can no longer see.
+        if role == "user" and not is_internal:
+            conversation = self.conversation_repo.get_by_id(conversation_id)
+            if conversation and _metadata_dict(conversation).get("archived"):
+                self.set_archived(conversation_id, False)
+
         # Check if summarization is needed
         if self.memory_service.should_summarize(conversation_id):
             logger.info(f"Conversation {conversation_id} ready for summarization")
@@ -200,7 +214,11 @@ class ConversationService:
         return self.message_repo.get_by_conversation(conversation_id, limit=limit, offset=offset)
 
     def list_conversations(
-        self, channel: Optional[str] = None, limit: int = 20, offset: int = 0
+        self,
+        channel: Optional[str] = None,
+        limit: int = 20,
+        offset: int = 0,
+        archived: bool = False,
     ) -> Dict[str, Any]:
         """
         List conversations with pagination.
@@ -209,12 +227,13 @@ class ConversationService:
             channel: Filter by channel (optional)
             limit: Number of conversations per page
             offset: Pagination offset
+            archived: List archived conversations instead of active ones
 
         Returns:
             Dictionary with conversations and pagination info
         """
         conversations = self.conversation_repo.list_conversations(
-            channel=channel, limit=limit, offset=offset
+            channel=channel, limit=limit, offset=offset, archived=archived
         )
 
         # Enrich with message counts, previews, and titles
@@ -233,7 +252,7 @@ class ConversationService:
 
             _add_title_and_pinned(conv, recent)
 
-        total = self.conversation_repo.count_conversations(channel)
+        total = self.conversation_repo.count_conversations(channel, archived=archived)
 
         return {
             "conversations": conversations,
@@ -304,6 +323,7 @@ class ConversationService:
         channel: Optional[str] = None,
         limit: int = 20,
         offset: int = 0,
+        archived: bool = False,
     ) -> Dict[str, Any]:
         """
         Search conversations with optional query and date filtering.
@@ -314,6 +334,7 @@ class ConversationService:
             channel: Filter by channel (optional)
             limit: Number of conversations per page
             offset: Pagination offset
+            archived: Search archived conversations instead of active ones
 
         Returns:
             Dictionary with conversations and pagination info
@@ -348,7 +369,7 @@ class ConversationService:
 
         # Get all conversations (we'll filter in memory for complex logic)
         all_conversations = self.conversation_repo.list_conversations(
-            channel=channel, limit=1000, offset=0  # Get enough to filter
+            channel=channel, limit=1000, offset=0, archived=archived  # Get enough to filter
         )
 
         # Filter by search results
@@ -374,15 +395,7 @@ class ConversationService:
 
         # Sort: pinned first, then by updated_at DESC
         def sort_key(conv):
-            metadata = conv.get("metadata", {})
-            if metadata is None:
-                metadata = {}
-            elif isinstance(metadata, str):
-                try:
-                    metadata = json.loads(metadata)
-                except:
-                    metadata = {}
-            is_pinned = metadata.get("pinned", False)
+            is_pinned = _metadata_dict(conv).get("pinned", False)
             return (not is_pinned, conv["updated_at"])
 
         all_conversations.sort(key=sort_key, reverse=True)
@@ -454,9 +467,47 @@ class ConversationService:
 
         if success:
             logger.info(f"Toggled pin for conversation {conversation_id}: {not current_pinned}")
-            return self.conversation_repo.get_by_id(conversation_id)
+            return self._get_with_status(conversation_id)
 
         return None
+
+    def set_archived(self, conversation_id: str, archived: bool) -> Optional[Dict[str, Any]]:
+        """
+        Archive or unarchive a conversation.
+
+        Archived conversations are kept with all their messages but left out of
+        the default conversation list and search. Archiving also unpins the
+        conversation, so it doesn't come back pinned to the top when unarchived.
+
+        Args:
+            conversation_id: Conversation ID
+            archived: True to archive, False to unarchive
+
+        Returns:
+            Updated conversation dictionary or None if not found
+        """
+        conversation = self.conversation_repo.get_by_id(conversation_id)
+        if not conversation:
+            return None
+
+        metadata = _metadata_dict(conversation)
+        metadata["archived"] = archived
+        if archived:
+            metadata["pinned"] = False
+
+        if not self.conversation_repo.update_metadata(conversation_id, metadata):
+            return None
+
+        logger.info(f"{'Archived' if archived else 'Unarchived'} conversation {conversation_id}")
+        return self._get_with_status(conversation_id)
+
+    def _get_with_status(self, conversation_id: str) -> Optional[Dict[str, Any]]:
+        """Get a conversation with its title, pinned and archived fields filled in."""
+        conversation = self.conversation_repo.get_by_id(conversation_id)
+        if conversation:
+            recent = self.message_repo.get_recent_messages(conversation_id, count=5)
+            _add_title_and_pinned(conversation, recent)
+        return conversation
 
     def generate_conversation_title(self, conversation_id: str, llm_client=None) -> Optional[str]:
         """

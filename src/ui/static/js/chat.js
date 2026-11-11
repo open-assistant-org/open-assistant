@@ -28,6 +28,7 @@ const sidebarCloseBtn = document.getElementById('sidebarCloseBtn');
 const chatLayout = document.getElementById('chatLayout');
 const conversationSearch = document.getElementById('conversationSearch');
 const dateFilter = document.getElementById('dateFilter');
+const archiveFilter = document.getElementById('archiveFilter');
 const loadMoreBtn = document.getElementById('loadMoreConversations');
 const fileInput = document.getElementById('fileInput');
 const attachButton = document.getElementById('attachButton');
@@ -217,6 +218,13 @@ function setupEventListeners() {
     if (dateFilter) {
         dateFilter.addEventListener('change', (e) => {
             historyManager.filterByDate(e.target.value);
+        });
+    }
+
+    // Active / archived filter
+    if (archiveFilter) {
+        archiveFilter.addEventListener('change', (e) => {
+            historyManager.filterByArchived(e.target.value === 'archived');
         });
     }
 
@@ -980,6 +988,7 @@ class ConversationHistoryManager {
         this.isLoading = false;
         this.searchQuery = '';
         this.dateFilter = 'all';
+        this.showArchived = false;
         this.hasMore = true;
     }
 
@@ -995,6 +1004,7 @@ class ConversationHistoryManager {
             const params = new URLSearchParams({
                 q: this.searchQuery,
                 date_filter: this.dateFilter,
+                archived: this.showArchived,
                 limit: this.pageSize,
                 offset: offset
             });
@@ -1032,7 +1042,9 @@ class ConversationHistoryManager {
         }
 
         if (this.conversations.length === 0) {
-            listContainer.innerHTML = '<div class="sidebar-empty">No conversations yet.<br>Start chatting to create one!</div>';
+            listContainer.innerHTML = this.showArchived
+                ? '<div class="sidebar-empty">No archived conversations.</div>'
+                : '<div class="sidebar-empty">No conversations yet.<br>Start chatting to create one!</div>';
             return;
         }
 
@@ -1055,7 +1067,7 @@ class ConversationHistoryManager {
             card.classList.add('pinned');
         }
 
-        // Header with title and pin button
+        // Header with title and action buttons
         const header = document.createElement('div');
         header.className = 'conversation-card-header';
 
@@ -1076,8 +1088,26 @@ class ConversationHistoryManager {
             this.togglePin(conv.conversation_id);
         };
 
+        const archiveBtn = document.createElement('button');
+        archiveBtn.className = 'archive-button';
+        archiveBtn.innerHTML = icon(conv.archived ? 'archive-restore' : 'archive');
+        archiveBtn.title = conv.archived ? 'Unarchive' : 'Archive';
+        archiveBtn.setAttribute('aria-label', archiveBtn.title);
+        archiveBtn.onclick = (e) => {
+            e.stopPropagation();
+            this.setArchived(conv.conversation_id, !conv.archived);
+        };
+
+        const actions = document.createElement('div');
+        actions.className = 'conversation-card-actions';
+        // Archived conversations are unpinned, so only offer unarchiving there
+        if (!conv.archived) {
+            actions.appendChild(pinBtn);
+        }
+        actions.appendChild(archiveBtn);
+
         header.appendChild(title);
-        header.appendChild(pinBtn);
+        header.appendChild(actions);
 
         // Meta info
         const meta = document.createElement('div');
@@ -1150,6 +1180,25 @@ class ConversationHistoryManager {
             console.error('Failed to toggle pin:', error);
             toast.error('Failed to update conversation');
         }
+    }
+
+    async setArchived(convId, archived) {
+        try {
+            await api.post(`/api/conversations/${convId}/${archived ? 'archive' : 'unarchive'}`);
+
+            // The conversation moves to the other list, so reload this one
+            await this.loadConversations(false);
+
+            toast.success(archived ? 'Conversation archived' : 'Conversation unarchived');
+        } catch (error) {
+            console.error('Failed to update archive status:', error);
+            toast.error('Failed to update conversation');
+        }
+    }
+
+    async filterByArchived(showArchived) {
+        this.showArchived = showArchived;
+        await this.loadConversations(false);
     }
 
     async searchConversations(query) {

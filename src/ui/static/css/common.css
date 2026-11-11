@@ -459,7 +459,15 @@
     white-space: nowrap;
 }
 
-.pin-button {
+.conversation-card-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    flex-shrink: 0;
+}
+
+.pin-button,
+.archive-button {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -477,17 +485,21 @@
 }
 
 .conversation-card:hover .pin-button,
+.conversation-card:hover .archive-button,
 .pin-button:focus-visible,
+.archive-button:focus-visible,
 .pin-button.pinned {
     opacity: 1;
 }
 
-.pin-button:hover {
+.pin-button:hover,
+.archive-button:hover {
     background: var(--color-fill-active);
     color: var(--color-text);
 }
 
-.pin-button .icon {
+.pin-button .icon,
+.archive-button .icon {
     width: 14px;
     height: 14px;
 }
