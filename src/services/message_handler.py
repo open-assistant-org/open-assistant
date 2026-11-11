@@ -47,6 +47,20 @@ logger = get_logger(__name__)
 # waiting on slow sub-tasks and returns before their results are collected.
 MAX_COORDINATION_ITERATIONS = 20
 
+# Only the final reply (the one without tool calls) reaches the user. Text the
+# model writes alongside tool calls, or in a reply a nudge rejects, is a draft
+# that is withdrawn (text_reset) and never stored. The model has to be told so,
+# otherwise it later writes "delivered in my replies above" for content the
+# user never saw.
+UNSEEN_NOTICE = (
+    "The user has NOT seen your previous message; only your final reply is shown "
+    "to them, so it must restate all results in full."
+)
+
+# A text-only reply at least this long, given after a plan nudge already fired,
+# is accepted as the answer instead of nudging again.
+SUBSTANTIVE_REPLY_CHARS = 200
+
 
 class MessageHandler:
     """
@@ -107,6 +121,37 @@ class MessageHandler:
                 await callback(event)
             except Exception:
                 pass
+
+    @staticmethod
+    def _withhold(messages: List[Dict[str, Any]], text: str, instruction: str) -> None:
+        """Record a rejected reply plus the nudge, marking the reply as unseen."""
+        messages.append({"role": "assistant", "content": text})
+        messages.append({"role": "user", "content": f"{instruction} {UNSEEN_NOTICE}"})
+
+    @staticmethod
+    async def _final_summary(
+        llm_client: LLMClient,
+        messages: List[Dict[str, Any]],
+        reason: str,
+        pending_desc: str = "",
+    ) -> str:
+        """Force a tool-less final reply that carries the results, not a status report."""
+        prompt = (
+            f"[Internal: {reason} Write your final reply to the user now. "
+            "It must contain the complete answer: every result, list, draft or piece of "
+            "content produced during this task, written out in full (not referenced). "
+            f"{UNSEEN_NOTICE} "
+        )
+        if pending_desc:
+            prompt += f"Then add one short line naming the steps not completed: {pending_desc}. "
+        prompt += "Do NOT call tools. Do NOT repeat this message verbatim.]"
+        messages.append({"role": "user", "content": prompt})
+        resp = await run_llm_blocking(
+            llm_client.complete,
+            messages=messages,
+            model_override=llm_client.config.get_worker_model(),
+        )
+        return (resp.choices[0].message.content if resp.choices else None) or ""
 
     # Minimum gap between text_delta events. Tokens arriving faster than this
     # are coalesced, which keeps the SSE frame count (each padded to ~8 KB for
@@ -912,6 +957,7 @@ class MessageHandler:
         8. If a tool call fails, try alternative approaches or ask for help
         9. When browsing: after browse_url, use browse_action with ref IDs to click/type. The browser session persists between calls so you can navigate across pages.
         10. When a tool returns a result with a "file" key, the full data was too large for context and has been saved to that path. Pass the file path as context to python_agent — do not try to read or process it inline. When asking python_agent to write output files (charts, reports, HTML), tell it to write to the directory containing that file — do NOT use /app/tmp.
+        11. The user only sees your final reply (the one without tool calls). Text you write alongside tool calls, and any reply you are asked to revise, is never shown. Put every result in the final reply in full, and never refer to "above", "earlier" or "my previous replies" for content the final reply does not repeat.
 
         """
 
@@ -1348,37 +1394,43 @@ class MessageHandler:
                     and plan.current_step.status != "completed"
                 ):
                     plan_nudge_count += 1
+                    pending = [s for s in plan.steps if s.status in ("pending", "in_progress")]
+                    pending_desc = "; ".join(f"{s.number}. {s.description}" for s in pending)
                     if plan_nudge_count > max_plan_nudges:
                         logger.warning(
                             f"Plan nudge limit ({max_plan_nudges}) reached, "
                             "returning response to user"
                         )
-                        # Ask the LLM to summarise what was done
-                        pending = [s for s in plan.steps if s.status in ("pending", "in_progress")]
-                        pending_desc = "; ".join(f"{s.number}. {s.description}" for s in pending)
                         messages.append({"role": "assistant", "content": final_response})
-                        messages.append(
-                            {
-                                "role": "user",
-                                "content": (
-                                    "[Internal: the following plan steps were not completed: "
-                                    f"{pending_desc}. "
-                                    "Provide a concise summary to the user of what was "
-                                    "accomplished and mention any steps that could not be "
-                                    "finished. Do NOT repeat this message verbatim.]"
-                                ),
-                            }
-                        )
-                        summary_resp = await run_llm_blocking(
-                            llm_client.complete,
-                            messages=messages,
-                            model_override=llm_client.config.get_worker_model(),
-                        )
                         final_response = (
-                            summary_resp.choices[0].message.content
-                            if summary_resp.choices
-                            else None
-                        ) or final_response
+                            await self._final_summary(
+                                llm_client,
+                                messages,
+                                "the plan was not completed.",
+                                pending_desc,
+                            )
+                            or final_response
+                        )
+                        return self._build_result(
+                            final_response,
+                            tools_executed,
+                            iteration,
+                            stuck_detected,
+                            plan,
+                            _turn_trace(),
+                        )
+                    elif (
+                        plan_nudge_count > 1
+                        and len(final_response.strip()) >= SUBSTANTIVE_REPLY_CHARS
+                        and not plan.has_iterative_steps
+                    ):
+                        # The model keeps answering without tools: the plan does
+                        # not fit the request. Accept the answer rather than
+                        # replacing it with a summary.
+                        logger.info(
+                            f"Accepting substantive reply with {len(pending)} plan steps "
+                            "pending (plan does not match the request)"
+                        )
                         return self._build_result(
                             final_response,
                             tools_executed,
@@ -1388,23 +1440,18 @@ class MessageHandler:
                             _turn_trace(),
                         )
                     else:
-                        pending = [s for s in plan.steps if s.status in ("pending", "in_progress")]
-                        pending_desc = "; ".join(f"{s.number}. {s.description}" for s in pending)
                         logger.info(
                             f"LLM stopped with {len(pending)} plan steps remaining, "
                             f"nudging to continue ({plan_nudge_count}/{max_plan_nudges})"
                         )
-                        messages.append({"role": "assistant", "content": final_response})
-                        messages.append(
-                            {
-                                "role": "user",
-                                "content": (
-                                    "You still have unfinished steps in the plan: "
-                                    f"{pending_desc}. "
-                                    "Continue executing the next step now using the available tools. "
-                                    "Do not stop until all steps are complete."
-                                ),
-                            }
+                        self._withhold(
+                            messages,
+                            final_response,
+                            "You still have unfinished steps in the plan: "
+                            f"{pending_desc}. "
+                            "Continue executing the next step using the available tools. "
+                            "If these steps do not fit what the user asked, call revise_plan "
+                            "to remove them, or reply with the complete answer instead.",
                         )
                         continue
 
@@ -1421,17 +1468,13 @@ class MessageHandler:
                         f"to return a final response: {running_ids}. "
                         f"Nudging to wait ({running_tasks_nudge_count}/{max_running_tasks_nudges})."
                     )
-                    messages.append({"role": "assistant", "content": final_response})
-                    messages.append(
-                        {
-                            "role": "user",
-                            "content": (
-                                f"[Internal: {len(running_tasks)} sub-task(s) are still running: "
-                                f"{running_ids}. Call wait_for_tasks to collect their results "
-                                "before providing the final response to the user. "
-                                "Do NOT repeat this message verbatim.]"
-                            ),
-                        }
+                    self._withhold(
+                        messages,
+                        final_response,
+                        f"[Internal: {len(running_tasks)} sub-task(s) are still running: "
+                        f"{running_ids}. Call wait_for_tasks to collect their results "
+                        "before providing the final response to the user. "
+                        "Do NOT repeat this message verbatim.]",
                     )
                     continue
                 elif running_tasks:
@@ -1462,19 +1505,15 @@ class MessageHandler:
                             f"({validation_nudge_count}/{max_validation_nudges}): "
                             f"{validation['reason']}"
                         )
-                        messages.append({"role": "assistant", "content": final_response})
-                        messages.append(
-                            {
-                                "role": "user",
-                                "content": (
-                                    "[Internal: A validation check found the response incomplete. "
-                                    f"Reason: {validation['reason']} "
-                                    "You must provide the actual answer, data, or content directly "
-                                    "in your response — do NOT say you have found it or that it is "
-                                    "available. State the answer explicitly and completely. "
-                                    "Do NOT repeat this message verbatim.]"
-                                ),
-                            }
+                        self._withhold(
+                            messages,
+                            final_response,
+                            "[Internal: A validation check found the response incomplete. "
+                            f"Reason: {validation['reason']} "
+                            "You must provide the actual answer, data, or content directly "
+                            "in your response — do NOT say you have found it or that it is "
+                            "available. State the answer explicitly and completely. "
+                            "Do NOT repeat this message verbatim.]",
                         )
                         continue
 
@@ -1488,26 +1527,15 @@ class MessageHandler:
                     )
                     tools_summary = ", ".join(tools_executed) if tools_executed else "none"
                     messages.append({"role": "assistant", "content": ""})
-                    messages.append(
-                        {
-                            "role": "user",
-                            "content": (
-                                "[Internal: Your response is empty. "
-                                f"The following tools were already executed: {tools_summary}. "
-                                "Based on what was accomplished, write a complete summary "
-                                "response to the user describing what was done. "
-                                "Do NOT call any more tools. Do NOT repeat this message verbatim.]"
-                            ),
-                        }
-                    )
-                    fallback_resp = await run_llm_blocking(
-                        llm_client.complete,
-                        messages=messages,
-                        model_override=llm_client.config.get_worker_model(),
-                    )
                     final_response = (
-                        fallback_resp.choices[0].message.content if fallback_resp.choices else None
-                    ) or final_response
+                        await self._final_summary(
+                            llm_client,
+                            messages,
+                            "your response was empty. "
+                            f"The following tools were already executed: {tools_summary}.",
+                        )
+                        or final_response
+                    )
 
                 logger.debug(f"Conversation complete in {iteration} iterations")
                 return self._build_result(
@@ -1991,28 +2019,12 @@ class MessageHandler:
                 stuck_detected = True
 
                 # Force completion with explanation prompt
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": (
-                            "You seem to be repeating the same tool calls. "
-                            "Please provide a final response based on the information you have gathered, "
-                            "or explain what additional information you need from me."
-                        ),
-                    }
+                final_response = await self._final_summary(
+                    llm_client,
+                    messages,
+                    "you are repeating the same tool calls. Use the information gathered so far, "
+                    "or explain what additional information you need from the user.",
                 )
-
-                # Get final response without tools
-                final_response_obj = await run_llm_blocking(
-                    llm_client.complete,
-                    messages=messages,
-                    model_override=llm_client.config.get_worker_model(),
-                )
-                final_response = (
-                    final_response_obj.choices[0].message.content
-                    if final_response_obj.choices
-                    else None
-                ) or ""
 
                 return self._build_result(
                     final_response, tools_executed, iteration, True, plan, _turn_trace()
@@ -2020,34 +2032,14 @@ class MessageHandler:
 
         # Max iterations reached - nudge LLM to wrap up
         logger.warning(f"Max iterations ({effective_max_iterations}) reached")
-        remaining_hint = ""
-        if plan:
-            pending = [s for s in plan.steps if s.status != "completed"]
-            if pending:
-                remaining_hint = (
-                    " The following steps are still pending: "
-                    + "; ".join(f"{s.number}. {s.description}" for s in pending)
-                    + ". Summarize what was accomplished and what remains."
-                )
-
-        messages.append(
-            {
-                "role": "user",
-                "content": (
-                    "Please provide a final response based on the information "
-                    "you have gathered so far." + remaining_hint
-                ),
-            }
+        final_response = await self._final_summary(
+            llm_client,
+            messages,
+            "the iteration limit was reached.",
+            "; ".join(f"{s.number}. {s.description}" for s in plan.steps if s.status != "completed")
+            if plan
+            else "",
         )
-
-        final_response_obj = await run_llm_blocking(
-            llm_client.complete,
-            messages=messages,
-            model_override=llm_client.config.get_worker_model(),
-        )
-        final_response = (
-            final_response_obj.choices[0].message.content if final_response_obj.choices else None
-        ) or ""
 
         return self._build_result(
             final_response, tools_executed, iteration, False, plan, _turn_trace()
