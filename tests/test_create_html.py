@@ -2,6 +2,7 @@
 
 import asyncio
 import time
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -58,7 +59,7 @@ async def test_strips_fences_joins_continuations_uses_worker_model(tmp_path, mon
 
     result = await create_html("a page", "page", settings_service=_FakeSettings())
 
-    html = open(result["filepath"], encoding="utf-8").read()
+    html = Path(result["filepath"]).read_text(encoding="utf-8")
     assert html == "<!DOCTYPE html><html></html>"
     assert result["filename"] == "page.html"
     assert [c["model"] for c in llm.calls] == ["worker-model", "worker-model"]
