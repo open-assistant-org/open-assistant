@@ -406,6 +406,22 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
         display_order=11,
         ui_widget="number",
     ),
+    "llm.create_html_timeout_seconds": SettingDefinition(
+        key="llm.create_html_timeout_seconds",
+        display_name="create_html timeout (seconds)",
+        description=(
+            "Maximum time the create_html tool may spend generating a page before it "
+            "gives up and returns an error instead of hanging the conversation."
+        ),
+        value_type=SettingValueType.INT,
+        category=ConfigCategory.LLM,
+        default_value=300,
+        min_value=30,
+        max_value=1800,
+        env_var_name="LLM_CREATE_HTML_TIMEOUT_SECONDS",
+        display_order=12,
+        ui_widget="number",
+    ),
     "llm.context_strategy": SettingDefinition(
         key="llm.context_strategy",
         display_name="Context strategy",
@@ -541,7 +557,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
         key="llm.worker_model",
         display_name="Worker model",
         description=(
-            "Model used for background worker tasks. Defaults to the main model if left empty. "
+            "Model used for background worker tasks and the create_html tool. Defaults to the main model if left empty. "
             "Ignored for Ollama and vLLM, which always use the main model."
         ),
         value_type=SettingValueType.STRING,

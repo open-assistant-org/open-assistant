@@ -15,6 +15,7 @@ from zoneinfo import ZoneInfo
 from src.core.concurrency import run_llm_blocking
 from src.core.llm_client import LLMClient, LLMConfig
 from src.core.repositories.skill import SkillRepository
+from src.core.tool_events import bind_emitter
 from src.core.tools.executor import ToolExecutor
 from src.core.tools.registry import get_tool_registry
 from src.core.transparency_logger import transparency_logger
@@ -968,7 +969,7 @@ class MessageHandler:
         7. When each item needs multiple sequential steps (e.g. fetch an email then create a Notion page for each one), use loop_tool with a list of steps and items — this runs the full pipeline per item without extra round-trips.
         8. If a tool call fails, try alternative approaches or ask for help
         9. When browsing: after browse_url, use browse_action with ref IDs to click/type. The browser session persists between calls so you can navigate across pages.
-        10. When a tool returns a result with a "file" key, the full data was too large for context and has been saved to that path. Pass the file path as context to python_agent — do not try to read or process it inline. When asking python_agent to write output files (charts, reports, HTML), tell it to write to the directory containing that file — do NOT use /app/tmp.
+        10. When a tool returns a result with a "file" key, the full data was too large for context and has been saved to that path. Pass the file path as context to python_agent (or as context_path to create_html when building an HTML page) — do not try to read or process it inline. When asking python_agent to write output files (charts, reports, HTML), tell it to write to the directory containing that file — do NOT use /app/tmp.
         11. The user only sees your final reply (the one without tool calls). Text you write alongside tool calls, and any reply you are asked to revise, is never shown. Put every result in the final reply in full, and never refer to "above", "earlier" or "my previous replies" for content the final reply does not repeat.
 
         """
@@ -1713,6 +1714,7 @@ class MessageHandler:
                         context,
                         skill=skill_name,
                         conversation_id=conversation_id,
+                        event_callback=event_callback,
                     )
                     skill_note = (
                         f" It will run as the '{skill_name}' specialist." if skill_name else ""
@@ -1890,17 +1892,28 @@ class MessageHandler:
                 }
                 await self._emit(
                     event_callback,
-                    {"type": "tool_call", "tool": tool_name, "args": _args_preview},
+                    {
+                        "type": "tool_call",
+                        "tool": tool_name,
+                        "call_id": tool_call_id,
+                        "args": _args_preview,
+                    },
                 )
+
+                # Bind a per-call emitter so long-running tools can report
+                # progress (tool_progress events) on this turn's SSE stream.
+                async def _tool_emit(event: dict, _cb=event_callback, _cid=tool_call_id) -> None:
+                    await self._emit(_cb, {**event, "call_id": _cid})
 
                 # Execute tool
                 logger.info(f"Executing tool: {tool_name}")
-                result = await self.tool_executor.execute_tool(
-                    tool_name=tool_name,
-                    arguments=arguments,
-                    tool_call_id=tool_call_id,
-                    iteration=iteration,
-                )
+                with bind_emitter(_tool_emit if event_callback else None):
+                    result = await self.tool_executor.execute_tool(
+                        tool_name=tool_name,
+                        arguments=arguments,
+                        tool_call_id=tool_call_id,
+                        iteration=iteration,
+                    )
 
                 # --- Tool result size guardrail ---
                 # Offload oversized payloads to TMP_DIR so they don't clog the context
@@ -1943,7 +1956,7 @@ class MessageHandler:
                             "note": (
                                 f"Response too large for context ({len(_raw):,} chars). "
                                 f"Full data saved to {_out}. "
-                                "Pass this path to python_agent to process the data."
+                                "Pass this path to python_agent to process the data, or as context_path to create_html."
                             ),
                         }
                         if plan is not None:
@@ -1963,6 +1976,7 @@ class MessageHandler:
                     {
                         "type": "tool_result",
                         "tool": tool_name,
+                        "call_id": tool_call_id,
                         "success": _tool_success,
                         "summary": _result_summary,
                     },

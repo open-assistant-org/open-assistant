@@ -698,6 +698,7 @@ async function sendMessageStreaming(message, imageAttachment, historyFields = {}
     const decoder = new TextDecoder();
     let buffer = '';
     let toolTraceContainer = null;
+    let sawTerminalEvent = false;
 
     while (true) {
         const { done, value } = await reader.read();
@@ -720,9 +721,20 @@ async function sendMessageStreaming(message, imageAttachment, historyFields = {}
                 // Ensure we have a container for tool call cards
                 toolTraceContainer = toolTraceContainer || createToolTraceContainer();
 
+            } else if (event.type === 'subtask_start') {
+                toolTraceContainer = toolTraceContainer || createToolTraceContainer();
+                getSubtaskBody(toolTraceContainer, event);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            } else if (event.type === 'subtask_end') {
+                if (toolTraceContainer) finishSubtaskGroup(toolTraceContainer, event);
+
+            } else if (event.type === 'tool_progress') {
+                if (toolTraceContainer) updateToolProgress(toolTraceContainer, event);
+
             } else if (event.type === 'tool_call') {
                 toolTraceContainer = toolTraceContainer || createToolTraceContainer();
-                renderToolCallCard(toolTraceContainer, event);
+                renderToolCallCard(getSubtaskBody(toolTraceContainer, event), event);
                 chatMessages.scrollTop = chatMessages.scrollHeight;
 
             } else if (event.type === 'text_delta') {
@@ -740,6 +752,7 @@ async function sendMessageStreaming(message, imageAttachment, historyFields = {}
                 }
 
             } else if (event.type === 'complete') {
+                sawTerminalEvent = true;
                 activeStreamAbortController = null;
                 hideTypingIndicator();
                 removeStreamingDraft();
@@ -755,6 +768,7 @@ async function sendMessageStreaming(message, imageAttachment, historyFields = {}
                 }
 
             } else if (event.type === 'error') {
+                sawTerminalEvent = true;
                 activeStreamAbortController = null;
                 hideTypingIndicator();
                 removeStreamingDraft();
@@ -762,6 +776,19 @@ async function sendMessageStreaming(message, imageAttachment, historyFields = {}
                 addMessageToUI('Sorry, I encountered an error. Please try again.', 'error');
             }
         }
+    }
+
+    // The stream closed without a terminal event (e.g. a proxy cut a silent
+    // connection). Don't leave the UI spinning forever.
+    if (!sawTerminalEvent) {
+        activeStreamAbortController = null;
+        hideTypingIndicator();
+        removeStreamingDraft();
+        addMessageToUI(
+            'Connection lost before the response finished. The task may still be running — ' +
+            'reload the conversation in a moment to check.',
+            'error'
+        );
     }
 }
 
@@ -816,6 +843,7 @@ function renderToolCallCard(container, event) {
     const card = document.createElement('div');
     card.className = 'tool-call-card running';
     card.dataset.tool = event.tool;
+    if (event.call_id) card.dataset.callId = event.call_id;
 
     // Build a short args summary (first key=value pair, truncated)
     let argsSummary = '';
@@ -834,6 +862,7 @@ function renderToolCallCard(container, event) {
         <span class="tool-call-body">
             <span class="tool-call-name">${escapeHtml(event.tool)}</span>
             ${argsSummary ? `<div class="tool-call-args">${escapeHtml(argsSummary)}</div>` : ''}
+            <div class="tool-call-progress"></div>
         </span>
         <span class="tool-call-status"><span class="tool-spinner"></span></span>
     `;
@@ -841,11 +870,69 @@ function renderToolCallCard(container, event) {
 }
 
 // Update the most recent card for this tool with the result
-function updateToolCallCard(container, event) {
-    // Find the last running card for this tool
+function findRunningCard(container, event) {
+    // Prefer an exact call_id match; fall back to the last running card for the tool.
+    if (event.call_id) {
+        const exact = container.querySelector(
+            `.tool-call-card[data-call-id="${CSS.escape(event.call_id)}"]`
+        );
+        if (exact) return exact;
+    }
     const cards = container.querySelectorAll(`.tool-call-card[data-tool="${CSS.escape(event.tool)}"].running`);
-    const card = cards[cards.length - 1];
+    return cards[cards.length - 1] || null;
+}
+
+// Show live progress text (e.g. "Generating HTML… 12.3k chars") on a running card
+function updateToolProgress(container, event) {
+    const card = findRunningCard(container, event);
     if (!card) return;
+    const el = card.querySelector('.tool-call-progress');
+    if (el) el.textContent = event.message || '';
+}
+
+// Return the element tool cards should be appended to: the sub-task group's
+// body for events tagged with subtask_id (created on demand), else the container.
+function getSubtaskBody(container, event) {
+    if (!event.subtask_id) return container;
+    let group = container.querySelector(
+        `.subtask-group[data-subtask="${CSS.escape(event.subtask_id)}"]`
+    );
+    if (!group) {
+        group = document.createElement('div');
+        group.className = 'subtask-group running';
+        group.dataset.subtask = event.subtask_id;
+        const label = event.skill ? event.skill.replace(/_/g, ' ') : 'sub-task';
+        group.innerHTML = `
+            <div class="subtask-header">
+                <span class="subtask-label">${escapeHtml(label)}</span>
+                <span class="subtask-desc">${escapeHtml(event.description || '')}</span>
+                <span class="tool-call-status"><span class="tool-spinner"></span></span>
+            </div>
+            <div class="subtask-body"></div>
+        `;
+        container.appendChild(group);
+    }
+    return group.querySelector('.subtask-body');
+}
+
+function finishSubtaskGroup(container, event) {
+    const group = container.querySelector(
+        `.subtask-group[data-subtask="${CSS.escape(event.subtask_id)}"]`
+    );
+    if (!group) return;
+    const ok = event.status === 'completed';
+    group.classList.remove('running');
+    group.classList.add(ok ? 'done' : 'failed');
+    const statusEl = group.querySelector('.subtask-header .tool-call-status');
+    if (statusEl) statusEl.textContent = ok ? 'done' : 'failed';
+}
+
+// Update the matching card with the result
+function updateToolCallCard(container, event) {
+    const card = findRunningCard(container, event);
+    if (!card) return;
+    const progressEl = card.querySelector('.tool-call-progress');
+    if (progressEl) progressEl.textContent = '';
 
     card.classList.remove('running');
     card.classList.add(event.success ? 'done' : 'failed');
