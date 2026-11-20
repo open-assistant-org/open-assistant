@@ -2,6 +2,7 @@
 
 from typing import Any, Dict, Optional
 
+from src.core.concurrency import run_llm_blocking
 from src.core.transparency_logger import transparency_logger
 from src.utils.logger import get_logger
 from src.core.llm_client import LLMClient, LLMConfig
@@ -51,7 +52,8 @@ async def analyze_content(
     )
 
     logger.info(f"analyze_content: processing analysis for question '{question[:100]}'")
-    analysis_result = llm_client.complete_text(
+    analysis_result = await run_llm_blocking(
+        llm_client.complete_text,
         prompt=prompt,
         system_message=system_message,
         temperature=0.3,

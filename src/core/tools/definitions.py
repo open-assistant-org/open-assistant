@@ -2310,9 +2310,10 @@ def define_document_tools():
                 "The LLM writes the HTML directly — page CSS and JavaScript are inline; "
                 "CDN chart libraries (Chart.js, Plotly.js) are used when charts are needed. "
                 "Ideal for dashboards, reports, landing pages, and data displays. "
-                "Much faster than writing Python to generate HTML. "
-                "Optionally pass raw data (CSV, JSON, text) via 'context' to embed in the page. "
-                "The file is saved to temporary storage. "
+                "Uses the worker model. Pass data already in a file (e.g. the 'file' path from an "
+                "offloaded tool result, or a file written by python_execute) via 'context_path' "
+                "instead of re-typing it; use 'context' only for small inline data. "
+                "The file is saved to temporary storage; call store_artifact to keep/share it. "
                 "To upload to cloud storage, use nextcloud_upload_file or onedrive_upload_file "
                 "with source_path pointing to the returned filepath.",
                 parameters_model=CreateHtmlRequest,

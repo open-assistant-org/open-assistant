@@ -120,3 +120,38 @@ async def test_collect_unreported_surfaces_finished_tasks():
     assert d.collect_unreported("conv-x") == []
     # Different conversation sees nothing.
     assert d.collect_unreported("other") == []
+
+
+@pytest.mark.asyncio
+async def test_subtask_events_forwarded_with_tags_and_text_filtered():
+    """Tool events reach the parent's callback tagged; text events are dropped."""
+    received = []
+
+    async def parent_cb(event):
+        received.append(event)
+
+    async def handler(message, channel="subtask", pinned_skill=None, event_callback=None):
+        await event_callback({"type": "text_delta", "delta": "hi"})
+        await event_callback({"type": "tool_call", "tool": "create_html", "call_id": "c1"})
+        await event_callback({"type": "tool_result", "tool": "create_html", "success": True})
+        return {"response": "ok", "tools_executed": ["create_html"]}
+
+    d = AsyncTaskDispatcher(handler)
+    tid = d.dispatch("make page", skill="file_handler", event_callback=parent_cb)
+    await d.wait_for([tid], timeout=5)
+
+    types = [e["type"] for e in received]
+    assert types == ["subtask_start", "tool_call", "tool_result", "subtask_end"]
+    assert all(e["subtask_id"] == tid and e["skill"] == "file_handler" for e in received)
+    assert received[-1]["status"] == "completed"
+
+
+@pytest.mark.asyncio
+async def test_handler_without_event_callback_still_works():
+    async def handler(message, channel="subtask", pinned_skill=None):
+        return {"response": "ok", "tools_executed": []}
+
+    d = AsyncTaskDispatcher(handler)
+    tid = d.dispatch("plain")
+    results = await d.wait_for([tid], timeout=5)
+    assert results[tid]["status"] == "completed"

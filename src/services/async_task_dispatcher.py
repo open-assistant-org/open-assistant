@@ -52,6 +52,11 @@ class AsyncTask:
     # parent conversation (either collected by wait_for_tasks/get_task_result
     # or re-attached on a subsequent turn).  Prevents reporting it twice.
     reported: bool = False
+    # Parent turn's SSE event callback, if any — sub-task tool events are
+    # forwarded through it (tagged with this task's id/skill). Not serialized.
+    _event_callback: Optional[Callable[[dict], Awaitable[None]]] = field(
+        default=None, repr=False, compare=False
+    )
     # The underlying asyncio.Task — used by wait_for(); excluded from dict output.
     _asyncio_task: Optional[asyncio.Task] = field(default=None, repr=False, compare=False)
 
@@ -125,6 +130,7 @@ class AsyncTaskDispatcher:
         context: str = "",
         skill: Optional[str] = None,
         conversation_id: Optional[str] = None,
+        event_callback: Optional[Callable[[dict], Awaitable[None]]] = None,
     ) -> str:
         """
         Dispatch *description* as an async sub-task.
@@ -138,6 +144,10 @@ class AsyncTaskDispatcher:
                 and tools rather than running keyword-based skill selection.
             conversation_id: Parent conversation ID, used when persisting the
                 task record to the ``agent_tasks`` table.
+            event_callback: Optional SSE callback of the parent turn. When given,
+                the sub-task's ``tool_call`` / ``tool_result`` / ``tool_progress``
+                events are forwarded (tagged with ``subtask_id`` and ``skill``),
+                bracketed by ``subtask_start`` / ``subtask_end``.
 
         Returns:
             A short *task_id* string (8 hex chars).  Pass this to
@@ -154,6 +164,7 @@ class AsyncTaskDispatcher:
             skill=skill,
             conversation_id=conversation_id or "",
         )
+        task._event_callback = event_callback
         self._tasks[task_id] = task
 
         # Fan-out depth guard: stop sub-tasks that dispatch sub-tasks from
@@ -399,6 +410,27 @@ class AsyncTaskDispatcher:
         except Exception as exc:
             logger.debug(f"Sub-task {task.task_id}: failed to persist final state to DB: {exc}")
 
+    # Event types a sub-task may forward to the parent's stream. Text events
+    # (text_delta / text_reset / iteration_start) are deliberately excluded so
+    # they cannot corrupt the parent's draft bubble.
+    _FORWARDED_EVENT_TYPES = frozenset(
+        {"tool_call", "tool_result", "tool_progress", "subtask_start", "subtask_end"}
+    )
+
+    def _make_event_forwarder(self, task: AsyncTask) -> Callable[[dict], Awaitable[None]]:
+        """Return a callback that tags and forwards sub-task events to the parent stream."""
+
+        async def forward(event: dict) -> None:
+            callback = task._event_callback
+            if callback is None or event.get("type") not in self._FORWARDED_EVENT_TYPES:
+                return
+            try:
+                await callback({**event, "subtask_id": task.task_id, "skill": task.skill})
+            except Exception as exc:  # noqa: BLE001 - never break the sub-task
+                logger.debug(f"Sub-task {task.task_id}: event forward failed: {exc}")
+
+        return forward
+
     async def _run(self, task: AsyncTask, message: str, task_id: str, depth: int) -> None:
         """Execute the task and record the outcome.
 
@@ -423,11 +455,17 @@ class AsyncTaskDispatcher:
                 except Exception as exc:
                     logger.debug(f"Sub-task {task_id}: failed to update started_at in DB: {exc}")
 
+            forward = self._make_event_forwarder(task)
+            await forward({"type": "subtask_start", "description": task.description[:200]})
             try:
+                extra_kwargs: Dict[str, Any] = {}
+                if task._event_callback is not None:
+                    extra_kwargs["event_callback"] = forward
                 result = await self._handle_message(
                     message=message,
                     channel="subtask",
                     pinned_skill=task.skill,
+                    **extra_kwargs,
                 )
                 task.status = "completed"
                 task.result = result.get("response", "")
@@ -442,6 +480,7 @@ class AsyncTaskDispatcher:
             finally:
                 task.completed_at = datetime.now(timezone.utc)
                 concurrency.subtask_depth.reset(depth_token)
+                await forward({"type": "subtask_end", "status": task.status})
                 tool_count = len(task.tools_executed)
                 logger.info(
                     f"Sub-task {task.task_id} {task.status}"

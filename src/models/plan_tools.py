@@ -101,7 +101,10 @@ class DispatchTaskRequest(BaseModel):
         default="",
         description=(
             "Optional context from the current conversation to pass to the sub-task "
-            "(e.g. user preferences, intermediate results that inform this work)."
+            "(e.g. user preferences, intermediate results that inform this work). "
+            "For large data, pass the FILE PATH of a saved tool result rather than inlining "
+            "it — the sub-task can hand that path to tools such as create_html (context_path) "
+            "or python_agent."
         ),
     )
     skill: Optional[str] = Field(

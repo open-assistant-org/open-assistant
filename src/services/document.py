@@ -6,6 +6,7 @@ import pathlib
 import re
 from typing import Any, Dict, Optional
 
+from src.core.concurrency import run_llm_blocking
 from src.core.transparency_logger import transparency_logger
 from src.utils.logger import get_logger
 
@@ -110,7 +111,8 @@ async def compose_document(
         f"{section_guidance} "
         "Number each section."
     )
-    outline = llm_client.complete_text(
+    outline = await run_llm_blocking(
+        llm_client.complete_text,
         prompt=plan_prompt,
         system_message="You are a document planning specialist. Create clear, well-organized outlines.",
         temperature=0.5,
@@ -141,7 +143,8 @@ async def compose_document(
             f"Write the full document following the outline above. "
             f"Complete ALL sections thoroughly. {format_instruction}"
         )
-        draft = llm_client.complete_text(
+        draft = await run_llm_blocking(
+            llm_client.complete_text,
             prompt=write_prompt,
             system_message="You are an expert writer. Produce well-structured, comprehensive content.",
             temperature=0.7,
@@ -166,7 +169,8 @@ async def compose_document(
                 f"Write the full document following the outline above. "
                 f"Complete ALL sections thoroughly.{depth_instruction} {format_instruction}"
             )
-            draft = llm_client.complete_text(
+            draft = await run_llm_blocking(
+                llm_client.complete_text,
                 prompt=write_prompt,
                 system_message="You are an expert writer. Produce well-structured, comprehensive content.",
                 temperature=0.7,
@@ -197,7 +201,8 @@ async def compose_document(
                     + (f"Key points to cover:\n{bullets_text}\n\n" if bullets_text else "\n")
                     + f"Write ONLY this section's content (do not include other sections).{depth_instruction} {format_instruction}"
                 )
-                section_content = llm_client.complete_text(
+                section_content = await run_llm_blocking(
+                    llm_client.complete_text,
                     prompt=section_prompt,
                     system_message=(
                         "You are an expert writer. Write detailed, high-quality section content. "
@@ -222,7 +227,8 @@ async def compose_document(
         "Return the improved version of the full document. "
         "Do NOT return commentary — only the improved document text."
     )
-    final_content = llm_client.complete_text(
+    final_content = await run_llm_blocking(
+        llm_client.complete_text,
         prompt=review_prompt,
         system_message=(
             "You are a meticulous editor. Improve the document while preserving its structure and intent. "
@@ -679,92 +685,178 @@ def create_pdf(
     }
 
 
+def _read_context_file(context_path: str, max_chars: int) -> str:
+    """Read *context_path* if it lives under the tmp or artifacts directory.
+
+    Restricting the location keeps the LLM from using this tool to exfiltrate
+    arbitrary files from the host.
+    """
+    from src.utils.tmp import get_artifacts_dir, get_tmp_dir
+
+    resolved = pathlib.Path(context_path).expanduser().resolve()
+    allowed = [get_tmp_dir().resolve(), get_artifacts_dir().resolve()]
+    if not any(resolved == root or root in resolved.parents for root in allowed):
+        raise ValueError(
+            "context_path must be a file in the temp or artifacts directory "
+            "(e.g. the 'file' path returned by a tool)."
+        )
+    if not resolved.is_file():
+        raise ValueError(f"context_path does not exist: {context_path}")
+
+    text = resolved.read_text(encoding="utf-8", errors="replace")
+    if len(text) > max_chars:
+        text = (
+            text[:max_chars]
+            + f"\n\n[... truncated: file has {len(text):,} chars, showing first {max_chars:,}]"
+        )
+    return text
+
+
+_CREATE_HTML_SYSTEM_MESSAGE = (
+    "You are an expert front-end developer. Generate a complete HTML page.\n"
+    "Rules:\n"
+    "- All page-specific CSS must be inside a <style> tag in <head>.\n"
+    "- All page-specific JavaScript must be inside a <script> tag.\n"
+    "- You MAY load chart/visualisation libraries from a CDN when charts are needed "
+    "(e.g. Chart.js from cdnjs, Plotly.js from cdn.plot.ly). "
+    "Do NOT link to arbitrary external stylesheets or scripts beyond these.\n"
+    "- When using a CDN library, embed all data as inline JS variables — "
+    "never fetch data from external URLs.\n"
+    "- Output ONLY raw HTML starting with <!DOCTYPE html>. "
+    "No markdown, no explanation, no code fences.\n"
+    "- Make it visually polished: clean typography, good spacing, modern responsive layout.\n"
+    "- If data is provided, embed it directly "
+    "(e.g. as a JS variable passed to a chart, or rendered as an HTML table/list)."
+)
+
+_HTML_MAX_TOKENS_PER_CALL = 16000
+_HTML_MAX_CONTINUATIONS = 4
+_HTML_PROGRESS_INTERVAL = 2.0
+
+
+def _strip_html_fences(text: str) -> str:
+    text = text.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```[a-zA-Z]*\n?", "", text)
+    return re.sub(r"\n?```\s*$", "", text).strip()
+
+
 async def create_html(
     prompt: str,
     filename: str,
     context: Optional[str] = None,
+    context_path: Optional[str] = None,
     settings_service=None,
+    conversation_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Generate a complete HTML page from a plain-English description.
 
-    Calls the LLM directly to write the HTML. Page-specific CSS and JavaScript
-    are inline; CDN chart libraries (Chart.js, Plotly.js, etc.) are permitted
-    when charts are needed. The result is saved to temporary storage.
+    Calls the worker model directly (streamed, on the dedicated LLM thread
+    pool so the event loop stays free) and saves the result to temporary
+    storage. Progress is reported through the bound tool-event emitter so the
+    UI shows activity and the SSE stream stays alive.
 
     Args:
         prompt: Plain-English description of the page to generate
         filename: Output filename (will have .html appended if missing)
-        context: Optional data or content to embed (CSV, JSON, text, etc.)
+        context: Optional inline data or content to embed (CSV, JSON, text, etc.)
+        context_path: Optional path to a file whose contents should be embedded
         settings_service: SettingsService instance for LLM configuration
+        conversation_id: Optional conversation id for transparency logging
 
     Returns:
-        Dict with filepath, filename, size, message
+        Dict with filepath, filename, size, message — or ``error``/``success=False``
     """
     if not settings_service:
         raise ValueError("settings_service is required for create_html")
 
+    import asyncio
+    import time
+
     from src.core.llm_client import LLMClient, LLMConfig
+    from src.core.tool_events import get_emitter
 
     llm_config = LLMConfig.from_settings(settings_service)
     llm_client = LLMClient(llm_config)
+    model = llm_config.get_worker_model()
 
-    system_message = (
-        "You are an expert front-end developer. Generate a complete HTML page.\n"
-        "Rules:\n"
-        "- All page-specific CSS must be inside a <style> tag in <head>.\n"
-        "- All page-specific JavaScript must be inside a <script> tag.\n"
-        "- You MAY load chart/visualisation libraries from a CDN when charts are needed "
-        "(e.g. Chart.js from cdnjs, Plotly.js from cdn.plot.ly). "
-        "Do NOT link to arbitrary external stylesheets or scripts beyond these.\n"
-        "- When using a CDN library, embed all data as inline JS variables — "
-        "never fetch data from external URLs.\n"
-        "- Output ONLY raw HTML starting with <!DOCTYPE html>. "
-        "No markdown, no explanation, no code fences.\n"
-        "- Make it visually polished: clean typography, good spacing, modern responsive layout.\n"
-        "- If data is provided, embed it directly "
-        "(e.g. as a JS variable passed to a chart, or rendered as an HTML table/list)."
+    timeout = float(
+        settings_service.get_config_with_fallback("llm.create_html_timeout_seconds", 300)
+    )
+    max_file_chars = int(
+        settings_service.get_config_with_fallback("llm.tool_output_max_chars", 300000)
     )
 
-    user_prompt = f"Build this HTML page: {prompt.strip()}"
+    data_parts: list[str] = []
+    if context_path:
+        try:
+            data_parts.append(_read_context_file(context_path, max_file_chars))
+        except (ValueError, OSError) as exc:
+            return {"success": False, "error": f"create_html: {exc}"}
     if context:
-        user_prompt += f"\n\nData / content to embed:\n{context.strip()}"
+        data_parts.append(context.strip())
 
-    _MAX_TOKENS_PER_CALL = 16000
-    _MAX_CONTINUATIONS = 4
+    user_prompt = f"Build this HTML page: {prompt.strip()}"
+    if data_parts:
+        user_prompt += "\n\nData / content to embed:\n" + "\n\n".join(data_parts)
 
-    messages = [
-        {"role": "system", "content": system_message},
-        {"role": "user", "content": user_prompt},
-    ]
+    emitter = get_emitter()
+    loop = asyncio.get_running_loop()
+    started = time.monotonic()
+    chars_written = 0
+    last_progress = 0.0
 
-    html_parts: list[str] = []
-    for _ in range(_MAX_CONTINUATIONS):
-        response = llm_client.complete(messages=messages, max_tokens=_MAX_TOKENS_PER_CALL)
-        chunk = response.choices[0].message.content or ""
-        finish_reason = response.choices[0].finish_reason
+    def _post_progress(message: str) -> None:
+        # Called from the LLM worker thread — hand the event to the loop.
+        if emitter is None:
+            return
+        event = {"type": "tool_progress", "tool": "create_html", "message": message}
+        loop.call_soon_threadsafe(lambda: asyncio.ensure_future(emitter(event)))
 
-        # Strip code fences only on the first chunk
-        if not html_parts:
-            chunk = chunk.strip()
-            if chunk.startswith("```"):
-                chunk = re.sub(r"^```[a-zA-Z]*\n?", "", chunk)
-                chunk = re.sub(r"\n?```$", "", chunk)
-                chunk = chunk.strip()
+    def _on_text(delta: str) -> None:
+        nonlocal chars_written, last_progress
+        chars_written += len(delta)
+        now = time.monotonic()
+        if now - last_progress >= _HTML_PROGRESS_INTERVAL:
+            last_progress = now
+            _post_progress(f"Generating HTML… {chars_written / 1000:.1f}k chars")
 
-        html_parts.append(chunk)
+    def _generate() -> str:
+        messages = [
+            {"role": "system", "content": _CREATE_HTML_SYSTEM_MESSAGE},
+            {"role": "user", "content": user_prompt},
+        ]
+        parts: list[str] = []
+        for _ in range(_HTML_MAX_CONTINUATIONS):
+            response = llm_client.stream_completion(
+                messages=messages,
+                on_text=_on_text,
+                max_tokens=_HTML_MAX_TOKENS_PER_CALL,
+                model_override=model,
+            )
+            choice = response.choices[0]
+            chunk = choice.message.content or ""
+            parts.append(chunk)
+            if choice.finish_reason != "length":
+                break
+            # Truncated — ask the model to continue from where it stopped
+            messages.append({"role": "assistant", "content": chunk})
+            messages.append(
+                {"role": "user", "content": "Continue exactly from where you left off."}
+            )
+        return "".join(parts)
 
-        if finish_reason != "length":
-            break
+    try:
+        raw_html = await asyncio.wait_for(run_llm_blocking(_generate), timeout=timeout)
+    except asyncio.TimeoutError:
+        logger.error(f"create_html timed out after {timeout:g}s ({chars_written} chars written)")
+        return {
+            "success": False,
+            "error": f"create_html timed out after {timeout:g}s. Try a simpler page or less data.",
+        }
 
-        # Truncated — ask the model to continue from where it stopped
-        messages.append({"role": "assistant", "content": chunk})
-        messages.append({"role": "user", "content": "Continue exactly from where you left off."})
-
-    html = "".join(html_parts)
-
-    # Final fence cleanup in case the last chunk ended with one
-    html = re.sub(r"\n?```\s*$", "", html).strip()
+    html = _strip_html_fences(raw_html)
 
     from src.utils.tmp import get_tmp_dir
 
@@ -779,15 +871,24 @@ async def create_html(
         f.write(html)
 
     size = os.path.getsize(filepath)
-    logger.info(f"Created HTML: {filepath}")
+    logger.info(f"Created HTML: {filepath} ({size} bytes in {time.monotonic() - started:.1f}s)")
+
+    if conversation_id:
+        transparency_logger.log(
+            conversation_id,
+            "document",
+            f"create_html: {filename} ({size} bytes, model={model})",
+            role="assistant",
+            extra_metadata={"stage": "create_html"},
+        )
 
     return {
         "filepath": filepath,
         "filename": filename,
         "size": size,
         "message": f"HTML page '{filename}' created successfully ({size} bytes). "
-        "Use nextcloud_upload_file (with source_path) or onedrive_upload_file (with source_path) "
-        "to upload to cloud storage.",
+        "Call store_artifact (with source_path) to keep/share it, or use "
+        "nextcloud_upload_file / onedrive_upload_file (with source_path) to upload to cloud storage.",
     }
 
 

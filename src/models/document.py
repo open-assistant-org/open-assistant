@@ -84,6 +84,12 @@ class CreateHtmlRequest(BaseModel):
         description="Optional data or content to embed in the page "
         "(e.g. CSV data, JSON, text to display). The LLM will incorporate it.",
     )
+    context_path: Optional[str] = Field(
+        None,
+        description="Path to an existing file (JSON/CSV/text) whose contents should be embedded "
+        "in the page. PREFER THIS over 'context' for anything large: e.g. the 'file' path from an "
+        "offloaded tool result or a file written by python_execute. Avoids re-typing the data.",
+    )
 
 
 class SearchArtifactsRequest(BaseModel):

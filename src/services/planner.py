@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from src.core.llm_client import LLMClient
+from src.core.concurrency import run_llm_blocking
 from src.core.transparency_logger import transparency_logger
 from src.models.skill import Skill
 from src.utils.logger import get_logger
@@ -473,7 +474,8 @@ class Planner:
             {"role": "user", "content": user_message},
         ]
 
-        response = llm_client.complete(
+        response = await run_llm_blocking(
+            llm_client.complete,
             messages=messages,
             temperature=0.3,
             max_tokens=1024,

@@ -803,7 +803,11 @@ class ToolExecutor:
         elif tool_name == "create_html":
             from src.services.document import create_html
 
-            return await create_html(**arguments, settings_service=self.settings_service)
+            return await create_html(
+                **arguments,
+                settings_service=self.settings_service,
+                conversation_id=self.conversation_id,
+            )
 
         elif tool_name == "search_artifacts":
             return self.services["system"].search_artifacts(**arguments)
