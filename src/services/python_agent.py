@@ -398,14 +398,17 @@ def _stdout_tail(text: str, limit: int = 500) -> str:
     return "…" + text[-limit:]
 
 
-async def _complete_with_retry(llm_client, messages, tools, retries: int = 2):
+async def _complete_with_retry(llm_client, messages, tools, model_override, retries: int = 2):
     """Call the LLM, retrying transient failures with exponential backoff."""
     delay = 1.0
     last_exc: Optional[Exception] = None
     for attempt in range(retries + 1):
         try:
             return await asyncio.to_thread(
-                llm_client.complete_with_tools, messages=messages, tools=tools
+                llm_client.complete_with_tools,
+                messages=messages,
+                tools=tools,
+                model_override=model_override,
             )
         except Exception as e:  # noqa: BLE001 - retried/re-raised below
             last_exc = e
@@ -451,6 +454,9 @@ async def python_agent(
 
     llm_config = LLMConfig.from_settings(settings_service)
     llm_client = LLMClient(llm_config)
+    # Worker model for the inner loop; falls back to the main model when unset
+    # or on single-model providers (Ollama, vLLM).
+    model_override = llm_config.get_worker_model()
 
     try:
         max_inline_chars = int(
@@ -499,7 +505,7 @@ async def python_agent(
         logger.info("python_agent iteration=%d (of %d)", iterations, max_iterations)
 
         try:
-            response = await _complete_with_retry(llm_client, messages, inner_tools)
+            response = await _complete_with_retry(llm_client, messages, inner_tools, model_override)
         except Exception as e:
             logger.error("python_agent LLM call failed at iteration %d: %s", iterations, e)
             return {
