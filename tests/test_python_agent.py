@@ -194,16 +194,31 @@ class _FakeLLMClient:
     def __init__(self, scripted):
         self._scripted = list(scripted)
         self.calls = 0
+        self.model_overrides = []
 
-    def complete_with_tools(self, messages, tools):
+    def complete_with_tools(self, messages, tools, model_override=None):
         self.calls += 1
+        self.model_overrides.append(model_override)
         return _FakeResponse(self._scripted.pop(0))
 
 
-def _install_fake_llm(monkeypatch, scripted):
+class _FakeLLMConfig:
+    """Stands in for LLMConfig; reports the worker model it was given."""
+
+    def __init__(self, worker_model=None):
+        self._worker_model = worker_model
+
+    def get_worker_model(self):
+        return self._worker_model
+
+
+def _install_fake_llm(monkeypatch, scripted, worker_model=None):
     fake = _FakeLLMClient(scripted)
     monkeypatch.setattr("src.core.llm_client.LLMClient", lambda cfg: fake)
-    monkeypatch.setattr("src.core.llm_client.LLMConfig.from_settings", lambda ss, **kw: object())
+    monkeypatch.setattr(
+        "src.core.llm_client.LLMConfig.from_settings",
+        lambda ss, **kw: _FakeLLMConfig(worker_model),
+    )
     return fake
 
 
@@ -262,9 +277,11 @@ class TestPythonAgentLoop:
         class FlakyClient:
             def __init__(self):
                 self.calls = 0
+                self.model_overrides = []
 
-            def complete_with_tools(self, messages, tools):
+            def complete_with_tools(self, messages, tools, model_override=None):
                 self.calls += 1
+                self.model_overrides.append(model_override)
                 if self.calls == 1:
                     raise RuntimeError("transient network error")
                 return _FakeResponse(
@@ -276,7 +293,8 @@ class TestPythonAgentLoop:
         flaky = FlakyClient()
         monkeypatch.setattr("src.core.llm_client.LLMClient", lambda cfg: flaky)
         monkeypatch.setattr(
-            "src.core.llm_client.LLMConfig.from_settings", lambda ss, **kw: object()
+            "src.core.llm_client.LLMConfig.from_settings",
+            lambda ss, **kw: _FakeLLMConfig(),
         )
         # Avoid real backoff sleeps.
         monkeypatch.setattr(pa.asyncio, "sleep", _no_sleep)
@@ -284,6 +302,34 @@ class TestPythonAgentLoop:
         result = await python_agent(goal="do it", settings_service=_FakeSettings())
         assert result["success"] is True
         assert flaky.calls == 2
+
+
+@pytest.mark.asyncio
+class TestPythonAgentModelSelection:
+    async def test_uses_worker_model_when_configured(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("TMP_DIR", str(tmp_path))
+        scripted = [
+            _call("finish", {"summary": "done", "success": True}),
+        ]
+        fake = _install_fake_llm(monkeypatch, scripted, worker_model="cheap-worker-model")
+
+        result = await python_agent(goal="do it", settings_service=_FakeSettings())
+
+        assert result["success"] is True
+        assert fake.model_overrides == ["cheap-worker-model"]
+
+    async def test_falls_back_to_main_model_when_worker_unset(self, tmp_path, monkeypatch):
+        """No worker model configured -> get_worker_model() returns None -> main model."""
+        monkeypatch.setenv("TMP_DIR", str(tmp_path))
+        scripted = [
+            _call("finish", {"summary": "done", "success": True}),
+        ]
+        fake = _install_fake_llm(monkeypatch, scripted, worker_model=None)
+
+        result = await python_agent(goal="do it", settings_service=_FakeSettings())
+
+        assert result["success"] is True
+        assert fake.model_overrides == [None]
 
 
 async def _no_sleep(_seconds):
