@@ -261,7 +261,7 @@ collect_llm_config() {
   echo ""
   echo -e "  ${BOLD}LLM Provider${RESET}"
   prompt_choice CFG_LLM_PROVIDER "Which provider?" \
-    "openrouter,anthropic,groq,custom" "openrouter"
+    "openrouter,anthropic,groq,mistral,custom" "openrouter"
 
   case "$CFG_LLM_PROVIDER" in
     openrouter)
@@ -281,6 +281,12 @@ collect_llm_config() {
       prompt_choice CFG_LLM_MODEL "Model" \
         "llama-3.3-70b-versatile,llama-3.1-8b-instant,mixtral-8x7b-32768" \
         "llama-3.3-70b-versatile"
+      ;;
+    mistral)
+      CFG_LLM_BASE_URL="https://api.mistral.ai/v1"
+      prompt_choice CFG_LLM_MODEL "Model" \
+        "mistral-large-latest,mistral-medium-latest,mistral-small-latest,magistral-medium-latest,codestral-latest" \
+        "mistral-medium-latest"
       ;;
     custom)
       prompt CFG_LLM_BASE_URL "API base URL" "http://localhost:11434/v1"
