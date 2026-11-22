@@ -27,6 +27,7 @@ PROVIDER_BASE_URLS = {
     "openrouter": "https://openrouter.ai/api/v1",
     "anthropic": "https://api.anthropic.com/v1/",
     "groq": "https://api.groq.com/openai/v1",
+    "mistral": "https://api.mistral.ai/v1",
     "ollama": "http://localhost:11434/v1",
     "vllm": "http://localhost:8000/v1",
 }
@@ -55,7 +56,7 @@ class LLMConfig(BaseModel):
 
     provider: str = Field(
         default="openrouter",
-        description="LLM provider (openrouter, anthropic, groq, ollama, vllm, custom)",
+        description="LLM provider (openrouter, anthropic, groq, mistral, ollama, vllm, custom)",
     )
     model: str = Field(default="anthropic/claude-3.5-sonnet", description="Model identifier")
     api_key: str = Field(
@@ -145,7 +146,7 @@ class LLMClient:
     """
     Client for making LLM API calls.
 
-    Supports OpenRouter, Anthropic, Groq, and other OpenAI-compatible APIs.
+    Supports OpenRouter, Anthropic, Groq, Mistral, and other OpenAI-compatible APIs.
     Anthropic is reached via its official OpenAI SDK compatibility layer
     (https://api.anthropic.com/v1/) rather than the native Anthropic SDK, so
     it goes through the same OpenAI client path as every other provider here.
@@ -255,9 +256,9 @@ class LLMClient:
 
         sanitized = messages.copy()
 
-        # Groq/Ollama/vLLM sanitization: remove non-standard fields that these
-        # stricter OpenAI-compatible servers reject.
-        if self.config.provider in ("groq", "ollama", "vllm"):
+        # Groq/Mistral/Ollama/vLLM sanitization: remove non-standard fields that
+        # these stricter OpenAI-compatible servers reject.
+        if self.config.provider in ("groq", "mistral", "ollama", "vllm"):
             unsupported_fields = {"annotations", "audio", "executed_tools"}
             # Remove function_call/tool_calls if null/empty, but keep valid values
 
@@ -364,7 +365,8 @@ class LLMClient:
         if not isinstance(e, Exception):
             return False
         status = getattr(e, "status_code", None)
-        if status is not None and status != 400:
+        # Mistral answers 422 (not 400) for request fields it doesn't accept.
+        if status is not None and status not in (400, 422):
             return False
         text = f"{type(e).__name__} {e}".lower()
         return "stream_options" in text or "unknown field" in text or "unexpected keyword" in text

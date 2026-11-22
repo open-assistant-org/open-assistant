@@ -305,11 +305,11 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
     "llm.provider": SettingDefinition(
         key="llm.provider",
         display_name="LLM provider",
-        description="LLM provider to use (openrouter, anthropic, groq, ollama, vllm, or custom)",
+        description="LLM provider to use (openrouter, anthropic, groq, mistral, ollama, vllm, or custom)",
         value_type=SettingValueType.STRING,
         category=ConfigCategory.LLM,
         default_value="openrouter",
-        options=["openrouter", "anthropic", "groq", "ollama", "vllm", "custom"],
+        options=["openrouter", "anthropic", "groq", "mistral", "ollama", "vllm", "custom"],
         env_var_name="LLM_PROVIDER",
         display_order=1,
         ui_widget="select",
@@ -351,6 +351,7 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
         description=(
             "API endpoint URL for the LLM provider. "
             "Anthropic default: https://api.anthropic.com/v1/ — "
+            "Mistral default: https://api.mistral.ai/v1 — "
             "Ollama default: http://localhost:11434/v1 — "
             "vLLM default: http://localhost:8000/v1"
         ),

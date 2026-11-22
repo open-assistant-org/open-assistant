@@ -88,6 +88,73 @@ class TestLLMClient:
 
         assert get_default_base_url("anthropic") == "https://api.anthropic.com/v1/"
 
+    def test_mistral_initialization(self):
+        """Mistral uses the plain OpenAI SDK path with its own base URL."""
+        config = LLMConfig(
+            provider="mistral",
+            model="mistral-medium-latest",
+            api_key="test-key",
+            base_url="https://api.mistral.ai/v1",
+        )
+
+        with patch("src.core.llm_client.OpenAI") as mock_openai:
+            LLMClient(config)
+
+            mock_openai.assert_called_once()
+            _, kwargs = mock_openai.call_args
+            assert kwargs["api_key"] == "test-key"
+            assert kwargs["base_url"] == "https://api.mistral.ai/v1"
+            assert kwargs["default_headers"] is None
+
+    def test_mistral_default_base_url(self):
+        from src.core.llm_client import get_default_base_url
+
+        assert get_default_base_url("mistral") == "https://api.mistral.ai/v1"
+
+    def test_mistral_sanitize_messages(self):
+        """Mistral rejects unknown message fields, so it gets the strict cleanup."""
+        config = LLMConfig(provider="mistral", model="m", api_key="k")
+
+        with patch("src.core.llm_client.OpenAI"):
+            client = LLMClient(config)
+            messages = [
+                {"role": "user", "content": "Hello"},
+                {
+                    "role": "assistant",
+                    "content": "Hi",
+                    "annotations": [{"type": "test"}],
+                    "audio": {"id": "123"},
+                    "function_call": None,
+                    "tool_calls": [],
+                },
+                {"role": "user", "content": "Bye"},
+            ]
+            sanitized = client._sanitize_messages(messages)
+            assert "annotations" not in sanitized[1]
+            assert "audio" not in sanitized[1]
+            assert "function_call" not in sanitized[1]
+            assert "tool_calls" not in sanitized[1]
+            assert sanitized[1]["content"] == "Hi"
+
+    def test_mistral_aux_models(self):
+        """Mistral serves all models from one endpoint, so per-role models apply."""
+        config = LLMConfig(
+            provider="mistral",
+            model="mistral-large-latest",
+            api_key="k",
+            media_model="mistral-medium-latest",
+            worker_model="mistral-small-latest",
+            writer_model="mistral-medium-latest",
+        )
+        assert config.get_media_model() == "mistral-medium-latest"
+        assert config.get_worker_model() == "mistral-small-latest"
+        assert config.get_writer_model() == "mistral-medium-latest"
+
+        blank = LLMConfig(provider="mistral", model="mistral-large-latest", api_key="k")
+        assert blank.get_media_model() == "mistral-large-latest"
+        assert blank.get_worker_model() == "mistral-large-latest"
+        assert blank.get_writer_model() == "mistral-large-latest"
+
     def test_sanitize_messages(self):
         """Test message sanitization logic."""
         config = LLMConfig(

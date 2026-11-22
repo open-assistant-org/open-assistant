@@ -6,6 +6,7 @@ This guide explains how to obtain API credentials for different LLM providers.
 - [OpenRouter (Recommended)](#openrouter-recommended)
 - [Anthropic](#anthropic)
 - [Groq](#groq)
+- [Mistral](#mistral)
 - [Local LLM (Ollama)](#local-llm-ollama)
 - [Self-Hosted Inference (vLLM)](#self-hosted-inference-vllm)
 - [Ollama vs. vLLM](#ollama-vs-vllm)
@@ -149,6 +150,53 @@ Groq offers extremely competitive pricing with fast inference. See [https://groq
 - Extremely fast inference
 - Very low latency
 - Cost-effective for high-volume use
+
+---
+
+## Mistral
+
+Use Mistral's hosted models (La Plateforme) directly with your own API key.
+Mistral exposes an OpenAI-compatible API, so it uses the same request path as
+every other provider here.
+
+### Setup Steps
+
+1. **Sign up**: Visit [https://console.mistral.ai/](https://console.mistral.ai/)
+2. **Get API Key**:
+   - Log in and open [API Keys](https://console.mistral.ai/api-keys)
+   - Click "Create new key" and copy it
+3. **Configure in Settings**:
+   - Provider: `mistral`
+   - API Key: Your Mistral API key
+   - Model: `mistral-medium-latest` (or another model — see below)
+   - Base URL: `https://api.mistral.ai/v1` (pre-filled automatically)
+
+### Available Models
+
+- `mistral-large-latest` - most capable general-purpose model
+- `mistral-medium-latest` - balanced quality and cost, vision-capable
+- `mistral-small-latest` - fast and cheap, good for background work
+- `magistral-medium-latest` - reasoning model
+- `codestral-latest` - specialised for code
+
+Browse all models at [https://docs.mistral.ai/getting-started/models/](https://docs.mistral.ai/getting-started/models/)
+
+### Per-role models
+
+Mistral serves every model from one endpoint, so the **Media**, **Worker** and
+**Writer** model settings all work independently of the main model. For example:
+main `mistral-large-latest`, worker `mistral-small-latest`, writer and media
+`mistral-medium-latest`. Leave any of them blank to reuse the main model.
+
+### Notes
+
+- **Use plain Mistral model names**, not OpenRouter-style `mistralai/...` ids.
+- The separate **Mistral OCR** integration has its own API key setting and is
+  not affected by the LLM provider choice.
+
+### Pricing
+
+Pay-as-you-go, billed directly by Mistral. See [https://mistral.ai/pricing](https://mistral.ai/pricing).
 
 ---
 
@@ -340,6 +388,11 @@ port) and point a `custom` provider at it.
 - You want fast inference at low cost
 - You're building high-throughput applications
 
+### Use Mistral if:
+- You want a European-hosted provider
+- You want open-weight-family models without self-hosting
+- You want cheap small models for worker tasks and a larger one for chat
+
 ### Use Ollama if:
 - Privacy is critical
 - You want to avoid API costs
@@ -397,6 +450,7 @@ Common issues:
 - **OpenRouter**: [Documentation](https://openrouter.ai/docs)
 - **Anthropic**: [Documentation](https://platform.claude.com/docs)
 - **Groq**: [Documentation](https://console.groq.com/docs)
+- **Mistral**: [Documentation](https://docs.mistral.ai/)
 - **Ollama**: [Documentation](https://ollama.ai/docs)
 - **vLLM**: [Documentation](https://docs.vllm.ai/)
 

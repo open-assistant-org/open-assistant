@@ -101,6 +101,17 @@ class TestStreamCompletion:
         assert response.choices[0].message.content == "Hi"
         assert "stream_options" not in create.call_args.kwargs
 
+    def test_stream_options_422_rejection_retries_without_it(self):
+        # Mistral answers 422 (not 400) for request fields it doesn't accept.
+        err = Exception("422 Unprocessable: extra field stream_options not permitted")
+        err.status_code = 422
+        client, create = _client([_chunk("Hi", finish_reason="stop")])
+        create.side_effect = [err, iter([_chunk("Hi", finish_reason="stop")])]
+        deltas = []
+        client.stream_completion(messages=[], on_text=deltas.append)
+        assert deltas == ["Hi"]
+        assert "stream_options" not in create.call_args.kwargs
+
     def test_stream_options_unrelated_error_is_not_swallowed(self):
         client, create = _client([_chunk("Hi", finish_reason="stop")])
         create.side_effect = Exception("Invalid API key")
@@ -142,6 +153,26 @@ class TestProviderChunkShapes:
         calls = response.choices[0].message.tool_calls
         assert [(c.id, c.function.name, c.function.arguments) for c in calls] == [
             ("toolu_1", "lookup", '{"q": "x"}')
+        ]
+
+    def test_mistral_stream_reassembles(self):
+        chunks = [
+            _chunk("Hel"),
+            _chunk("lo"),
+            _chunk(
+                tool_calls=[_tc_delta(0, id="abc123XYZ", name="lookup", arguments='{"q": "x"}')],
+                finish_reason="tool_calls",
+            ),
+            _chunk(choices=False, usage=SimpleNamespace(prompt_tokens=7, completion_tokens=3)),
+        ]
+        client, _ = _provider_client(chunks, provider="mistral")
+        deltas = []
+        response = client.stream_completion(messages=[], on_text=deltas.append)
+        assert deltas == ["Hel", "lo"]
+        assert response.choices[0].message.content == "Hello"
+        calls = response.choices[0].message.tool_calls
+        assert [(c.id, c.function.name, c.function.arguments) for c in calls] == [
+            ("abc123XYZ", "lookup", '{"q": "x"}')
         ]
 
     def test_ollama_single_chunk_tool_call_without_index_or_usage(self):
