@@ -132,6 +132,50 @@ class AuditLogRepository(BaseRepository):
 
         return results
 
+    def get_tool_actions(
+        self,
+        conversation_id: str,
+        after_id: int = 0,
+        turn_id: Optional[str] = None,
+        limit: int = 200,
+    ) -> List[Dict[str, Any]]:
+        """Tool executions in a conversation, oldest first, with ``id`` above ``after_id``.
+
+        ``turn_id`` limits them to one chat turn (the id of the user message that began it).
+        Returns the fields a client needs to show each action.
+        """
+        query = """
+            SELECT id, timestamp, action, service_name, success, error_message, details
+            FROM audit_log
+            WHERE conversation_id = ? AND event_type = 'tool_execution' AND id > ?
+        """
+        params: List[Any] = [conversation_id, after_id]
+        if turn_id:
+            query += " AND json_extract(details, '$.turn_id') = ?"
+            params.append(turn_id)
+        query += " ORDER BY id ASC LIMIT ?"
+        params.append(limit)
+
+        actions = []
+        for row in self.fetch_all(query, tuple(params)):
+            details = json.loads(row["details"]) if row.get("details") else {}
+            actions.append(
+                {
+                    "id": row["id"],
+                    "timestamp": row["timestamp"],
+                    "tool": row["action"],
+                    "service": row["service_name"],
+                    "success": bool(row["success"]),
+                    "error": row["error_message"],
+                    "arguments": details.get("arguments"),
+                    "result_summary": details.get("result_summary"),
+                    "duration_ms": details.get("execution_time_ms"),
+                    "tool_call_id": details.get("tool_call_id"),
+                    "turn_id": details.get("turn_id"),
+                }
+            )
+        return actions
+
     def get_error_logs(self, since: Optional[str] = None, limit: int = 100) -> List[Dict[str, Any]]:
         """
         Get error logs.

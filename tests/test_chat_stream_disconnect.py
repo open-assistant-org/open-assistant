@@ -5,6 +5,7 @@ finish and save its reply; ``/cancel`` is how a person stops it on purpose.
 """
 
 import asyncio
+from contextlib import suppress
 
 import pytest
 
@@ -46,6 +47,14 @@ async def _open_stream(handler, conversation_id="conv-1"):
     return response.body_iterator
 
 
+async def _drop(frames, first):
+    """The client goes away mid-run: the connection closes the stream."""
+    first.cancel()
+    with suppress(asyncio.CancelledError):
+        await first
+    await frames.aclose()
+
+
 @pytest.mark.asyncio
 async def test_turn_finishes_and_saves_after_client_disconnects():
     handler = _SlowHandler()
@@ -53,9 +62,7 @@ async def test_turn_finishes_and_saves_after_client_disconnects():
     first = asyncio.create_task(frames.__anext__())
     await handler.started.wait()
 
-    # The client goes away mid-run: the connection closes the stream
-    first.cancel()
-    await frames.aclose()
+    await _drop(frames, first)
 
     handler.release.set()
     for _ in range(50):
@@ -71,8 +78,7 @@ async def test_cancel_stops_a_turn_that_lost_its_client():
     frames = await _open_stream(handler, "conv-2")
     first = asyncio.create_task(frames.__anext__())
     await handler.started.wait()
-    first.cancel()
-    await frames.aclose()
+    await _drop(frames, first)
 
     assert running_turns.cancel("conv-2") is True
     handler.release.set()
@@ -97,41 +103,41 @@ def test_cancel_with_nothing_running():
     assert running_turns.cancel("nobody") is False
 
 
-class _ToolHandler(_SlowHandler):
-    async def handle_message(self, **kwargs):
-        await kwargs["event_callback"]({"type": "tool_call", "tool": "web_search"})
-        return await super().handle_message(**kwargs)
-
-
 @pytest.mark.asyncio
-async def test_run_endpoint_lets_a_client_catch_up_after_losing_the_stream():
-    from src.api.chat import chat_run
+async def test_progress_reports_a_turn_that_lost_its_client():
+    from src.api.chat import chat_progress
 
-    handler = _ToolHandler()
+    class _Audit:
+        def get_tool_actions(self, conversation_id, after_id=0, turn_id=None):
+            return [{"id": 7, "tool": "web_search"}]
+
+    handler = _SlowHandler()
     frames = await _open_stream(handler, "conv-4")
     first = asyncio.create_task(frames.__anext__())
     await handler.started.wait()
-    first.cancel()
-    await frames.aclose()
+    await _drop(frames, first)
 
-    mid = await chat_run("conv-4", after=0)
-    assert mid["running"] is True
-    assert [e["type"] for e in mid["events"]] == ["tool_call"]
+    during = await chat_progress("conv-4", after_id=3, audit_repo=_Audit())
+    assert during == {"running": True, "actions": [{"id": 7, "tool": "web_search"}], "next_id": 7}
 
     handler.release.set()
     for _ in range(50):
-        done = await chat_run("conv-4", after=mid["next"])
-        if not done["running"]:
+        if not running_turns.is_running("conv-4"):
             break
         await asyncio.sleep(0.01)
-    assert done["running"] is False
-    assert [e["type"] for e in done["events"]] == ["complete"]
-    assert done["events"][0]["response"] == "reply"
-    assert done["next"] == 2
+    assert (await chat_progress("conv-4", audit_repo=_Audit()))["running"] is False
 
 
 @pytest.mark.asyncio
-async def test_run_endpoint_for_an_unknown_conversation():
-    from src.api.chat import chat_run
+async def test_progress_for_a_conversation_with_nothing_running():
+    from src.api.chat import chat_progress
 
-    assert await chat_run("never-ran") == {"running": False, "events": [], "next": 0}
+    class _Audit:
+        def get_tool_actions(self, conversation_id, after_id=0, turn_id=None):
+            return []
+
+    assert await chat_progress("never-ran", after_id=5, audit_repo=_Audit()) == {
+        "running": False,
+        "actions": [],
+        "next_id": 5,
+    }
