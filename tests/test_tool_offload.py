@@ -130,3 +130,31 @@ def test_get_tool_actions_returns_new_rows_of_one_turn_oldest_first(clean_temp_d
     assert [a["tool"] for a in repo.get_tool_actions("c", after_id=everything[1]["id"])] == ["t3"]
     # The newest rows, still oldest first, for showing the end of a long history
     assert [a["tool"] for a in repo.get_tool_actions("c", limit=2, tail=True)] == ["t2", "t3"]
+
+
+@pytest.mark.asyncio
+async def test_artifact_and_notification_tools_run_off_the_event_loop():
+    import threading
+
+    seen = {}
+
+    class System:
+        def search_artifacts(self, **kwargs):
+            seen["search"] = threading.current_thread() is not threading.main_thread()
+            return {}
+
+        def store_artifact(self, **kwargs):
+            seen["store"] = threading.current_thread() is not threading.main_thread()
+            return {}
+
+    executor = _executor()
+    executor.services = {"system": System()}
+
+    def notify(arguments):
+        seen["notify"] = threading.current_thread() is not threading.main_thread()
+        return {}
+
+    executor._handle_notify_owner = notify
+    for tool in ("search_artifacts", "store_artifact", "notify_owner"):
+        await executor._route_tool_call(tool, None, {})
+    assert seen == {"search": True, "store": True, "notify": True}

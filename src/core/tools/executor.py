@@ -721,7 +721,7 @@ class ToolExecutor:
 
         # Notify owner (WhatsApp or Slack)
         elif tool_name == "notify_owner":
-            return self._handle_notify_owner(arguments)
+            return await self._offload(self._handle_notify_owner, arguments)
 
         # Google News tools (no API key required)
         elif tool_name == "google_news_top_headlines":
@@ -836,10 +836,10 @@ class ToolExecutor:
             )
 
         elif tool_name == "search_artifacts":
-            return self.services["system"].search_artifacts(**arguments)
+            return await self._offload(self.services["system"].search_artifacts, **arguments)
 
         elif tool_name == "store_artifact":
-            return self.services["system"].store_artifact(**arguments)
+            return await self._offload(self.services["system"].store_artifact, **arguments)
 
         # Plugin-builder tools
         elif tool_name == "install_plugin":
