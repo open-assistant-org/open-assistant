@@ -48,9 +48,9 @@ def test_every_browser_setting_is_documented_in_browser_reference(key):
 
 @pytest.mark.parametrize("key", BROWSER_KEYS)
 def test_every_browser_setting_is_documented_in_configuration_guide(key):
-    assert f"`{key}`" in _read(CONFIG_DOC), (
-        f"{key} is missing from the Browser section of docs/setup/configuration.md"
-    )
+    assert f"`{key}`" in _read(
+        CONFIG_DOC
+    ), f"{key} is missing from the Browser section of docs/setup/configuration.md"
 
 
 def _session_routes():

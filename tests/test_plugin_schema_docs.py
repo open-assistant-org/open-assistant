@@ -37,9 +37,9 @@ def test_builtin_plugin_validates(json_path):
         defn = PluginDefinition.model_validate(raw)
     except Exception as exc:
         pytest.fail(f"Built-in plugin {json_path.name!r} failed validation: {exc}")
-    assert defn.id == json_path.stem, (
-        f"Plugin id {defn.id!r} in {json_path.name!r} doesn't match the filename stem."
-    )
+    assert (
+        defn.id == json_path.stem
+    ), f"Plugin id {defn.id!r} in {json_path.name!r} doesn't match the filename stem."
 
 
 # ---------------------------------------------------------------------------

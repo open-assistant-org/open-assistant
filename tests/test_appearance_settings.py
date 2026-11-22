@@ -30,9 +30,9 @@ def test_option_labels_match_options_length():
     for key, definition in SETTING_DEFINITIONS.items():
         if definition.option_labels is not None:
             assert definition.options is not None, f"{key} has option_labels but no options"
-            assert len(definition.option_labels) == len(definition.options), (
-                f"{key}: option_labels length does not match options length"
-            )
+            assert len(definition.option_labels) == len(
+                definition.options
+            ), f"{key}: option_labels length does not match options length"
 
 
 @pytest.fixture
