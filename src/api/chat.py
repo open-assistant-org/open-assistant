@@ -4,7 +4,7 @@ import asyncio
 import json
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from src.core.dependencies import get_audit_repo, get_message_handler, get_settings_service
@@ -272,6 +272,8 @@ async def chat_progress(
     conversation_id: str,
     after_id: int = 0,
     turn_id: Optional[str] = None,
+    limit: int = Query(default=200, ge=0, le=500),
+    tail: bool = False,
     audit_repo: AuditLogRepository = Depends(get_audit_repo),
 ) -> dict:
     """Where a chat turn stands, for clients that lost (or never had) its stream.
@@ -279,9 +281,12 @@ async def chat_progress(
     ``running`` says whether a turn is still working in this conversation. ``actions`` are
     the tools it has run, oldest first, from ``after_id`` on; pass ``next_id`` back as
     ``after_id`` to get only what's new. ``turn_id`` limits them to the turn that began
-    with that user message. The reply itself is saved to the conversation when the turn ends.
+    with that user message. ``tail`` returns the newest ``limit`` actions rather than the
+    oldest. The reply itself is saved to the conversation when the turn ends.
     """
-    actions = audit_repo.get_tool_actions(conversation_id, after_id=after_id, turn_id=turn_id)
+    actions = audit_repo.get_tool_actions(
+        conversation_id, after_id=after_id, turn_id=turn_id, limit=limit, tail=tail
+    )
     return {
         "running": running_turns.is_running(conversation_id),
         "actions": actions,

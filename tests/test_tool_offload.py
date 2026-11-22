@@ -128,3 +128,5 @@ def test_get_tool_actions_returns_new_rows_of_one_turn_oldest_first(clean_temp_d
     assert [a["tool"] for a in everything] == ["t1", "t2", "t3"]
     assert [a["tool"] for a in repo.get_tool_actions("c", turn_id="a")] == ["t1", "t2"]
     assert [a["tool"] for a in repo.get_tool_actions("c", after_id=everything[1]["id"])] == ["t3"]
+    # The newest rows, still oldest first, for showing the end of a long history
+    assert [a["tool"] for a in repo.get_tool_actions("c", limit=2, tail=True)] == ["t2", "t3"]

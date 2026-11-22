@@ -31,7 +31,7 @@ class TestPlanTrackerIterativeParsing:
         assert "[repeat]" not in tracker.steps[2].description
 
     def test_for_each_language_detected(self):
-        plan_text = "1. List all emails\n" "2. For each email, apply the Work label\n"
+        plan_text = "1. List all emails\n2. For each email, apply the Work label\n"
         tracker = PlanTracker.from_llm_output(plan_text)
         assert tracker.steps[1].requires_iteration is True
 

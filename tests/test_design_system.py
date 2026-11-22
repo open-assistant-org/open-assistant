@@ -172,9 +172,9 @@ def test_media_queries_use_the_shared_breakpoints(path):
 def test_no_js_dark_fallback_matches_dark_theme():
     media = block_body(TOKENS_CSS, r"@media \(prefers-color-scheme: dark\)")
     fallback = custom_props(block_body(media, r":root:not\(\[data-theme\]\)"))
-    assert (
-        fallback == DARK
-    ), "The prefers-color-scheme fallback in tokens.css drifted from [data-theme=dark]"
+    assert fallback == DARK, (
+        "The prefers-color-scheme fallback in tokens.css drifted from [data-theme=dark]"
+    )
 
 
 def test_light_tokens_built_on_primitives_have_a_dark_value():
@@ -195,15 +195,15 @@ def test_theme_color_copies_match_canvas_token():
     dark_bg = resolve(DARK["--color-bg"], {**LIGHT, **DARK}).lower()
 
     theme_js = read(STATIC / "js" / "theme.js").lower()
-    assert (
-        f"'{light_bg}'" in theme_js and f"'{dark_bg}'" in theme_js
-    ), "theme.js theme-color drifted from --color-bg"
+    assert f"'{light_bg}'" in theme_js and f"'{dark_bg}'" in theme_js, (
+        "theme.js theme-color drifted from --color-bg"
+    )
 
     for page in HTML_FILES:
         for colour in re.findall(r'name="theme-color" content="([^"]+)"', read(page)):
-            assert (
-                colour.lower() == light_bg
-            ), f"{rel(page)} theme-color {colour} != --color-bg {light_bg}"
+            assert colour.lower() == light_bg, (
+                f"{rel(page)} theme-color {colour} != --color-bg {light_bg}"
+            )
 
     manifest = json.loads(read(STATIC / "manifest.json"))
     pwa = read(ROOT / "src" / "api" / "pwa.py").lower()
@@ -227,9 +227,9 @@ def test_artifact_unlock_mirrors_tokens():
             expected = resolve(scope[name], scope)
             if "color-mix(" in expected:  # derived; can't be compared statically
                 continue
-            assert (
-                value.lower() == expected.lower()
-            ), f"artifact-unlock.html {theme} {name} is {value}, tokens.css says {expected}"
+            assert value.lower() == expected.lower(), (
+                f"artifact-unlock.html {theme} {name} is {value}, tokens.css says {expected}"
+            )
 
 
 # --------------------------------------------------------------------------
@@ -251,9 +251,9 @@ def test_no_inline_styles(path):
 
 @pytest.mark.parametrize("path", JS_FILES + HTML_FILES, ids=rel)
 def test_visibility_uses_hidden_attribute(path):
-    assert ".style.display" not in read(
-        path
-    ), f"{rel(path)}: toggle visibility with el.hidden, not style.display"
+    assert ".style.display" not in read(path), (
+        f"{rel(path)}: toggle visibility with el.hidden, not style.display"
+    )
 
 
 RETIRED_CLASSES = [

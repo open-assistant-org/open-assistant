@@ -711,9 +711,9 @@ class TestCookieConsentPatterns:
         cookie_keywords = re.compile(r"cookie|consent|gdpr|privacy|tracking|analytics")
 
         for text in dialog_texts:
-            assert cookie_keywords.search(
-                text.lower()
-            ), f"Expected '{text}' to match cookie keywords"
+            assert cookie_keywords.search(text.lower()), (
+                f"Expected '{text}' to match cookie keywords"
+            )
 
     def test_platform_selectors_in_dismiss_script(self):
         """Verify common platform selectors are in the dismiss script."""
@@ -731,9 +731,9 @@ class TestCookieConsentPatterns:
         ]
 
         for selector in expected_selectors:
-            assert (
-                selector in DISMISS_COOKIE_CONSENT_JS
-            ), f"Expected selector '{selector}' in dismiss script"
+            assert selector in DISMISS_COOKIE_CONSENT_JS, (
+                f"Expected selector '{selector}' in dismiss script"
+            )
 
     def test_overlay_selectors_in_dismiss_script(self):
         """Verify overlay selectors are in the dismiss script."""
@@ -749,9 +749,9 @@ class TestCookieConsentPatterns:
         ]
 
         for overlay in expected_overlays:
-            assert (
-                overlay in DISMISS_COOKIE_CONSENT_JS
-            ), f"Expected overlay '{overlay}' in dismiss script"
+            assert overlay in DISMISS_COOKIE_CONSENT_JS, (
+                f"Expected overlay '{overlay}' in dismiss script"
+            )
 
     def test_aria_dialog_handling_in_script(self):
         """Verify ARIA dialog roles are handled in the dismiss script."""

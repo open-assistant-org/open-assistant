@@ -138,11 +138,13 @@ class AuditLogRepository(BaseRepository):
         after_id: int = 0,
         turn_id: Optional[str] = None,
         limit: int = 200,
+        tail: bool = False,
     ) -> List[Dict[str, Any]]:
         """Tool executions in a conversation, oldest first, with ``id`` above ``after_id``.
 
         ``turn_id`` limits them to one chat turn (the id of the user message that began it).
-        Returns the fields a client needs to show each action.
+        With ``tail`` the newest ``limit`` rows are returned instead of the oldest, still
+        oldest first. Returns the fields a client needs to show each action.
         """
         query = """
             SELECT id, timestamp, action, service_name, success, error_message, details
@@ -153,11 +155,14 @@ class AuditLogRepository(BaseRepository):
         if turn_id:
             query += " AND json_extract(details, '$.turn_id') = ?"
             params.append(turn_id)
-        query += " ORDER BY id ASC LIMIT ?"
+        query += f" ORDER BY id {'DESC' if tail else 'ASC'} LIMIT ?"
         params.append(limit)
 
+        rows = self.fetch_all(query, tuple(params))
+        if tail:
+            rows.reverse()
         actions = []
-        for row in self.fetch_all(query, tuple(params)):
+        for row in rows:
             details = json.loads(row["details"]) if row.get("details") else {}
             actions.append(
                 {

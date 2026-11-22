@@ -70,6 +70,14 @@ class ChatRequest(BaseModel):
             "`message` also carries file context"
         ),
     )
+    client_id: Optional[str] = Field(
+        None,
+        max_length=64,
+        description=(
+            "An id the client made up for this message, stored with it so the client can "
+            "find the message again, and the reply to it, after losing its connection"
+        ),
+    )
 
     def history_metadata(self, source: str) -> Dict[str, Any]:
         """Metadata for the stored user message: its source plus any display fields."""
@@ -78,6 +86,8 @@ class ChatRequest(BaseModel):
             metadata["attachments"] = [a.model_dump(exclude_none=True) for a in self.attachments]
         if self.display_text is not None:
             metadata["display_text"] = self.display_text
+        if self.client_id:
+            metadata["client_id"] = self.client_id
         return metadata
 
 

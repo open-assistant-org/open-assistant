@@ -108,7 +108,9 @@ async def test_progress_reports_a_turn_that_lost_its_client():
     from src.api.chat import chat_progress
 
     class _Audit:
-        def get_tool_actions(self, conversation_id, after_id=0, turn_id=None):
+        def get_tool_actions(
+            self, conversation_id, after_id=0, turn_id=None, limit=200, tail=False
+        ):
             return [{"id": 7, "tool": "web_search"}]
 
     handler = _SlowHandler()
@@ -117,7 +119,7 @@ async def test_progress_reports_a_turn_that_lost_its_client():
     await handler.started.wait()
     await _drop(frames, first)
 
-    during = await chat_progress("conv-4", after_id=3, audit_repo=_Audit())
+    during = await chat_progress("conv-4", after_id=3, limit=200, tail=False, audit_repo=_Audit())
     assert during == {"running": True, "actions": [{"id": 7, "tool": "web_search"}], "next_id": 7}
 
     handler.release.set()
@@ -125,7 +127,9 @@ async def test_progress_reports_a_turn_that_lost_its_client():
         if not running_turns.is_running("conv-4"):
             break
         await asyncio.sleep(0.01)
-    assert (await chat_progress("conv-4", audit_repo=_Audit()))["running"] is False
+    assert (await chat_progress("conv-4", limit=200, tail=False, audit_repo=_Audit()))[
+        "running"
+    ] is False
 
 
 @pytest.mark.asyncio
@@ -133,10 +137,14 @@ async def test_progress_for_a_conversation_with_nothing_running():
     from src.api.chat import chat_progress
 
     class _Audit:
-        def get_tool_actions(self, conversation_id, after_id=0, turn_id=None):
+        def get_tool_actions(
+            self, conversation_id, after_id=0, turn_id=None, limit=200, tail=False
+        ):
             return []
 
-    assert await chat_progress("never-ran", after_id=5, audit_repo=_Audit()) == {
+    assert await chat_progress(
+        "never-ran", after_id=5, limit=200, tail=False, audit_repo=_Audit()
+    ) == {
         "running": False,
         "actions": [],
         "next_id": 5,

@@ -53,9 +53,9 @@ def test_service_layer():
         assert "toggle_pin_conversation" in content, "toggle_pin_conversation method not found"
         print("✓ toggle_pin_conversation method exists")
 
-        assert (
-            "generate_conversation_title" in content
-        ), "generate_conversation_title method not found"
+        assert "generate_conversation_title" in content, (
+            "generate_conversation_title method not found"
+        )
         print("✓ generate_conversation_title method exists")
 
         print("\n✓ Service layer looks good!")
@@ -80,9 +80,9 @@ def test_api_endpoints():
         assert "toggle_pin_conversation" in content, "toggle_pin_conversation endpoint not found"
         print("✓ POST /api/conversations/{id}/pin endpoint exists")
 
-        assert (
-            "generate_conversation_title" in content
-        ), "generate_conversation_title endpoint not found"
+        assert "generate_conversation_title" in content, (
+            "generate_conversation_title endpoint not found"
+        )
         print("✓ POST /api/conversations/{id}/generate-title endpoint exists")
 
         print("\n✓ API endpoints look good!")
