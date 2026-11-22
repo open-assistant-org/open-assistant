@@ -9,6 +9,7 @@ from fastapi.responses import StreamingResponse
 from src.core.dependencies import get_message_handler, get_settings_service
 from src.core.tools.definitions import initialize_all_tools
 from src.models.conversation import ChatRequest, ChatResponse, PendingInput
+from src.services import running_turns
 from src.services.message_handler import MessageHandler
 from src.services.settings import SettingsService
 from src.utils.logger import get_logger
@@ -140,6 +141,9 @@ async def chat_stream(
     That text is a draft: a ``text_reset`` frame withdraws it when the loop
     moves on (tool calls follow, or an internal check rejects the answer),
     and ``complete.response`` is always the authoritative final text.
+
+    The turn keeps running if the client disconnects, and its reply is saved to
+    the conversation; send ``/cancel`` to stop it.
     """
     api_key = settings_service.get_config_with_fallback("llm.api_key")
     if not api_key:
@@ -172,9 +176,17 @@ async def chat_stream(
     model = settings_service.get_config_with_fallback("llm.model", "anthropic/claude-3.5-sonnet")
 
     queue: asyncio.Queue = asyncio.Queue()
+    client_gone = asyncio.Event()
+    run = running_turns.Run()
 
-    async def event_callback(event: dict) -> None:
-        await queue.put(event)
+    async def emit(event: dict) -> None:
+        # Kept for clients that poll /chat/{id}/run after losing the stream; nobody is
+        # reading the queue once the client has disconnected, and the turn carries on.
+        run.record(event)
+        if not client_gone.is_set():
+            await queue.put(event)
+
+    event_callback = emit
 
     async def run_handler() -> None:
         try:
@@ -198,7 +210,7 @@ async def chat_stream(
                     "options": pi.get("options"),
                     "context": pi.get("context"),
                 }
-            await queue.put(
+            await emit(
                 {
                     "type": "complete",
                     "response": result["response"],
@@ -217,16 +229,23 @@ async def chat_stream(
                     "pending_input": pending_input,
                 }
             )
+        except asyncio.CancelledError:
+            # /cancel: let a stream that's still attached end instead of waiting forever
+            await emit({"type": "error", "error": "Stopped."})
+            raise
         except Exception as e:
             logger.error(f"Error in chat stream: {type(e).__name__}: {str(e)}", exc_info=True)
-            await queue.put({"type": "error", "error": f"{type(e).__name__}: {str(e)}"})
+            await emit({"type": "error", "error": f"{type(e).__name__}: {str(e)}"})
 
     # Padding comment that exceeds nginx's default proxy_busy_buffers_size (8 KB),
     # forcing an immediate buffer flush on every frame without proxy config changes.
     _FLUSH_PAD = ": " + " " * 8192 + "\n"
 
     async def sse_generator():
+        # The turn is not tied to this connection: if the client drops (a phone that locks
+        # or loses signal), it still finishes and saves its reply. /cancel stops it.
         handler_task = asyncio.create_task(run_handler())
+        running_turns.track(handler_task, run, request.conversation_id)
         try:
             while True:
                 try:
@@ -238,7 +257,7 @@ async def chat_stream(
                 if event.get("type") in ("complete", "error"):
                     break
         finally:
-            handler_task.cancel()
+            client_gone.set()
 
     return StreamingResponse(
         sse_generator(),
@@ -249,3 +268,18 @@ async def chat_stream(
             "Connection": "keep-alive",
         },
     )
+
+
+@router.get("/chat/{conversation_id}/run")
+async def chat_run(conversation_id: str, after: int = 0) -> dict:
+    """What a chat turn has produced since event ``after``, for clients that lost the stream.
+
+    ``events`` are the same frames /chat/stream sends, in order; pass ``next`` back as
+    ``after`` to get only what's new. ``running`` is false once the turn has finished
+    (its last event is then ``complete`` or ``error``) or when there is no turn to report.
+    """
+    run = running_turns.get(conversation_id)
+    if run is None:
+        return {"running": False, "events": [], "next": 0}
+    after = max(after, 0)
+    return {"running": not run.finished, "events": run.events[after:], "next": len(run.events)}

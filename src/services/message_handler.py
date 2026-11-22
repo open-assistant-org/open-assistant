@@ -20,6 +20,7 @@ from src.core.tools.executor import ToolExecutor
 from src.core.tools.registry import get_tool_registry
 from src.core.transparency_logger import transparency_logger
 from src.models.skill import Skill
+from src.services import running_turns
 from src.services.conversation import ConversationService
 from src.services.memory import MemoryService
 from src.services.plan_helpers import (
@@ -282,6 +283,8 @@ class MessageHandler:
             # clear any suspended ask_user state, and let the user continue
             # in the same conversation from a clean slate.
             if message.strip() == "/cancel":
+                # A chat turn that outlived its connection stops here too
+                running_turns.cancel(conv_id)
                 cancelled = self.async_task_dispatcher.cancel_all_for_conversation(conv_id)
                 # Clear any suspended ask_user state so the next message is
                 # treated as a fresh request rather than a resumed execution.
