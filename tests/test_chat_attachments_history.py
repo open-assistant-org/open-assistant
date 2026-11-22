@@ -105,3 +105,11 @@ def test_attachment_fields_are_validated(client_and_handler):
     client, _ = client_and_handler
     bad = {**BODY, "attachments": [{"filename": "x", "size": -1}]}
     assert client.post("/api/chat", json=bad).status_code == 422
+
+
+def test_client_id_is_kept_with_the_message():
+    request = ChatRequest(message="Hello", client_id="abc-123")
+    assert request.history_metadata("chat_api_stream") == {
+        "source": "chat_api_stream",
+        "client_id": "abc-123",
+    }

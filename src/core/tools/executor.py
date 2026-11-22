@@ -1,11 +1,14 @@
 """Tool executor for routing LLM tool calls to service methods."""
 
+import asyncio
 import hashlib
+import inspect
 import json
 import time
 from typing import Any, Dict, Optional, Tuple
 
-from src.core.concurrency import get_browser_semaphore, get_search_semaphore
+from src.core.concurrency import get_browser_semaphore, get_search_semaphore, run_tool_blocking
+from src.core.turn_context import get_turn
 from src.core.tools.registry import get_tool_registry
 from src.models.nextcloud import UploadFileRequest as NextcloudUploadFileRequest
 from src.models.outlook import UploadFileRequest as OutlookUploadFileRequest
@@ -13,6 +16,11 @@ from src.utils.logger import get_logger
 from src.utils.settings import settings_truthy
 
 logger = get_logger(__name__)
+
+# These services hand work to the event loop's scheduler, which is not thread-safe.
+_EVENT_LOOP_SERVICES = frozenset({"CronJobService", "FutureTaskService"})
+# One lock per service, so its calls don't overlap on the thread pool.
+_service_locks: Dict[str, asyncio.Lock] = {}
 
 # Import authentication exceptions from integrations
 try:
@@ -414,6 +422,24 @@ class ToolExecutor:
             )
             return error_result
 
+    async def _offload(self, func: Any, *args: Any, **kwargs: Any) -> Any:
+        """Call a tool function without holding the event loop.
+
+        Most tools are synchronous. Run on the event loop they would freeze the whole
+        server (other chats, page loads, /cancel) until they return, so they run on the
+        tool thread pool. Calls into one service run one at a time, as they did when
+        everything shared the loop, because the service clients aren't built for
+        concurrent use. Services that schedule work on the event loop stay on it.
+        """
+        if inspect.iscoroutinefunction(func):
+            return await func(*args, **kwargs)
+        owner = getattr(func, "__self__", None)
+        name = type(owner).__name__ if owner is not None else getattr(func, "__name__", "tool")
+        if name in _EVENT_LOOP_SERVICES:
+            return func(*args, **kwargs)
+        async with _service_locks.setdefault(name, asyncio.Lock()):
+            return await run_tool_blocking(func, *args, **kwargs)
+
     async def _route_tool_call(
         self, tool_name: str, service: Any, arguments: Dict[str, Any]
     ) -> Any:
@@ -433,301 +459,301 @@ class ToolExecutor:
         """
         # Google tools
         if tool_name == "google_send_email":
-            return service.send_email(**arguments)
+            return await self._offload(service.send_email, **arguments)
         elif tool_name == "google_read_emails":
-            return service.read_emails(**arguments)
+            return await self._offload(service.read_emails, **arguments)
         elif tool_name == "google_search_emails":
-            return service.search_emails(**arguments)
+            return await self._offload(service.search_emails, **arguments)
         elif tool_name == "google_get_email":
-            return service.get_email(**arguments)
+            return await self._offload(service.get_email, **arguments)
         elif tool_name == "google_create_draft":
-            return service.create_draft(**arguments)
+            return await self._offload(service.create_draft, **arguments)
         elif tool_name == "google_reply_email":
-            return service.reply_email(**arguments)
+            return await self._offload(service.reply_email, **arguments)
         elif tool_name == "google_trash_email":
-            return service.trash_email(**arguments)
+            return await self._offload(service.trash_email, **arguments)
         elif tool_name == "google_modify_labels":
-            return service.modify_labels(**arguments)
+            return await self._offload(service.modify_labels, **arguments)
         elif tool_name == "google_get_labels":
-            return service.get_labels()
+            return await self._offload(service.get_labels)
         elif tool_name == "google_get_attachment":
-            return service.get_attachment(**arguments)
+            return await self._offload(service.get_attachment, **arguments)
         elif tool_name == "google_list_calendars":
-            return service.list_calendars()
+            return await self._offload(service.list_calendars)
         elif tool_name == "google_list_events":
-            return service.list_calendar_events(**arguments)
+            return await self._offload(service.list_calendar_events, **arguments)
         elif tool_name == "google_get_event":
-            return service.get_calendar_event(**arguments)
+            return await self._offload(service.get_calendar_event, **arguments)
         elif tool_name == "google_create_event":
-            return service.create_calendar_event(**arguments)
+            return await self._offload(service.create_calendar_event, **arguments)
         elif tool_name == "google_update_event":
-            return service.update_calendar_event(**arguments)
+            return await self._offload(service.update_calendar_event, **arguments)
         elif tool_name == "google_delete_event":
-            return service.delete_calendar_event(**arguments)
+            return await self._offload(service.delete_calendar_event, **arguments)
 
         # Google Drive tools
         elif tool_name == "google_drive_list_files":
-            return service.drive_list_files(**arguments)
+            return await self._offload(service.drive_list_files, **arguments)
         elif tool_name == "google_drive_search_files":
-            return service.drive_search_files(**arguments)
+            return await self._offload(service.drive_search_files, **arguments)
         elif tool_name == "google_drive_get_file":
-            return service.drive_get_file(**arguments)
+            return await self._offload(service.drive_get_file, **arguments)
         elif tool_name == "google_drive_read_file":
-            return service.drive_read_file(**arguments)
+            return await self._offload(service.drive_read_file, **arguments)
 
         # Google Docs tools
         elif tool_name == "google_docs_create":
-            return service.docs_create(**arguments)
+            return await self._offload(service.docs_create, **arguments)
         elif tool_name == "google_docs_get":
-            return service.docs_get(**arguments)
+            return await self._offload(service.docs_get, **arguments)
         elif tool_name == "google_docs_append":
-            return service.docs_append(**arguments)
+            return await self._offload(service.docs_append, **arguments)
         elif tool_name == "google_docs_update":
-            return service.docs_update(**arguments)
+            return await self._offload(service.docs_update, **arguments)
         elif tool_name == "google_docs_replace_text":
-            return service.docs_replace_text(**arguments)
+            return await self._offload(service.docs_replace_text, **arguments)
 
         # Google Sheets tools
         elif tool_name == "google_sheets_create":
-            return service.sheets_create(**arguments)
+            return await self._offload(service.sheets_create, **arguments)
         elif tool_name == "google_sheets_get":
-            return service.sheets_get(**arguments)
+            return await self._offload(service.sheets_get, **arguments)
         elif tool_name == "google_sheets_read":
-            return service.sheets_read(**arguments)
+            return await self._offload(service.sheets_read, **arguments)
         elif tool_name == "google_sheets_write":
-            return service.sheets_write(**arguments)
+            return await self._offload(service.sheets_write, **arguments)
         elif tool_name == "google_sheets_append":
-            return service.sheets_append(**arguments)
+            return await self._offload(service.sheets_append, **arguments)
         elif tool_name == "google_sheets_clear":
-            return service.sheets_clear(**arguments)
+            return await self._offload(service.sheets_clear, **arguments)
 
         # Google Slides tools
         elif tool_name == "google_slides_create":
-            return service.slides_create(**arguments)
+            return await self._offload(service.slides_create, **arguments)
         elif tool_name == "google_slides_get":
-            return service.slides_get(**arguments)
+            return await self._offload(service.slides_get, **arguments)
         elif tool_name == "google_slides_add_slide":
-            return service.slides_add_slide(**arguments)
+            return await self._offload(service.slides_add_slide, **arguments)
         elif tool_name == "google_slides_replace_text":
-            return service.slides_replace_text(**arguments)
+            return await self._offload(service.slides_replace_text, **arguments)
         elif tool_name == "google_slides_insert_text":
-            return service.slides_insert_text(**arguments)
+            return await self._offload(service.slides_insert_text, **arguments)
 
         # Google Places & Routes tools
         elif tool_name == "google_search_places":
-            return service.search_places(**arguments)
+            return await self._offload(service.search_places, **arguments)
         elif tool_name == "google_get_place_details":
-            return service.get_place_details(**arguments)
+            return await self._offload(service.get_place_details, **arguments)
         elif tool_name == "google_nearby_places":
-            return service.nearby_places(**arguments)
+            return await self._offload(service.nearby_places, **arguments)
         elif tool_name == "google_get_directions":
-            return service.get_directions(**arguments)
+            return await self._offload(service.get_directions, **arguments)
         elif tool_name == "google_geocode_place":
-            return service.geocode_place(**arguments)
+            return await self._offload(service.geocode_place, **arguments)
         elif tool_name == "google_reverse_geocode":
-            return service.reverse_geocode(**arguments)
+            return await self._offload(service.reverse_geocode, **arguments)
 
         # Google Ads tools
         elif tool_name == "google_ads_get_account_info":
-            return service.get_account_info(**arguments)
+            return await self._offload(service.get_account_info, **arguments)
         elif tool_name == "google_ads_list_campaigns":
-            return service.list_campaigns(**arguments)
+            return await self._offload(service.list_campaigns, **arguments)
         elif tool_name == "google_ads_get_campaign":
-            return service.get_campaign(**arguments)
+            return await self._offload(service.get_campaign, **arguments)
         elif tool_name == "google_ads_create_campaign":
-            return service.create_campaign(**arguments)
+            return await self._offload(service.create_campaign, **arguments)
         elif tool_name == "google_ads_update_campaign_status":
-            return service.update_campaign_status(**arguments)
+            return await self._offload(service.update_campaign_status, **arguments)
         elif tool_name == "google_ads_update_campaign_budget":
-            return service.update_campaign_budget(**arguments)
+            return await self._offload(service.update_campaign_budget, **arguments)
         elif tool_name == "google_ads_list_ad_groups":
-            return service.list_ad_groups(**arguments)
+            return await self._offload(service.list_ad_groups, **arguments)
         elif tool_name == "google_ads_create_ad_group":
-            return service.create_ad_group(**arguments)
+            return await self._offload(service.create_ad_group, **arguments)
         elif tool_name == "google_ads_list_keywords":
-            return service.list_keywords(**arguments)
+            return await self._offload(service.list_keywords, **arguments)
         elif tool_name == "google_ads_add_keyword":
-            return service.add_keyword(**arguments)
+            return await self._offload(service.add_keyword, **arguments)
         elif tool_name == "google_ads_get_campaign_performance":
-            return service.get_campaign_performance(**arguments)
+            return await self._offload(service.get_campaign_performance, **arguments)
         elif tool_name == "google_ads_get_ad_group_performance":
-            return service.get_ad_group_performance(**arguments)
+            return await self._offload(service.get_ad_group_performance, **arguments)
 
         # Outlook tools
         elif tool_name == "outlook_send_email":
-            return service.send_email(**arguments)
+            return await self._offload(service.send_email, **arguments)
         elif tool_name == "outlook_create_event":
-            return service.create_calendar_event(**arguments)
+            return await self._offload(service.create_calendar_event, **arguments)
         elif tool_name == "outlook_read_emails":
-            return service.read_emails(**arguments)
+            return await self._offload(service.read_emails, **arguments)
         elif tool_name == "outlook_get_email":
-            return service.get_email(**arguments)
+            return await self._offload(service.get_email, **arguments)
         elif tool_name == "outlook_search_emails":
-            return service.search_emails(**arguments)
+            return await self._offload(service.search_emails, **arguments)
         elif tool_name == "outlook_create_draft":
-            return service.create_draft(**arguments)
+            return await self._offload(service.create_draft, **arguments)
         elif tool_name == "outlook_list_calendars":
-            return service.list_calendars()
+            return await self._offload(service.list_calendars)
         elif tool_name == "outlook_list_events":
-            return service.list_calendar_events(**arguments)
+            return await self._offload(service.list_calendar_events, **arguments)
         elif tool_name == "outlook_update_event":
-            return service.update_calendar_event(**arguments)
+            return await self._offload(service.update_calendar_event, **arguments)
         elif tool_name == "outlook_delete_event":
-            return service.delete_calendar_event(**arguments)
+            return await self._offload(service.delete_calendar_event, **arguments)
         elif tool_name == "outlook_list_files":
-            return service.list_files(**arguments)
+            return await self._offload(service.list_files, **arguments)
         elif tool_name == "outlook_search_files":
-            return service.search_files(**arguments)
+            return await self._offload(service.search_files, **arguments)
         elif tool_name == "outlook_read_file":
-            return service.read_file(**arguments)
+            return await self._offload(service.read_file, **arguments)
         elif tool_name == "outlook_get_attachment":
-            return service.get_attachment(**arguments)
+            return await self._offload(service.get_attachment, **arguments)
         elif tool_name == "onedrive_upload_file":
             validated = OutlookUploadFileRequest.model_validate(arguments)
-            return service.upload_file(**validated.model_dump())
+            return await self._offload(service.upload_file, **validated.model_dump())
         elif tool_name == "outlook_refresh_credentials":
-            return service.refresh_credentials()
+            return await self._offload(service.refresh_credentials)
 
         # OneNote tools
         elif tool_name == "onenote_list_notebooks":
-            return service.list_notebooks(**arguments)
+            return await self._offload(service.list_notebooks, **arguments)
         elif tool_name == "onenote_get_notebook":
-            return service.get_notebook(**arguments)
+            return await self._offload(service.get_notebook, **arguments)
         elif tool_name == "onenote_list_sections":
-            return service.list_sections(**arguments)
+            return await self._offload(service.list_sections, **arguments)
         elif tool_name == "onenote_get_section":
-            return service.get_section(**arguments)
+            return await self._offload(service.get_section, **arguments)
         elif tool_name == "onenote_list_pages":
-            return service.list_pages(**arguments)
+            return await self._offload(service.list_pages, **arguments)
         elif tool_name == "onenote_get_page":
-            return service.get_page(**arguments)
+            return await self._offload(service.get_page, **arguments)
         elif tool_name == "onenote_create_page":
-            return service.create_page(**arguments)
+            return await self._offload(service.create_page, **arguments)
         elif tool_name == "onenote_update_page":
-            return service.update_page(**arguments)
+            return await self._offload(service.update_page, **arguments)
         elif tool_name == "onenote_delete_page":
-            return service.delete_page(**arguments)
+            return await self._offload(service.delete_page, **arguments)
         elif tool_name == "onenote_search":
-            return service.search_onenote(**arguments)
+            return await self._offload(service.search_onenote, **arguments)
         elif tool_name == "onenote_copy_page":
-            return service.copy_page(**arguments)
+            return await self._offload(service.copy_page, **arguments)
         elif tool_name == "onenote_extract_text":
-            return service.extract_page_text(**arguments)
+            return await self._offload(service.extract_page_text, **arguments)
         elif tool_name == "onenote_create_markdown_page":
-            return service.create_page_from_markdown(**arguments)
+            return await self._offload(service.create_page_from_markdown, **arguments)
         elif tool_name == "onenote_create_from_template":
-            return service.create_page_from_template(**arguments)
+            return await self._offload(service.create_page_from_template, **arguments)
 
         # Microsoft To Do tools
         elif tool_name == "todo_list_task_lists":
-            return service.list_todo_lists()
+            return await self._offload(service.list_todo_lists)
         elif tool_name == "todo_get_task_list":
-            return service.get_todo_list(**arguments)
+            return await self._offload(service.get_todo_list, **arguments)
         elif tool_name == "todo_create_task_list":
-            return service.create_todo_list(**arguments)
+            return await self._offload(service.create_todo_list, **arguments)
         elif tool_name == "todo_delete_task_list":
-            return service.delete_todo_list(**arguments)
+            return await self._offload(service.delete_todo_list, **arguments)
         elif tool_name == "todo_list_tasks":
-            return service.list_todo_tasks(**arguments)
+            return await self._offload(service.list_todo_tasks, **arguments)
         elif tool_name == "todo_get_task":
-            return service.get_todo_task(**arguments)
+            return await self._offload(service.get_todo_task, **arguments)
         elif tool_name == "todo_create_task":
-            return service.create_todo_task(**arguments)
+            return await self._offload(service.create_todo_task, **arguments)
         elif tool_name == "todo_update_task":
-            return service.update_todo_task(**arguments)
+            return await self._offload(service.update_todo_task, **arguments)
         elif tool_name == "todo_delete_task":
-            return service.delete_todo_task(**arguments)
+            return await self._offload(service.delete_todo_task, **arguments)
 
         # Notion tools
         elif tool_name == "notion_create_note":
-            return service.create_note(**arguments)
+            return await self._offload(service.create_note, **arguments)
         elif tool_name == "notion_search":
-            return service.search_pages(**arguments)
+            return await self._offload(service.search_pages, **arguments)
         elif tool_name == "notion_get_page":
-            return service.get_page(**arguments)
+            return await self._offload(service.get_page, **arguments)
         elif tool_name == "notion_get_page_content":
-            return service.get_page_content(**arguments)
+            return await self._offload(service.get_page_content, **arguments)
         elif tool_name == "notion_update_page":
-            return service.update_page(**arguments)
+            return await self._offload(service.update_page, **arguments)
         elif tool_name == "notion_append_content":
-            return service.append_content(**arguments)
+            return await self._offload(service.append_content, **arguments)
         elif tool_name == "notion_list_databases":
-            return service.list_databases()
+            return await self._offload(service.list_databases)
         elif tool_name == "notion_query_database":
-            return service.query_database(**arguments)
+            return await self._offload(service.query_database, **arguments)
         elif tool_name == "notion_delete_page":
-            return service.delete_page(**arguments)
+            return await self._offload(service.delete_page, **arguments)
 
         # Nextcloud tools
         elif tool_name == "nextcloud_list_files":
-            return service.list_files(**arguments)
+            return await self._offload(service.list_files, **arguments)
         elif tool_name == "nextcloud_search_files":
-            return service.search_files(**arguments)
+            return await self._offload(service.search_files, **arguments)
         elif tool_name == "nextcloud_read_file":
-            return service.read_file(**arguments)
+            return await self._offload(service.read_file, **arguments)
         elif tool_name == "nextcloud_download_file":
-            return service.download_file(**arguments)
+            return await self._offload(service.download_file, **arguments)
         elif tool_name == "nextcloud_upload_file":
             validated = NextcloudUploadFileRequest.model_validate(arguments)
-            return service.upload_file(**validated.model_dump())
+            return await self._offload(service.upload_file, **validated.model_dump())
         elif tool_name == "nextcloud_create_folder":
-            return service.create_folder(**arguments)
+            return await self._offload(service.create_folder, **arguments)
         elif tool_name == "nextcloud_delete_file":
-            return service.delete_file(**arguments)
+            return await self._offload(service.delete_file, **arguments)
         elif tool_name == "nextcloud_move_file":
-            return service.move_file(**arguments)
+            return await self._offload(service.move_file, **arguments)
         elif tool_name == "nextcloud_copy_file":
-            return service.copy_file(**arguments)
+            return await self._offload(service.copy_file, **arguments)
         elif tool_name == "nextcloud_get_file_info":
-            return service.get_file_info(**arguments)
+            return await self._offload(service.get_file_info, **arguments)
         elif tool_name == "nextcloud_file_exists":
-            return service.file_exists(**arguments)
+            return await self._offload(service.file_exists, **arguments)
         elif tool_name == "nextcloud_read_pdf":
-            return service.read_pdf(**arguments)
+            return await self._offload(service.read_pdf, **arguments)
 
         # WhatsApp tools
         elif tool_name == "whatsapp_send_message":
-            return service.send_message(**arguments)
+            return await self._offload(service.send_message, **arguments)
         elif tool_name == "whatsapp_get_status":
-            return service.get_status()
+            return await self._offload(service.get_status)
         elif tool_name == "whatsapp_configure_webhook":
-            return service.configure_webhook(**arguments)
+            return await self._offload(service.configure_webhook, **arguments)
 
         # Notify owner (WhatsApp or Slack)
         elif tool_name == "notify_owner":
-            return self._handle_notify_owner(arguments)
+            return await self._offload(self._handle_notify_owner, arguments)
 
         # Google News tools (no API key required)
         elif tool_name == "google_news_top_headlines":
-            return service.google_news_top_headlines()
+            return await self._offload(service.google_news_top_headlines)
         elif tool_name == "google_news_search":
-            return service.google_news_search(**arguments)
+            return await self._offload(service.google_news_search, **arguments)
         elif tool_name == "google_news_by_topic":
-            return service.google_news_by_topic(**arguments)
+            return await self._offload(service.google_news_by_topic, **arguments)
         elif tool_name == "google_news_by_location":
-            return service.google_news_by_location(**arguments)
+            return await self._offload(service.google_news_by_location, **arguments)
         elif tool_name == "google_news_by_site":
-            return service.google_news_by_site(**arguments)
+            return await self._offload(service.google_news_by_site, **arguments)
 
         # Yahoo Finance tools (no API key required)
         elif tool_name == "yahoo_finance_get_quote":
-            return service.get_quote(**arguments)
+            return await self._offload(service.get_quote, **arguments)
         elif tool_name == "yahoo_finance_get_history":
-            return service.get_history(**arguments)
+            return await self._offload(service.get_history, **arguments)
         elif tool_name == "yahoo_finance_get_info":
-            return service.get_info(**arguments)
+            return await self._offload(service.get_info, **arguments)
         elif tool_name == "yahoo_finance_get_financials":
-            return service.get_financials(**arguments)
+            return await self._offload(service.get_financials, **arguments)
         elif tool_name == "yahoo_finance_get_news":
-            return service.get_news(**arguments)
+            return await self._offload(service.get_news, **arguments)
         elif tool_name == "yahoo_finance_search":
-            return service.search(**arguments)
+            return await self._offload(service.search, **arguments)
 
         # Brave Search tools — serialised globally to avoid API rate-limit
         # bursts when multiple sub-tasks fan out parallel searches.
         elif tool_name == "web_search":
             async with get_search_semaphore():
-                return service.web_search(**arguments)
+                return await self._offload(service.web_search, **arguments)
 
         # Browser tools — serialised globally so that parallel sub-tasks
         # cannot spawn multiple Playwright/Chromium instances simultaneously,
@@ -753,23 +779,23 @@ class ToolExecutor:
 
         # System tools
         elif tool_name == "system_fetch_logs":
-            return service.fetch_logs(**arguments)
+            return await self._offload(service.fetch_logs, **arguments)
         elif tool_name == "system_get_conversation_text":
-            return service.get_conversation_text(**arguments)
+            return await self._offload(service.get_conversation_text, **arguments)
         elif tool_name == "system_get_prompt":
-            return service.get_prompt(**arguments)
+            return await self._offload(service.get_prompt, **arguments)
         elif tool_name == "system_update_memory_prompt":
-            return service.update_memory_prompt(**arguments)
+            return await self._offload(service.update_memory_prompt, **arguments)
         elif tool_name == "system_index_memory_facts":
-            return service.index_memory_facts(**arguments)
+            return await self._offload(service.index_memory_facts, **arguments)
         elif tool_name == "system_update_soul_prompt":
-            return service.update_soul_prompt(**arguments)
+            return await self._offload(service.update_soul_prompt, **arguments)
         elif tool_name == "system_clean_tmp_dir":
-            return service.clean_tmp_dir(**arguments)
+            return await self._offload(service.clean_tmp_dir, **arguments)
         elif tool_name == "system_compact_messages":
-            return service.compact_messages(**arguments)
+            return await self._offload(service.compact_messages, **arguments)
         elif tool_name == "memory_recall":
-            return service.recall_conversation_memory(**arguments)
+            return await self._offload(service.recall_conversation_memory, **arguments)
 
         # Document tools
         elif tool_name == "compose_document":
@@ -793,12 +819,12 @@ class ToolExecutor:
         elif tool_name == "create_docx":
             from src.services.document import create_docx
 
-            return create_docx(**arguments)
+            return await self._offload(create_docx, **arguments)
 
         elif tool_name == "create_pdf":
             from src.services.document import create_pdf
 
-            return create_pdf(**arguments)
+            return await self._offload(create_pdf, **arguments)
 
         elif tool_name == "create_html":
             from src.services.document import create_html
@@ -810,10 +836,10 @@ class ToolExecutor:
             )
 
         elif tool_name == "search_artifacts":
-            return self.services["system"].search_artifacts(**arguments)
+            return await self._offload(self.services["system"].search_artifacts, **arguments)
 
         elif tool_name == "store_artifact":
-            return self.services["system"].store_artifact(**arguments)
+            return await self._offload(self.services["system"].store_artifact, **arguments)
 
         # Plugin-builder tools
         elif tool_name == "install_plugin":
@@ -835,7 +861,7 @@ class ToolExecutor:
         elif tool_name == "calculate":
             from src.services.calculator import calculate
 
-            return calculate(**arguments)
+            return await self._offload(calculate, **arguments)
 
         # Python execution tool
         elif tool_name == "python_execute":
@@ -850,7 +876,9 @@ class ToolExecutor:
                         "llm.tool_output_max_chars", 300000
                     )
                 )
-            return python_execute(**arguments, max_inline_chars=max_inline_chars)
+            return await self._offload(
+                python_execute, **arguments, max_inline_chars=max_inline_chars
+            )
 
         # Python autonomous sub-agent
         elif tool_name == "python_agent":
@@ -872,9 +900,9 @@ class ToolExecutor:
 
         # Unified search tools
         elif tool_name == "unified_search":
-            return service.search(**arguments)
+            return await self._offload(service.search, **arguments)
         elif tool_name == "reindex_search":
-            return service.reindex(**arguments)
+            return await self._offload(service.reindex, **arguments)
 
         # Cron job tools
         elif tool_name == "create_cron_job":
@@ -1403,12 +1431,17 @@ class ToolExecutor:
             if authentication_required:
                 details["authentication_required"] = True
 
+            # Tie the action to the chat turn it belongs to, so clients can show it with the reply
+            turn = get_turn()
+            if turn:
+                details["turn_id"] = turn.turn_id
+
             # Log to audit repository
             self.audit_repo.log_event(
                 event_type="tool_execution",
                 service_name=service_name,
                 action=tool_name,
-                conversation_id=self.conversation_id,
+                conversation_id=turn.conversation_id if turn else self.conversation_id,
                 success=success,
                 error_message=error_message,
                 details=details,

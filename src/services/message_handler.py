@@ -19,7 +19,9 @@ from src.core.tool_events import bind_emitter
 from src.core.tools.executor import ToolExecutor
 from src.core.tools.registry import get_tool_registry
 from src.core.transparency_logger import transparency_logger
+from src.core.turn_context import bind_turn
 from src.models.skill import Skill
+from src.services import running_turns
 from src.services.conversation import ConversationService
 from src.services.memory import MemoryService
 from src.services.plan_helpers import (
@@ -282,6 +284,8 @@ class MessageHandler:
             # clear any suspended ask_user state, and let the user continue
             # in the same conversation from a clean slate.
             if message.strip() == "/cancel":
+                # A chat turn that outlived its connection stops here too
+                running_turns.cancel(conv_id)
                 cancelled = self.async_task_dispatcher.cancel_all_for_conversation(conv_id)
                 # Clear any suspended ask_user state so the next message is
                 # treated as a fresh request rather than a resumed execution.
@@ -364,12 +368,15 @@ class MessageHandler:
 
             # Step 2: Store user message
             logger.debug("Step 2: Storing user message...")
-            self.conversation_service.add_message(
+            user_msg = self.conversation_service.add_message(
                 conversation_id=conv_id,
                 role="user",
                 content=message,
                 metadata=metadata,
             )
+            # Sub-tasks keep the turn they were started from
+            if channel != "subtask" and user_msg.get("message_id"):
+                bind_turn(conv_id, user_msg["message_id"])
 
             # Step 3: Load context (memory, soul, recent messages)
             logger.debug("Step 3: Loading context...")
@@ -567,6 +574,7 @@ class MessageHandler:
                 conv_id,
                 result["suspended_state"],
                 question=result["response"] or result["pending_input"]["question"],
+                pending_input=result["pending_input"],
             )
             logger.info(
                 f"Execution suspended for user input: {result['pending_input']['question']}"
@@ -947,8 +955,7 @@ class MessageHandler:
                 expanded.append(skill)
 
         logger.info(
-            f"Expanded skills for plan execution: "
-            f"{len(already_selected)} → {len(expanded)} skills"
+            f"Expanded skills for plan execution: {len(already_selected)} → {len(expanded)} skills"
         )
 
         new_system_prompt = self._build_system_prompt(expanded, context)
@@ -1596,8 +1603,7 @@ class MessageHandler:
                     repaired = try_repair_json(raw_args, hint=exc)
                     if repaired is not None:
                         logger.debug(
-                            "Repaired malformed JSON arguments for tool '%s' "
-                            "(original error: %s)",
+                            "Repaired malformed JSON arguments for tool '%s' (original error: %s)",
                             tool_name,
                             exc,
                         )
@@ -2263,7 +2269,11 @@ class MessageHandler:
         return False
 
     def _save_suspended_state(
-        self, conversation_id: str, suspended_state: Dict[str, Any], question: str = ""
+        self,
+        conversation_id: str,
+        suspended_state: Dict[str, Any],
+        question: str = "",
+        pending_input: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Persist suspended execution state as an assistant message with metadata.
 
@@ -2275,7 +2285,8 @@ class MessageHandler:
             conversation_id=conversation_id,
             role="assistant",
             content=content,
-            metadata={"suspended_state": suspended_state},
+            # pending_input is what a client needs to show the question again after a reload
+            metadata={"suspended_state": suspended_state, "pending_input": pending_input},
         )
         return msg.get("message_id", "")
 
@@ -2298,12 +2309,14 @@ class MessageHandler:
         call, and continues the conversation loop.
         """
         # Store the user's answer as a message
-        self.conversation_service.add_message(
+        answer_msg = self.conversation_service.add_message(
             conversation_id=conv_id,
             role="user",
             content=user_answer,
             metadata=metadata,
         )
+        if answer_msg.get("message_id"):
+            bind_turn(conv_id, answer_msg["message_id"])
 
         # Restore state
         messages = self._deserialize_messages(suspended_state.get("messages", []))
@@ -2381,6 +2394,7 @@ class MessageHandler:
                 conv_id,
                 result["suspended_state"],
                 question=result["response"] or result["pending_input"]["question"],
+                pending_input=result["pending_input"],
             )
             return {
                 "response": result["response"],

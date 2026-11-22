@@ -2,13 +2,16 @@
 
 import asyncio
 import json
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
-from src.core.dependencies import get_message_handler, get_settings_service
+from src.core.dependencies import get_audit_repo, get_message_handler, get_settings_service
+from src.core.repositories.audit import AuditLogRepository
 from src.core.tools.definitions import initialize_all_tools
 from src.models.conversation import ChatRequest, ChatResponse, PendingInput
+from src.services import running_turns
 from src.services.message_handler import MessageHandler
 from src.services.settings import SettingsService
 from src.utils.logger import get_logger
@@ -140,6 +143,9 @@ async def chat_stream(
     That text is a draft: a ``text_reset`` frame withdraws it when the loop
     moves on (tool calls follow, or an internal check rejects the answer),
     and ``complete.response`` is always the authoritative final text.
+
+    The turn keeps running if the client disconnects, and its reply is saved to
+    the conversation; send ``/cancel`` to stop it.
     """
     api_key = settings_service.get_config_with_fallback("llm.api_key")
     if not api_key:
@@ -172,9 +178,12 @@ async def chat_stream(
     model = settings_service.get_config_with_fallback("llm.model", "anthropic/claude-3.5-sonnet")
 
     queue: asyncio.Queue = asyncio.Queue()
+    client_gone = asyncio.Event()
 
     async def event_callback(event: dict) -> None:
-        await queue.put(event)
+        # Nobody is reading once the client has disconnected; the turn carries on regardless.
+        if not client_gone.is_set():
+            await queue.put(event)
 
     async def run_handler() -> None:
         try:
@@ -217,6 +226,10 @@ async def chat_stream(
                     "pending_input": pending_input,
                 }
             )
+        except asyncio.CancelledError:
+            # /cancel: let a stream that's still attached end instead of waiting forever
+            await queue.put({"type": "error", "error": "Stopped."})
+            raise
         except Exception as e:
             logger.error(f"Error in chat stream: {type(e).__name__}: {str(e)}", exc_info=True)
             await queue.put({"type": "error", "error": f"{type(e).__name__}: {str(e)}"})
@@ -226,7 +239,10 @@ async def chat_stream(
     _FLUSH_PAD = ": " + " " * 8192 + "\n"
 
     async def sse_generator():
+        # The turn is not tied to this connection: if the client drops (a phone that locks
+        # or loses signal), it still finishes and saves its reply. /cancel stops it.
         handler_task = asyncio.create_task(run_handler())
+        running_turns.track(handler_task, request.conversation_id)
         try:
             while True:
                 try:
@@ -238,7 +254,7 @@ async def chat_stream(
                 if event.get("type") in ("complete", "error"):
                     break
         finally:
-            handler_task.cancel()
+            client_gone.set()
 
     return StreamingResponse(
         sse_generator(),
@@ -249,3 +265,30 @@ async def chat_stream(
             "Connection": "keep-alive",
         },
     )
+
+
+@router.get("/chat/{conversation_id}/progress")
+async def chat_progress(
+    conversation_id: str,
+    after_id: int = 0,
+    turn_id: Optional[str] = None,
+    limit: int = Query(default=200, ge=0, le=500),
+    tail: bool = False,
+    audit_repo: AuditLogRepository = Depends(get_audit_repo),
+) -> dict:
+    """Where a chat turn stands, for clients that lost (or never had) its stream.
+
+    ``running`` says whether a turn is still working in this conversation. ``actions`` are
+    the tools it has run, oldest first, from ``after_id`` on; pass ``next_id`` back as
+    ``after_id`` to get only what's new. ``turn_id`` limits them to the turn that began
+    with that user message. ``tail`` returns the newest ``limit`` actions rather than the
+    oldest. The reply itself is saved to the conversation when the turn ends.
+    """
+    actions = audit_repo.get_tool_actions(
+        conversation_id, after_id=after_id, turn_id=turn_id, limit=limit, tail=tail
+    )
+    return {
+        "running": running_turns.is_running(conversation_id),
+        "actions": actions,
+        "next_id": actions[-1]["id"] if actions else after_id,
+    }

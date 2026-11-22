@@ -69,6 +69,30 @@ async def run_llm_blocking(func: Callable[..., T], /, *args, **kwargs) -> T:
 
 
 # ---------------------------------------------------------------------------
+# Dedicated tool thread pool
+# ---------------------------------------------------------------------------
+# Most tools are plain synchronous calls (Gmail, Calendar, Drive, python_execute, ...).
+# Called straight from async code they hold the event loop for their whole duration, so
+# the server answers nothing else meanwhile: not other chats, page loads or /cancel.
+# They run on their own pool instead, apart from the LLM pool so a burst of one cannot
+# starve the other.  Override with TOOL_THREAD_POOL_SIZE.
+_TOOL_POOL_SIZE = max(2, int(os.getenv("TOOL_THREAD_POOL_SIZE", "16")))
+
+_tool_executor = ThreadPoolExecutor(max_workers=_TOOL_POOL_SIZE, thread_name_prefix="tool")
+
+
+async def run_tool_blocking(func: Callable[..., T], /, *args, **kwargs) -> T:
+    """Run a blocking tool call on the dedicated tool pool.
+
+    The caller's context (current turn, tool emitter) is copied into the worker thread.
+    """
+    loop = asyncio.get_running_loop()
+    ctx = contextvars.copy_context()
+    call = functools.partial(ctx.run, functools.partial(func, *args, **kwargs))
+    return await loop.run_in_executor(_tool_executor, call)
+
+
+# ---------------------------------------------------------------------------
 # Sub-task fan-out limits
 # ---------------------------------------------------------------------------
 # Maximum number of dispatched sub-tasks allowed to run concurrently.  Kept
