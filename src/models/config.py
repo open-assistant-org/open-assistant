@@ -605,7 +605,8 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
         description=(
             "When on, scheduled tasks can pause and ask you a question. The run waits in "
             "its own conversation; open that conversation and answer to let it continue "
-            "with everything it has done so far."
+            "with everything it has done so far. When off, a scheduled task that plans "
+            "several steps can still pause with a question."
         ),
         value_type=SettingValueType.BOOL,
         category=ConfigCategory.APPLICATION,

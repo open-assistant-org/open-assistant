@@ -74,7 +74,7 @@ SCHEDULED_ASK_USER_NOTE = (
     "\n\n## Scheduled run\n"
     "This is a scheduled task: nobody is watching it live. If you cannot continue "
     "well without a decision or information from the user, call ask_user. The run "
-    "pauses, the user is told, and it continues right here with their answer and "
+    "pauses until the user answers, then continues right here with their answer and "
     "everything you have done so far. Use ask_user for questions rather than "
     "sending them a message, and only ask when it really matters."
 )
