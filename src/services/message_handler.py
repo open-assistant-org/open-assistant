@@ -69,6 +69,16 @@ RESUME_NOTICE = (
     "your question, treat it as a new request."
 )
 
+# Added to the system prompt of scheduled runs when they may ask questions.
+SCHEDULED_ASK_USER_NOTE = (
+    "\n\n## Scheduled run\n"
+    "This is a scheduled task: nobody is watching it live. If you cannot continue "
+    "well without a decision or information from the user, call ask_user. The run "
+    "pauses, the user is told, and it continues right here with their answer and "
+    "everything you have done so far. Use ask_user for questions rather than "
+    "sending them a message, and only ask when it really matters."
+)
+
 # A text-only reply at least this long, given after a plan nudge already fired,
 # is accepted as the answer instead of nudging again.
 SUBSTANTIVE_REPLY_CHARS = 200
@@ -351,6 +361,22 @@ class MessageHandler:
 
             # Step 1d: Check for suspended execution (ask_user resumption)
             suspended_result = self._get_suspended_state(conv_id)
+            if suspended_result and channel == "system":
+                # A scheduled prompt is never an answer: leave the question
+                # open in its own conversation and run this one in a new one.
+                # Later runs for the same contact pick the newest conversation.
+                waiting_id = conv_id
+                conv_id = str(uuid4())
+                self.conversation_service.conversation_repo.create(
+                    conversation_id=conv_id,
+                    channel=channel,
+                    contact_identifier=contact_identifier,
+                )
+                suspended_result = None
+                logger.info(
+                    f"Conversation {waiting_id} is waiting for an answer; "
+                    f"scheduled run continues in {conv_id}"
+                )
             if suspended_result:
                 suspended_state, suspended_msg_id = suspended_result
                 logger.info("Resuming suspended execution with user's answer")
@@ -506,6 +532,10 @@ class MessageHandler:
                 f"(plan_steps={plan.total if plan else 0}, "
                 f"skills={len(selected_skills)}, pinned={pinned_skill})"
             )
+
+        if channel == "system" and self._cfg_bool("automations.ask_user", False):
+            tools = self._with_ask_user(tools)
+            system_prompt += SCHEDULED_ASK_USER_NOTE
 
         # Re-insert tool results from recent turns so follow-ups needn't re-fetch them.
         history_messages, recall_index = self._prepare_tool_replay(
@@ -1037,6 +1067,14 @@ class MessageHandler:
                 tools.append(pt)
         return tools
 
+    def _with_ask_user(self, tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Add the ask_user tool to *tools* if it isn't there yet."""
+        if any(t["function"]["name"] == "ask_user" for t in tools):
+            return tools
+        all_tools = self.tool_registry.get_openai_tools(self.settings_service.settings_repo)
+        ask = [t for t in all_tools if t["function"]["name"] == "ask_user"]
+        return [*tools, *ask]
+
     def _get_tools_from_skills(self, skills: List[Skill]) -> List[Dict[str, Any]]:
         """Get tool definitions from selected skills in OpenAI format."""
         # Collect all unique tool names from skills
@@ -1149,6 +1187,9 @@ class MessageHandler:
         # Slack thread to post progress updates into.  None means post at the
         # channel root (or the channel has no notion of threads).
         reply_thread_ts: Optional[str] = None,
+        # Channel the run first started on; kept across ask_user pauses (a
+        # scheduled run is still one after the user answers from the web UI).
+        origin_channel: Optional[str] = None,
         # Resume parameters — when provided, skip message-building preamble
         resume_messages: Optional[List[Dict[str, Any]]] = None,
         resume_iteration: int = 0,
@@ -2014,6 +2055,7 @@ class MessageHandler:
                     "plan_nudge_count": plan_nudge_count,
                     "trace_start": trace_start,
                     "ask_user_tool_call_id": ask_user_pending["tool_call_id"],
+                    "origin_channel": origin_channel or channel,
                 }
                 question = ask_user_pending["arguments"].get("question", "")
                 options = ask_user_pending["arguments"].get("options")
@@ -2356,6 +2398,9 @@ class MessageHandler:
         tools = self._get_tools_from_skills(selected_skills)
         if plan and plan.total > 1:
             tools = self._inject_plan_tools(tools)
+        origin_channel = suspended_state.get("origin_channel") or channel
+        if origin_channel == "system" and self._cfg_bool("automations.ask_user", False):
+            tools = self._with_ask_user(tools)
         llm_client = self._get_llm_client()
 
         # Continue the conversation loop from where we left off
@@ -2374,6 +2419,7 @@ class MessageHandler:
             resume_tools_executed=tools_executed,
             resume_tool_call_history=tool_call_history,
             resume_plan_nudge_count=plan_nudge_count,
+            origin_channel=origin_channel,
             resume_trace_start=suspended_state.get("trace_start", 0),
             event_callback=event_callback,
         )
