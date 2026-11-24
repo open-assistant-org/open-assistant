@@ -599,6 +599,22 @@ SETTING_DEFINITIONS: Dict[str, SettingDefinition] = {
         display_order=15,
         ui_widget="toggle",
     ),
+    "automations.ask_user": SettingDefinition(
+        key="automations.ask_user",
+        display_name="Scheduled tasks can ask you questions",
+        description=(
+            "When on, scheduled tasks can pause and ask you a question. The run waits in "
+            "its own conversation; open that conversation and answer to let it continue "
+            "with everything it has done so far. When off, a scheduled task that plans "
+            "several steps can still pause with a question."
+        ),
+        value_type=SettingValueType.BOOL,
+        category=ConfigCategory.APPLICATION,
+        default_value=False,
+        env_var_name="AUTOMATIONS_ASK_USER",
+        display_order=50,
+        ui_widget="toggle",
+    ),
     # ========================================================================
     # GOOGLE INTEGRATION (Gmail, Calendar, etc.)
     # ========================================================================
