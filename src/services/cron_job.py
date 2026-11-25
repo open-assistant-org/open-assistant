@@ -679,7 +679,7 @@ class CronJobService:
         self,
         name: str,
         cron_expression: str,
-        job_type: str,
+        job_type: Optional[str] = None,
         description: Optional[str] = None,
         tool_name: Optional[str] = None,
         tool_parameters: Optional[Dict[str, Any]] = None,
@@ -697,7 +697,7 @@ class CronJobService:
         Args:
             name: Human-readable job name
             cron_expression: Cron expression
-            job_type: 'tool' or 'prompt'
+            job_type: 'tool' or 'prompt'; optional when steps are provided (defaults to 'prompt')
             description: Optional description
             tool_name: Tool to execute (legacy single-tool jobs)
             tool_parameters: Tool parameters (legacy)
@@ -719,6 +719,10 @@ class CronJobService:
                 steps = json.loads(steps)
             except (json.JSONDecodeError, TypeError):
                 steps = None
+
+        if steps and not job_type:
+            # Steps take precedence at execution time; job_type is only stored.
+            job_type = "prompt"
 
         if not steps:
             # Legacy validation
