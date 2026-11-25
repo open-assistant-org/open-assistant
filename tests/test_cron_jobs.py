@@ -778,3 +778,38 @@ class TestRecipeSkipGuards:
         )
         assert step.skip_remaining_if_empty is True
         assert step.skip_remaining_if_output_contains == "NO_NEW_FACTS"
+
+
+class TestJobTypeOptionalWithSteps:
+    """job_type is optional when steps are provided."""
+
+    STEPS = [{"order": 1, "description": "x", "prompt_template": "hi"}]
+
+    def test_request_accepts_steps_without_job_type(self):
+        from src.models.cron_jobs import CreateCronJobRequest, CronJobCreateAPI
+
+        for model in (CreateCronJobRequest, CronJobCreateAPI):
+            req = model(name="a", cron_expression="0 9 * * MON", steps=self.STEPS)
+            assert req.job_type is None
+
+    def test_request_requires_job_type_without_steps(self):
+        import pytest
+        from pydantic import ValidationError
+
+        from src.models.cron_jobs import CreateCronJobRequest, CronJobCreateAPI
+
+        for model in (CreateCronJobRequest, CronJobCreateAPI):
+            with pytest.raises(ValidationError):
+                model(name="a", cron_expression="0 9 * * MON", prompt="hi")
+
+    def test_service_defaults_job_type_for_recipe(self, clean_temp_db):
+        service = CronJobService(CronJobRepository(clean_temp_db))
+        job = service.create_job(name="a", cron_expression="0 9 * * MON", steps=self.STEPS)
+        assert job["job_type"] == "prompt"
+
+    def test_service_still_requires_job_type_without_steps(self, clean_temp_db):
+        import pytest
+
+        service = CronJobService(CronJobRepository(clean_temp_db))
+        with pytest.raises(ValueError):
+            service.create_job(name="a", cron_expression="0 9 * * MON", prompt="hi")

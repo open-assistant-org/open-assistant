@@ -2,7 +2,7 @@
 
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 # --- Recipe Step ---
 
@@ -58,8 +58,12 @@ class CreateCronJobRequest(BaseModel):
         ...,
         description="Cron schedule expression (e.g., '0 9 * * MON' for Monday 9am, '*/30 * * * *' for every 30 minutes)",
     )
-    job_type: str = Field(
-        ..., description="Job type: 'tool' for direct tool execution, 'prompt' for agent processing"
+    job_type: Optional[str] = Field(
+        None,
+        description=(
+            "Job type: 'tool' for direct tool execution, 'prompt' for agent processing. "
+            "Required unless steps are provided (steps take precedence)."
+        ),
     )
     description: Optional[str] = Field(None, description="Optional job description")
     tool_name: Optional[str] = Field(
@@ -85,6 +89,12 @@ class CreateCronJobRequest(BaseModel):
         None,
         description="Optional override for the delivery address: phone number for whatsapp (e.g. '+1234567890') or Slack channel ID (e.g. 'C1234567'). When omitted, the configured default is used automatically.",
     )
+
+    @model_validator(mode="after")
+    def _job_type_required_without_steps(self):
+        if not self.steps and not self.job_type:
+            raise ValueError("job_type is required when steps are not provided")
+        return self
 
 
 class UpdateCronJobRequest(BaseModel):
@@ -139,7 +149,9 @@ class CronJobCreateAPI(BaseModel):
 
     name: str = Field(..., description="Human-readable job name")
     cron_expression: str = Field(..., description="Cron schedule expression")
-    job_type: str = Field(..., description="'tool' or 'prompt'")
+    job_type: Optional[str] = Field(
+        None, description="'tool' or 'prompt'. Required unless steps are provided."
+    )
     description: Optional[str] = None
     tool_name: Optional[str] = None
     tool_parameters: Optional[Dict[str, Any]] = None
@@ -147,6 +159,12 @@ class CronJobCreateAPI(BaseModel):
     steps: Optional[List[RecipeStep]] = None
     delivery_channel: Optional[str] = None
     delivery_contact_identifier: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _job_type_required_without_steps(self):
+        if not self.steps and not self.job_type:
+            raise ValueError("job_type is required when steps are not provided")
+        return self
 
 
 class CronJobUpdateAPI(BaseModel):
