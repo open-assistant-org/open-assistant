@@ -79,6 +79,30 @@ SCHEDULED_ASK_USER_NOTE = (
     "sending them a message, and only ask when it really matters."
 )
 
+# Tools that create or change scheduled tasks: when one is offered, the assistant
+# is writing prompts that a scheduled run will follow.
+SCHEDULING_TOOLS = frozenset({"create_cron_job", "update_cron_job", "schedule_task"})
+
+# Added to the system prompt of chats that can create or change scheduled tasks,
+# when scheduled runs may ask questions. Without it the assistant doesn't know a run
+# can pause, and writes "reply with the question" steps the user never sees.
+SCHEDULING_ASK_USER_NOTE = (
+    "\n\n## Scheduled tasks that need the user's input\n"
+    "Scheduled runs (cron jobs and one-time tasks) can pause and ask the user a "
+    "question with ask_user. The run waits in its own conversation (the hosted chat "
+    "app lists it and notifies the user), and their answer resumes it with "
+    "everything it did so far. A plain reply from a scheduled run just stays in that "
+    "run's conversation: nobody is told about it.\n"
+    "When a job or task needs a decision or information from the user:\n"
+    "- In the step or prompt that needs the input, tell the run to call ask_user "
+    "with the question (and options, if it has some), then to continue with the "
+    "answer. Never tell it not to call ask_user.\n"
+    "- Leave delivery_channel empty. There is no 'webui' delivery channel; only a "
+    "run without one is listed in the chat app for the user to answer.\n"
+    "- In a recipe, make the step that asks the last step: each step runs in its "
+    "own conversation and later steps do not wait for the answer."
+)
+
 # A text-only reply at least this long, given after a plan nudge already fired,
 # is accepted as the answer instead of nudging again.
 SUBSTANTIVE_REPLY_CHARS = 200
@@ -533,9 +557,7 @@ class MessageHandler:
                 f"skills={len(selected_skills)}, pinned={pinned_skill})"
             )
 
-        if channel == "system" and self._cfg_bool("automations.ask_user", False):
-            tools = self._with_ask_user(tools)
-            system_prompt += SCHEDULED_ASK_USER_NOTE
+        tools, system_prompt = self._scheduled_questions(channel, tools, system_prompt)
 
         # Re-insert tool results from recent turns so follow-ups needn't re-fetch them.
         history_messages, recall_index = self._prepare_tool_replay(
@@ -1066,6 +1088,19 @@ class MessageHandler:
             if pt["function"]["name"] not in existing_names:
                 tools.append(pt)
         return tools
+
+    def _scheduled_questions(
+        self, channel: str, tools: List[Dict[str, Any]], system_prompt: str
+    ) -> tuple[List[Dict[str, Any]], str]:
+        """With ``automations.ask_user`` on: scheduled runs get ask_user, and chats
+        that can create or change scheduled tasks learn how those runs ask."""
+        if not self._cfg_bool("automations.ask_user", False):
+            return tools, system_prompt
+        if channel == "system":
+            return self._with_ask_user(tools), system_prompt + SCHEDULED_ASK_USER_NOTE
+        if any(t["function"]["name"] in SCHEDULING_TOOLS for t in tools):
+            return tools, system_prompt + SCHEDULING_ASK_USER_NOTE
+        return tools, system_prompt
 
     def _with_ask_user(self, tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Add the ask_user tool to *tools* if it isn't there yet."""

@@ -146,3 +146,36 @@ async def test_resumed_chat_keeps_its_own_channel():
     names, origin = await _resume_tools(handler, {"messages": []})
     assert "ask_user" not in names
     assert origin == "webui"
+
+
+CREATE_JOB = {"type": "function", "function": {"name": "create_cron_job", "parameters": {}}}
+
+
+def test_scheduled_run_gets_ask_user_and_its_note():
+    from src.services.message_handler import SCHEDULED_ASK_USER_NOTE
+
+    handler = _make_handler(ask_user_setting=True)
+    tools, prompt = handler._scheduled_questions("system", [OTHER], "base")
+    assert "ask_user" in [t["function"]["name"] for t in tools]
+    assert prompt == "base" + SCHEDULED_ASK_USER_NOTE
+
+
+def test_chat_that_schedules_learns_runs_can_ask():
+    from src.services.message_handler import SCHEDULING_ASK_USER_NOTE
+
+    handler = _make_handler(ask_user_setting=True)
+    tools, prompt = handler._scheduled_questions("webui", [OTHER, CREATE_JOB], "base")
+    assert tools == [OTHER, CREATE_JOB]
+    assert prompt == "base" + SCHEDULING_ASK_USER_NOTE
+
+
+def test_chat_without_scheduling_tools_is_left_alone():
+    handler = _make_handler(ask_user_setting=True)
+    assert handler._scheduled_questions("webui", [OTHER], "base") == ([OTHER], "base")
+
+
+@pytest.mark.parametrize("channel", ["system", "webui"])
+def test_nothing_added_without_the_setting(channel):
+    handler = _make_handler(ask_user_setting=False)
+    tools = [OTHER, CREATE_JOB]
+    assert handler._scheduled_questions(channel, tools, "base") == (tools, "base")

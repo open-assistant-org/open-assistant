@@ -34,7 +34,7 @@ class ScheduleTaskRequest(BaseModel):
     )
     delivery_channel: Optional[str] = Field(
         None,
-        description="Messaging channel to deliver the result to the user: 'whatsapp' or 'slack'. If omitted, the task runs silently.",
+        description="Messaging channel to deliver the result to the user: 'whatsapp' or 'slack' (there is no 'webui' channel). If omitted, the task runs silently.",
     )
     delivery_contact_identifier: Optional[str] = Field(
         None,

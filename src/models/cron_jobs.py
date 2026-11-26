@@ -83,7 +83,7 @@ class CreateCronJobRequest(BaseModel):
     )
     delivery_channel: Optional[str] = Field(
         None,
-        description="Messaging channel to deliver the LLM response to the user: 'whatsapp' or 'slack'. If omitted, the job runs silently (system execution only).",
+        description="Messaging channel to deliver the LLM response to the user: 'whatsapp' or 'slack' (there is no 'webui' channel). If omitted, the job runs silently (system execution only).",
     )
     delivery_contact_identifier: Optional[str] = Field(
         None,
