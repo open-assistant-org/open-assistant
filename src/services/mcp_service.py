@@ -3,8 +3,10 @@
 Supports remote MCP servers reached over Streamable HTTP with three auth modes:
 - ``none``: no authentication
 - ``header``: static auth headers (values stored encrypted)
-- ``oauth2``: OAuth 2.1 PKCE authorization-code flow with dynamic client
-  registration (RFC 7591 / RFC 9728). Tokens stored encrypted.
+- ``oauth2``: OAuth 2.1 PKCE authorization-code flow. Server discovery follows
+  RFC 9728 / RFC 8414 (with OpenID Connect and legacy fallbacks); the client is
+  either registered dynamically (RFC 7591) or pre-registered by the user
+  (client ID + optional secret). Tokens and the secret are stored encrypted.
 
 Design notes
 ------------
@@ -26,10 +28,12 @@ import asyncio
 import base64
 import hashlib
 import json
+import re
 import secrets
 import time
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
+from urllib.parse import urlencode, urlsplit
 
 import httpx
 
@@ -264,38 +268,185 @@ class McpService(BaseService):
     # OAuth 2.1 helpers
     # ------------------------------------------------------------------
 
-    async def _discover_oauth_metadata(self, url: str) -> McpOAuthMetadata:
-        """Discover OAuth server metadata via RFC 9728 + RFC 8414.
+    @staticmethod
+    async def _get_json(
+        client: httpx.AsyncClient, url: str, failures: List[str]
+    ) -> Optional[Dict[str, Any]]:
+        """GET ``url`` and return its JSON object, or None if it is absent.
 
-        1. GET ``{url}/.well-known/oauth-protected-resource`` → authorization_servers
-        2. GET ``{as_url}/.well-known/oauth-authorization-server`` → endpoints
+        Every miss is recorded in ``failures`` (an HTTP status, or the error) so
+        callers can tell "not published" (404) from "blocked / broken" (403, 5xx,
+        network errors) instead of guessing endpoints.
         """
-        base = url.rstrip("/")
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            # Step 1: protected-resource metadata
-            pr_resp = await client.get(f"{base}/.well-known/oauth-protected-resource")
-            pr_resp.raise_for_status()
-            pr_data = pr_resp.json()
+        try:
+            resp = await client.get(url)
+        except httpx.HTTPError as e:
+            failures.append(f"{url}: {type(e).__name__}: {e}")
+            return None
+        if resp.status_code != 200:
+            failures.append(f"{url}: HTTP {resp.status_code}")
+            return None
+        try:
+            data = resp.json()
+        except ValueError:
+            failures.append(f"{url}: not JSON")
+            return None
+        return data if isinstance(data, dict) else None
 
-            auth_servers = pr_data.get("authorization_servers") or []
-            if not auth_servers:
-                raise ValueError(
-                    f"MCP server at {url} returned no authorization_servers in its "
-                    "protected-resource metadata"
-                )
-            as_url = auth_servers[0].rstrip("/")
+    @staticmethod
+    async def _resource_metadata_hint(client: httpx.AsyncClient, url: str) -> Optional[str]:
+        """Probe the MCP endpoint unauthenticated and read ``resource_metadata``
+        from its ``WWW-Authenticate`` challenge (RFC 9728 §5.1), if any."""
+        try:
+            resp = await client.post(
+                url,
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "initialize",
+                    "params": {
+                        "protocolVersion": "2025-03-26",
+                        "capabilities": {},
+                        "clientInfo": {"name": "Open Assistant", "version": "0"},
+                    },
+                },
+                headers={"Accept": "application/json, text/event-stream"},
+            )
+        except Exception:
+            return None
+        if resp.status_code != 401:
+            return None
+        match = re.search(
+            r'resource_metadata="?([^",\s]+)', resp.headers.get("www-authenticate", "")
+        )
+        return match.group(1) if match else None
+
+    async def _discover_oauth_metadata(self, url: str) -> McpOAuthMetadata:
+        """Discover OAuth server metadata for an MCP server.
+
+        Protected-resource metadata (RFC 9728), in order: the ``resource_metadata``
+        URL from a 401 challenge, ``/.well-known/oauth-protected-resource`` with the
+        endpoint path inserted, then at the origin root. Authorization-server
+        metadata: RFC 8414 then OpenID Connect discovery. Servers publishing
+        neither fall back to the legacy ``/authorize`` ``/token`` ``/register``
+        endpoints on the MCP origin.
+        """
+        parts = urlsplit(url)
+        origin = f"{parts.scheme}://{parts.netloc}"
+        path = parts.path.rstrip("/")
+        resource = url.rstrip("/")
+
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            # Step 1: protected-resource metadata → authorization server
+            candidates: List[str] = []
+            hint = await self._resource_metadata_hint(client, url)
+            if hint:
+                candidates.append(hint)
+            if path:
+                candidates.append(f"{origin}/.well-known/oauth-protected-resource{path}")
+            candidates.append(f"{origin}/.well-known/oauth-protected-resource")
+
+            as_url = origin
+            found_resource_metadata = False
+            failures: List[str] = []
+            for candidate in candidates:
+                pr_data = await self._get_json(client, candidate, failures)
+                if not pr_data:
+                    continue
+                auth_servers = pr_data.get("authorization_servers") or []
+                if not auth_servers:
+                    continue
+                as_url = str(auth_servers[0]).rstrip("/")
+                resource = str(pr_data.get("resource") or resource)
+                found_resource_metadata = True
+                break
 
             # Step 2: authorization-server metadata
-            as_resp = await client.get(f"{as_url}/.well-known/oauth-authorization-server")
-            as_resp.raise_for_status()
-            as_data = as_resp.json()
+            as_parts = urlsplit(as_url)
+            as_origin = f"{as_parts.scheme}://{as_parts.netloc}"
+            as_path = as_parts.path.rstrip("/")
+            as_candidates = [
+                f"{as_origin}/.well-known/oauth-authorization-server{as_path}",
+                f"{as_origin}/.well-known/openid-configuration{as_path}",
+            ]
+            if as_path:
+                as_candidates.append(f"{as_url}/.well-known/openid-configuration")
+
+            as_data: Optional[Dict[str, Any]] = None
+            for candidate in as_candidates:
+                as_data = await self._get_json(client, candidate, failures)
+                if (
+                    as_data
+                    and as_data.get("authorization_endpoint")
+                    and as_data.get("token_endpoint")
+                ):
+                    break
+                as_data = None
+
+        if as_data is None:
+            # Only assume the legacy endpoints when metadata is genuinely absent
+            # (404/405/410); a 403, 5xx or network error means something is wrong
+            # and guessing endpoints would just hide it.
+            absent = all(f.endswith(("HTTP 404", "HTTP 405", "HTTP 410")) for f in failures)
+            if found_resource_metadata or not absent:
+                raise ValueError(
+                    f"Could not discover OAuth metadata for {url}: " + "; ".join(failures[-3:])
+                )
+            # Legacy fallback (MCP 2025-03-26): fixed endpoints on the MCP origin.
+            return McpOAuthMetadata(
+                authorization_endpoint=f"{origin}/authorize",
+                token_endpoint=f"{origin}/token",
+                registration_endpoint=f"{origin}/register",
+                resource=resource,
+            )
 
         return McpOAuthMetadata(
             authorization_endpoint=as_data["authorization_endpoint"],
             token_endpoint=as_data["token_endpoint"],
             registration_endpoint=as_data.get("registration_endpoint"),
             scopes_supported=as_data.get("scopes_supported") or [],
+            token_endpoint_auth_methods_supported=(
+                as_data.get("token_endpoint_auth_methods_supported") or []
+            ),
+            resource=resource,
         )
+
+    @staticmethod
+    def _oauth_resource(cfg: McpServerConfig) -> str:
+        """RFC 8707 resource indicator for this server's tokens."""
+        if cfg.oauth_metadata and cfg.oauth_metadata.resource:
+            return cfg.oauth_metadata.resource
+        return cfg.url.rstrip("/")
+
+    async def _token_request(
+        self, cfg: McpServerConfig, oauth_data: Dict[str, Any], payload: Dict[str, str]
+    ) -> Dict[str, Any]:
+        """POST to the token endpoint, authenticating as a confidential client
+        when a client secret is stored. Returns the decoded JSON response."""
+        assert cfg.oauth_metadata is not None
+        body = {**payload, "resource": self._oauth_resource(cfg)}
+        kwargs: Dict[str, Any] = {}
+        secret = oauth_data.get("client_secret")
+        if secret:
+            methods = cfg.oauth_metadata.token_endpoint_auth_methods_supported
+            if methods and "client_secret_basic" not in methods and "client_secret_post" in methods:
+                body["client_secret"] = secret
+            else:
+                body.pop("client_id", None)
+                kwargs["auth"] = (payload["client_id"], secret)
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                cfg.oauth_metadata.token_endpoint,
+                data=body,
+                headers={
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Accept": "application/json",
+                },
+                **kwargs,
+            )
+            resp.raise_for_status()
+            return resp.json()
 
     async def _register_oauth_client(
         self, server_id: str, metadata: McpOAuthMetadata, redirect_uri: str
@@ -304,7 +455,8 @@ class McpService(BaseService):
         if not metadata.registration_endpoint:
             raise ValueError(
                 f"MCP server '{server_id}' does not support dynamic client registration "
-                "(no registration_endpoint in OAuth metadata)"
+                "(no registration_endpoint in OAuth metadata). Register an OAuth app with the "
+                "provider and supply its client ID (and secret) instead."
             )
         payload = {
             "client_name": "Open Assistant",
@@ -351,13 +503,23 @@ class McpService(BaseService):
             self._configs[server_id] = cfg
             self._save_config(cfg)
 
-        # Dynamic client registration — get or (re-)register client_id.
+        # Client: a pre-registered one wins; otherwise use dynamic registration.
+        # A dynamically registered client is tied to the redirect URI it was
+        # registered with, so register again when the callback origin changed.
         oauth_data = self._load_oauth_data(server_id)
-        client_id = oauth_data.get("client_id")
-        if not client_id:
-            client_id = await self._register_oauth_client(server_id, metadata, redirect_uri)
-            oauth_data["client_id"] = client_id
-            self._save_oauth_data(server_id, oauth_data)
+        if cfg.oauth_client_id:
+            client_id = cfg.oauth_client_id
+            if oauth_data.get("client_id") != client_id:
+                oauth_data["client_id"] = client_id
+                self._save_oauth_data(server_id, oauth_data)
+        else:
+            client_id = oauth_data.get("client_id")
+            registered_for = oauth_data.get("registered_redirect_uri", redirect_uri)
+            if not client_id or registered_for != redirect_uri:
+                client_id = await self._register_oauth_client(server_id, metadata, redirect_uri)
+                oauth_data["client_id"] = client_id
+                oauth_data["registered_redirect_uri"] = redirect_uri
+                self._save_oauth_data(server_id, oauth_data)
 
         # PKCE
         code_verifier = secrets.token_urlsafe(64)
@@ -379,11 +541,10 @@ class McpService(BaseService):
             "state": state_token,
             "code_challenge": code_challenge,
             "code_challenge_method": "S256",
+            "resource": self._oauth_resource(cfg),
         }
         if scopes:
             params["scope"] = scopes
-
-        from urllib.parse import urlencode
 
         auth_url = f"{metadata.authorization_endpoint}?{urlencode(params)}"
         return McpOAuthStartResponse(auth_url=auth_url, state=state_token)
@@ -403,7 +564,6 @@ class McpService(BaseService):
         if not cfg or not cfg.oauth_metadata:
             raise ValueError(f"MCP server '{server_id}' has no OAuth metadata")
 
-        token_endpoint = cfg.oauth_metadata.token_endpoint
         payload = {
             "grant_type": "authorization_code",
             "code": code,
@@ -411,15 +571,7 @@ class McpService(BaseService):
             "client_id": state_data["client_id"],
             "code_verifier": state_data["code_verifier"],
         }
-
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(
-                token_endpoint,
-                data=payload,
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-            )
-            resp.raise_for_status()
-            token_data = resp.json()
+        token_data = await self._token_request(cfg, self._load_oauth_data(server_id), payload)
 
         access_token = token_data.get("access_token")
         if not access_token:
@@ -473,14 +625,7 @@ class McpService(BaseService):
             "client_id": client_id,
         }
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(
-                cfg.oauth_metadata.token_endpoint,
-                data=payload,
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-            )
-            resp.raise_for_status()
-            token_data = resp.json()
+        token_data = await self._token_request(cfg, oauth_data, payload)
 
         new_access = token_data.get("access_token")
         if not new_access:
@@ -672,6 +817,11 @@ class McpService(BaseService):
                     header_names=[h.name for h in cfg.auth_headers],
                     oauth_scopes=cfg.oauth_scopes,
                     oauth_authorized=self._is_oauth_authorized(server_id),
+                    oauth_client_id=cfg.oauth_client_id,
+                    oauth_has_client_secret=bool(
+                        cfg.auth_type == "oauth2"
+                        and self._load_oauth_data(server_id).get("client_secret")
+                    ),
                     enabled=self._is_enabled(server_id),
                     has_credentials=bool(self.credentials_repo.get(f"mcp_{server_id}")),
                     intent_keywords=cfg.intent_keywords,
@@ -698,6 +848,12 @@ class McpService(BaseService):
         """
         if request.id in self._configs:
             raise ValueError(f"MCP server id '{request.id}' already exists")
+        client_id = (request.oauth_client_id or "").strip() or None
+        client_secret = request.oauth_client_secret or None
+        if (client_id or client_secret) and request.auth_type != "oauth2":
+            raise ValueError("OAuth client credentials only apply to auth_type 'oauth2'")
+        if client_secret and not client_id:
+            raise ValueError("An OAuth client secret requires a client ID")
 
         cfg = McpServerConfig(
             id=request.id,
@@ -708,11 +864,16 @@ class McpService(BaseService):
             auth_type=request.auth_type,
             auth_headers=[{"name": h.name} for h in request.auth_headers],
             oauth_scopes=request.oauth_scopes,
+            oauth_client_id=client_id,
             intent_keywords=[k.strip() for k in request.intent_keywords if k.strip()],
             backstory=request.backstory or None,
         )
 
         if request.auth_type == "oauth2":
+            if client_secret:
+                self._save_oauth_data(
+                    request.id, {"client_id": client_id, "client_secret": client_secret}
+                )
             # Discover OAuth metadata now (validates the URL is an MCP OAuth server).
             try:
                 oauth_meta = await self._discover_oauth_metadata(request.url)
@@ -787,11 +948,47 @@ class McpService(BaseService):
         self._sync_agent_row(cfg)
         return cfg
 
+    def _save_oauth_client(self, cfg: McpServerConfig, request: McpCredentialsRequest) -> None:
+        """Switch an OAuth server to a pre-registered client (or back to dynamic
+        registration). Any change drops stored tokens, forcing re-authorization."""
+        if cfg.auth_type != "oauth2":
+            raise ValueError("OAuth client credentials only apply to OAuth servers")
+        new_id = cfg.oauth_client_id
+        if request.oauth_client_id is not None:
+            new_id = request.oauth_client_id.strip() or None
+        new_secret = request.oauth_client_secret or None
+        if new_secret and not new_id:
+            raise ValueError("An OAuth client secret requires a client ID")
+
+        old_oauth = self._load_oauth_data(cfg.id)
+        id_changed = new_id != cfg.oauth_client_id
+        if not id_changed and not new_secret:
+            return
+
+        oauth: Dict[str, Any] = {}
+        if new_id:
+            oauth["client_id"] = new_id
+            secret = new_secret or (None if id_changed else old_oauth.get("client_secret"))
+            if secret:
+                oauth["client_secret"] = secret
+        self._save_oauth_data(cfg.id, oauth)
+
+        if id_changed:
+            data = cfg.model_dump()
+            data["oauth_client_id"] = new_id
+            cfg = McpServerConfig.model_validate(data)
+            self._configs[cfg.id] = cfg
+            self._save_config(cfg)
+
     def save_credentials(self, server_id: str, request: McpCredentialsRequest) -> None:
-        """Update stored auth header values."""
+        """Update stored auth header values and/or the OAuth client."""
         cfg = self._configs.get(server_id)
         if not cfg:
             raise KeyError(f"MCP server '{server_id}' not found")
+
+        if request.oauth_client_id is not None or request.oauth_client_secret:
+            self._save_oauth_client(cfg, request)
+            cfg = self._configs[server_id]
 
         if request.headers:
             # Add any new header names to the config.

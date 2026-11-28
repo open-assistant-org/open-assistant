@@ -5,9 +5,9 @@ the LLM. Each server is added from **Settings → MCP Servers**, and you choose 
 **intent keyword** that activates the server's tools — the server behaves like a
 built-in "agent".
 
-This is **Phase 1**: remote servers over **Streamable HTTP**, authenticated with
-**static headers** (no OAuth yet). Local `stdio` servers and the MCP OAuth 2.1
-flow are planned for later phases.
+Servers are remote, over **Streamable HTTP**, and authenticate with **static
+headers**, **OAuth 2.1 (PKCE)**, or nothing. Local `stdio` servers are not
+supported.
 
 ## How it works
 
@@ -39,9 +39,32 @@ Header **values are stored encrypted** in the `service_credentials` table under
 to the config JSON — no secrets touch disk in plaintext. You can add or update
 header values later via `PUT /api/mcp/{id}/credentials`.
 
-> Servers that *require* the interactive MCP OAuth 2.1 handshake are **not**
-> supported in this version. Use a static token/header, or wait for the OAuth
-> phase.
+## Authentication (OAuth 2.1)
+
+Choose **OAuth 2.1 (PKCE)** when adding a server whose provider requires a
+browser sign-in. After adding it, click **Connect via OAuth**; tokens are stored
+encrypted and refreshed automatically.
+
+**Discovery** follows the MCP authorization spec: the server's
+`WWW-Authenticate` challenge or `/.well-known/oauth-protected-resource`
+(RFC 9728, path-aware) points to an authorization server, whose metadata is read
+from `/.well-known/oauth-authorization-server` or OpenID Connect discovery.
+Servers publishing neither fall back to `/authorize`, `/token`, `/register` on
+their own origin. Requests carry the RFC 8707 `resource` parameter.
+
+**The OAuth client** is obtained one of two ways:
+
+- **Dynamic registration (default)** — if the provider has a registration
+  endpoint, a client is registered automatically for this instance's callback URL
+  (and registered again if the instance is reached from a different origin).
+- **Your own OAuth app** — for providers without dynamic registration (GitHub,
+  many enterprise identity providers), register an app with the provider and
+  enter its **client ID** (and **client secret**, if it has one) when adding the
+  server, or later via `PUT /api/mcp/{id}/credentials`. Register this redirect
+  URI: `{your origin}{prefix}/api/mcp/oauth/callback`
+  (e.g. `https://example.com/api/mcp/oauth/callback`). The secret is stored
+  encrypted and never returned by the API. Changing the client clears stored
+  tokens; connect again afterwards.
 
 ## API
 
@@ -50,7 +73,9 @@ header values later via `PUT /api/mcp/{id}/credentials`.
 | `GET /api/mcp` | List configured servers |
 | `POST /api/mcp` | Add a server (connect + discover + wire agent row) |
 | `PUT /api/mcp/{id}/enable` | Enable/disable a server and its agent row |
-| `PUT /api/mcp/{id}/credentials` | Update stored (encrypted) header values |
+| `PUT /api/mcp/{id}/credentials` | Update stored (encrypted) header values, or the OAuth client ID/secret |
+| `POST /api/mcp/{id}/oauth/start` | Begin the OAuth flow (returns the authorization URL) |
+| `GET /api/mcp/oauth/callback` | OAuth redirect target (exchanges the code for tokens) |
 | `POST /api/mcp/{id}/refresh` | Re-discover tools |
 | `GET /api/mcp/{id}/test` | Test connectivity + report tool count |
 | `DELETE /api/mcp/{id}` | Remove server, tools, credentials, and agent row |

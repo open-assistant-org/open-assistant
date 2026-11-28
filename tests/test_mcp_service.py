@@ -618,3 +618,319 @@ async def test_update_server_unknown_raises(tmp_path):
     svc = _make_service(tmp_path)
     with pytest.raises(KeyError):
         await svc.update_server("missing", McpServerUpdateRequest(intent_keywords=["x"]))
+
+
+# ---------------------------------------------------------------------------
+# OAuth discovery, pre-registered clients, confidential clients
+# ---------------------------------------------------------------------------
+
+
+class _FakeHttp:
+    """httpx.AsyncClient stand-in routing GETs by URL and recording calls."""
+
+    def __init__(self, routes=None, post_response=None, probe_headers=None):
+        self.routes = routes or {}
+        self.post_response = post_response
+        self.probe_headers = probe_headers
+        self.gets = []
+        self.posts = []
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def get(self, url, **kwargs):
+        self.gets.append(url)
+        resp = MagicMock()
+        if url in self.routes:
+            resp.status_code = 200
+            resp.json.return_value = self.routes[url]
+        else:
+            resp.status_code = 404
+        return resp
+
+    async def post(self, url, **kwargs):
+        self.posts.append((url, kwargs))
+        if self.probe_headers is not None and url.endswith("/mcp"):
+            resp = MagicMock()
+            resp.status_code = 401
+            resp.headers = self.probe_headers
+            return resp
+        if self.post_response is not None:
+            return self.post_response
+        resp = MagicMock()
+        resp.status_code = 405
+        resp.headers = {}
+        return resp
+
+
+def _patch_http(fake):
+    return patch("src.services.mcp_service.httpx.AsyncClient", return_value=fake)
+
+
+_AS = {
+    "authorization_endpoint": "https://auth.example.com/authorize",
+    "token_endpoint": "https://auth.example.com/token",
+    "registration_endpoint": "https://auth.example.com/register",
+}
+
+
+@pytest.mark.asyncio
+async def test_discovery_uses_path_inserted_well_known(tmp_path):
+    """https://host/mcp is looked up at /.well-known/oauth-protected-resource/mcp."""
+    svc = _make_service(tmp_path)
+    fake = _FakeHttp(
+        routes={
+            "https://mcp.example.com/.well-known/oauth-protected-resource/mcp": {
+                "resource": "https://mcp.example.com/mcp",
+                "authorization_servers": ["https://auth.example.com"],
+            },
+            "https://auth.example.com/.well-known/oauth-authorization-server": _AS,
+        }
+    )
+    with _patch_http(fake):
+        meta = await svc._discover_oauth_metadata("https://mcp.example.com/mcp")
+    assert meta.token_endpoint == "https://auth.example.com/token"
+    assert meta.resource == "https://mcp.example.com/mcp"
+
+
+@pytest.mark.asyncio
+async def test_discovery_follows_www_authenticate_hint(tmp_path):
+    svc = _make_service(tmp_path)
+    hint = "https://mcp.example.com/custom/prm.json"
+    fake = _FakeHttp(
+        routes={
+            hint: {"authorization_servers": ["https://auth.example.com"]},
+            "https://auth.example.com/.well-known/oauth-authorization-server": _AS,
+        },
+        probe_headers={
+            "www-authenticate": f'Bearer error="invalid_token", resource_metadata="{hint}"'
+        },
+    )
+    with _patch_http(fake):
+        meta = await svc._discover_oauth_metadata("https://mcp.example.com/mcp")
+    assert fake.gets[0] == hint
+    assert meta.authorization_endpoint == "https://auth.example.com/authorize"
+
+
+@pytest.mark.asyncio
+async def test_discovery_falls_back_to_openid_configuration(tmp_path):
+    svc = _make_service(tmp_path)
+    fake = _FakeHttp(
+        routes={
+            "https://mcp.example.com/.well-known/oauth-protected-resource": {
+                "authorization_servers": ["https://auth.example.com/tenant1"]
+            },
+            "https://auth.example.com/.well-known/openid-configuration/tenant1": {
+                **_AS,
+                "token_endpoint_auth_methods_supported": ["client_secret_post"],
+            },
+        }
+    )
+    with _patch_http(fake):
+        meta = await svc._discover_oauth_metadata("https://mcp.example.com/mcp")
+    assert meta.token_endpoint_auth_methods_supported == ["client_secret_post"]
+
+
+@pytest.mark.asyncio
+async def test_discovery_legacy_fallback_when_nothing_published(tmp_path):
+    svc = _make_service(tmp_path)
+    with _patch_http(_FakeHttp()):
+        meta = await svc._discover_oauth_metadata("https://mcp.example.com/mcp")
+    assert meta.authorization_endpoint == "https://mcp.example.com/authorize"
+    assert meta.token_endpoint == "https://mcp.example.com/token"
+
+
+@pytest.mark.asyncio
+async def test_oauth_start_pre_registered_client_skips_dcr(tmp_path):
+    svc = _make_service(tmp_path)
+    cfg = _oauth_config().model_copy(update={"oauth_client_id": "gh_client"})
+    svc._configs[cfg.id] = cfg
+    with patch.object(svc, "_register_oauth_client", new=AsyncMock()) as dcr:
+        resp = await svc.oauth_start(cfg.id, "https://app.example.com/api/mcp/oauth/callback")
+    dcr.assert_not_called()
+    assert "client_id=gh_client" in resp.auth_url
+
+
+@pytest.mark.asyncio
+async def test_oauth_start_reregisters_when_redirect_uri_changes(tmp_path):
+    svc = _make_service(tmp_path)
+    cfg = _oauth_config()
+    svc._configs[cfg.id] = cfg
+    svc._save_oauth_data(
+        cfg.id,
+        {"client_id": "old", "registered_redirect_uri": "https://a.example.com/cb"},
+    )
+    with patch.object(svc, "_register_oauth_client", new=AsyncMock(return_value="new")) as dcr:
+        resp = await svc.oauth_start(cfg.id, "https://b.example.com/cb")
+        dcr.assert_awaited_once()
+        assert "client_id=new" in resp.auth_url
+        # Same redirect again: reuse the client.
+        await svc.oauth_start(cfg.id, "https://b.example.com/cb")
+        dcr.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_oauth_start_includes_resource(tmp_path):
+    svc = _make_service(tmp_path)
+    cfg = _oauth_config()
+    svc._configs[cfg.id] = cfg
+    svc._save_oauth_data(cfg.id, {"client_id": "c"})
+    resp = await svc.oauth_start(cfg.id, "https://app.example.com/cb")
+    assert "resource=https%3A%2F%2Fopenseo.example.com%2Fmcp" in resp.auth_url
+
+
+def _token_response(**body):
+    resp = MagicMock()
+    resp.raise_for_status = MagicMock()
+    resp.json.return_value = body
+    return resp
+
+
+@pytest.mark.asyncio
+async def test_client_secret_sent_as_basic_auth_on_exchange(tmp_path):
+    svc = _make_service(tmp_path)
+    cfg = _oauth_config().model_copy(update={"oauth_client_id": "cid"})
+    svc._configs[cfg.id] = cfg
+    svc._save_oauth_data(cfg.id, {"client_id": "cid", "client_secret": "s3cret"})
+    svc._oauth_states["st"] = {
+        "server_id": cfg.id,
+        "code_verifier": "v",
+        "redirect_uri": "https://app.example.com/cb",
+        "client_id": "cid",
+    }
+    fake = _FakeHttp(post_response=_token_response(access_token="tok", expires_in=60))
+    with _patch_http(fake):
+        await svc.oauth_callback("code", "st")
+
+    _, kwargs = fake.posts[0]
+    assert kwargs["auth"] == ("cid", "s3cret")
+    assert "client_secret" not in kwargs["data"]
+    assert kwargs["data"]["resource"] == "https://openseo.example.com/mcp"
+    assert kwargs["headers"]["Accept"] == "application/json"
+    # Secret survives the token write.
+    assert svc._load_oauth_data(cfg.id)["client_secret"] == "s3cret"
+
+
+@pytest.mark.asyncio
+async def test_client_secret_post_when_only_method_supported(tmp_path):
+    svc = _make_service(tmp_path)
+    cfg = _oauth_config()
+    cfg.oauth_metadata.token_endpoint_auth_methods_supported = ["client_secret_post"]
+    svc._configs[cfg.id] = cfg
+    svc._save_oauth_data(
+        cfg.id,
+        {
+            "access_token": "old",
+            "refresh_token": "r",
+            "client_id": "cid",
+            "client_secret": "s3cret",
+            "expires_at": time.time() - 10,
+        },
+    )
+    fake = _FakeHttp(post_response=_token_response(access_token="new", expires_in=60))
+    with _patch_http(fake):
+        await svc._ensure_oauth_token(cfg)
+
+    _, kwargs = fake.posts[0]
+    assert "auth" not in kwargs
+    assert kwargs["data"]["client_secret"] == "s3cret"
+    assert kwargs["data"]["client_id"] == "cid"
+    assert svc._load_oauth_data(cfg.id)["access_token"] == "new"
+
+
+@pytest.mark.asyncio
+async def test_add_server_stores_client_secret_encrypted_only(tmp_path):
+    agent_registry = MagicMock()
+    agent_registry.get_agent_by_name.return_value = None
+    svc = _make_service(tmp_path, agent_registry=agent_registry)
+    request = McpServerCreateRequest(
+        id="gh",
+        display_name="GitHub",
+        url="https://api.example.com/mcp/",
+        auth_type="oauth2",
+        oauth_client_id="gh_client",
+        oauth_client_secret="s3cret",
+    )
+    with patch.object(
+        svc, "_discover_oauth_metadata", new=AsyncMock(return_value=_oauth_config().oauth_metadata)
+    ):
+        cfg = await svc.add_server(request)
+
+    assert cfg.oauth_client_id == "gh_client"
+    assert svc._load_oauth_data("gh")["client_secret"] == "s3cret"
+    assert "s3cret" not in svc._config_path("gh").read_text()
+    item = next(i for i in svc.list_servers() if i.id == "gh")
+    assert item.oauth_client_id == "gh_client"
+    assert item.oauth_has_client_secret is True
+    assert "s3cret" not in item.model_dump_json()
+
+
+@pytest.mark.asyncio
+async def test_add_server_rejects_client_secret_without_id_or_wrong_auth(tmp_path):
+    svc = _make_service(tmp_path)
+    with pytest.raises(ValueError, match="requires a client ID"):
+        await svc.add_server(
+            McpServerCreateRequest(
+                id="a",
+                display_name="A",
+                url="https://x.example.com/mcp",
+                auth_type="oauth2",
+                oauth_client_secret="s",
+            )
+        )
+    with pytest.raises(ValueError, match="only apply"):
+        await svc.add_server(
+            McpServerCreateRequest(
+                id="b",
+                display_name="B",
+                url="https://x.example.com/mcp",
+                auth_type="header",
+                oauth_client_id="c",
+            )
+        )
+
+
+def test_save_credentials_changes_oauth_client_and_clears_tokens(tmp_path):
+    svc = _make_service(tmp_path)
+    cfg = _oauth_config()
+    svc._configs[cfg.id] = cfg
+    svc._save_oauth_data(cfg.id, {"client_id": "dyn", "access_token": "tok"})
+
+    svc.save_credentials(
+        cfg.id, McpCredentialsRequest(oauth_client_id="mine", oauth_client_secret="s3cret")
+    )
+    assert svc._configs[cfg.id].oauth_client_id == "mine"
+    stored = svc._load_oauth_data(cfg.id)
+    assert stored == {"client_id": "mine", "client_secret": "s3cret"}
+    assert not svc._is_oauth_authorized(cfg.id)
+
+    # Blank secret with the same ID keeps the stored one and the tokens.
+    svc._save_oauth_data(cfg.id, {**stored, "access_token": "tok2"})
+    svc.save_credentials(cfg.id, McpCredentialsRequest(oauth_client_id="mine"))
+    assert svc._load_oauth_data(cfg.id)["client_secret"] == "s3cret"
+    assert svc._is_oauth_authorized(cfg.id)
+
+    # Empty ID returns to dynamic registration and drops the secret.
+    svc.save_credentials(cfg.id, McpCredentialsRequest(oauth_client_id=""))
+    assert svc._configs[cfg.id].oauth_client_id is None
+    assert svc._load_oauth_data(cfg.id) == {}
+
+
+@pytest.mark.asyncio
+async def test_discovery_does_not_guess_endpoints_when_blocked(tmp_path):
+    """A 403 (or network error) must surface, not fall back to /authorize."""
+    svc = _make_service(tmp_path)
+
+    class _Blocked(_FakeHttp):
+        async def get(self, url, **kwargs):
+            self.gets.append(url)
+            resp = MagicMock()
+            resp.status_code = 403
+            return resp
+
+    with _patch_http(_Blocked()):
+        with pytest.raises(ValueError, match="Could not discover OAuth metadata"):
+            await svc._discover_oauth_metadata("https://mcp.example.com/mcp")

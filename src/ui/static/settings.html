@@ -576,6 +576,18 @@
                             After adding, you will need to click <strong>Connect via OAuth</strong> to authorize access.
                         </div>
                     </div>
+                    <div class="form-group">
+                        <label for="new-mcp-client-id">OAuth client ID <span class="text-muted">(optional)</span></label>
+                        <input type="text" id="new-mcp-client-id" class="form-input" autocomplete="off">
+                    </div>
+                    <div class="form-group">
+                        <label for="new-mcp-client-secret">OAuth client secret <span class="text-muted">(optional)</span></label>
+                        <input type="password" id="new-mcp-client-secret" class="form-input" autocomplete="new-password">
+                        <div class="form-hint">
+                            Only needed when the provider does not support automatic client registration (e.g. GitHub).
+                            Register this redirect URI with it: <code id="mcp-oauth-redirect-uri"></code>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
