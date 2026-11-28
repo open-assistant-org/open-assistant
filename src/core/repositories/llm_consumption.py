@@ -61,7 +61,9 @@ class LlmConsumptionRepository(BaseRepository):
         Returns:
             List of dicts with keys: year, month, tokens_input, tokens_output,
             tokens_total (ascending by year, month). The current month is always
-            present even when usage is zero.
+            present even when usage is zero. Failure-marker rows
+            (``metadata.failed``) are excluded — they carry zero billed tokens
+            and exist only for reconciliation visibility.
         """
         query = """
             SELECT
@@ -72,6 +74,7 @@ class LlmConsumptionRepository(BaseRepository):
                 COALESCE(SUM(total_tokens), 0) AS tokens_total
             FROM llm_consumption
             WHERE timestamp >= datetime('now', ? || ' months')
+              AND NOT COALESCE(json_extract(metadata, '$.failed'), 0)
             GROUP BY year, month
             ORDER BY year ASC, month ASC
         """

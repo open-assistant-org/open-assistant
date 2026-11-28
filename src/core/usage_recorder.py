@@ -29,6 +29,7 @@ from typing import Any, Dict, Optional
 from src.core.database import DatabaseManager
 from src.core.repositories.llm_consumption import LlmConsumptionRepository
 from src.utils.logger import get_logger
+from src.utils.token_counter import count_tokens
 
 logger = get_logger(__name__)
 
@@ -67,6 +68,33 @@ def _extract_usage(usage: Any) -> Dict[str, int]:
     }
 
 
+def _estimate_prompt_tokens(messages: Optional[list], model: str) -> int:
+    """Estimate the input size of an OpenAI-format ``messages`` payload.
+
+    Local tiktoken count (cl100k_base) — used only when the provider cannot
+    report usage, so the row is a flagged approximation rather than a silent 0.
+    Never raises; tolerant of dict/SimpleNamespace/mixed message shapes.
+    """
+    if not messages:
+        return 0
+    total = 0
+    for m in messages:
+        try:
+            content = m.get("content") if isinstance(m, dict) else getattr(m, "content", None)
+            if isinstance(content, str):
+                total += count_tokens(content, model)
+            elif isinstance(content, list):
+                for part in content:
+                    text = (
+                        part.get("text") if isinstance(part, dict) else getattr(part, "text", None)
+                    )
+                    if isinstance(text, str):
+                        total += count_tokens(text, model)
+        except Exception:  # noqa: BLE001 - estimation must never raise
+            continue
+    return total
+
+
 class UsageRecorder:
     """Records per-call LLM usage into the ``llm_consumption`` ledger.
 
@@ -96,11 +124,15 @@ class UsageRecorder:
         provider: str,
         model: str,
         conversation_id: Optional[str] = None,
+        messages: Optional[list] = None,
     ) -> None:
         """Persist one ``llm_consumption`` row for a single LLM call.
 
         Never raises — failures are logged so a billing glitch cannot break chat.
-        No-op when no database is wired (tests / standalone).
+        No-op when no database is wired (tests / standalone). When ``usage`` is
+        None but ``messages`` are supplied, the prompt side is estimated locally
+        (``count_tokens``) and flagged ``estimated`` so a provider that cannot
+        report streamed usage still leaves a visible input-cost row.
         """
         if cls._db is None:
             return
@@ -110,6 +142,10 @@ class UsageRecorder:
             metadata: Dict[str, Any] = {}
             if usage is None:
                 metadata["missing_usage"] = True
+                if messages:
+                    fields["prompt_tokens"] = _estimate_prompt_tokens(messages, model)
+                    fields["total_tokens"] = fields["prompt_tokens"]
+                    metadata["estimated"] = True
             else:
                 openrouter_cost = _attr(usage, "cost")
                 if openrouter_cost is not None:
@@ -128,6 +164,40 @@ class UsageRecorder:
             )
         except Exception as e:  # noqa: BLE001 - billing must not break chat
             logger.error(f"UsageRecorder failed to record usage: {e}")
+
+    @classmethod
+    def record_failure(
+        cls,
+        *,
+        provider: str,
+        model: str,
+        messages: Optional[list] = None,
+        conversation_id: Optional[str] = None,
+    ) -> None:
+        """Persist a marker row for an LLM call that failed before returning.
+
+        A request that times out or gets a 4xx/5xx never reaches ``record`` —
+        without this marker its (possibly partially billed) usage would be
+        silently absent from the ledger. The row carries zero billed tokens and
+        ``metadata.failed`` (excluded from billing totals; visible for
+        reconciliation). Never raises; no-op when no database is wired.
+        """
+        if cls._db is None:
+            return
+
+        try:
+            estimated = _estimate_prompt_tokens(messages, model) if messages else 0
+            LlmConsumptionRepository(cls._db).record(
+                provider=provider,
+                model=model,
+                prompt_tokens=0,
+                completion_tokens=0,
+                total_tokens=0,
+                conversation_id=conversation_id,
+                metadata={"failed": True, "estimated_prompt_tokens": estimated},
+            )
+        except Exception as e:  # noqa: BLE001 - billing must not break chat
+            logger.error(f"UsageRecorder failed to record failure marker: {e}")
 
 
 # Module-level singleton used by LLMClient.
