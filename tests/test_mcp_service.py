@@ -498,6 +498,16 @@ async def test_oauth_callback_stores_tokens(tmp_path):
     with patch("src.services.mcp_service.httpx.AsyncClient", return_value=mock_client):
         server_id = await svc.oauth_callback("auth_code_xyz", state_token)
 
+    _, kwargs = mock_client.post.call_args
+    assert mock_client.post.call_args.args[0] == "https://auth.example.com/token"
+    assert kwargs["data"] == {
+        "grant_type": "authorization_code",
+        "code": "auth_code_xyz",
+        "redirect_uri": "https://app.example.com/api/mcp/oauth/callback",
+        "client_id": "test_client",
+        "code_verifier": "verifier123",
+        "resource": "https://openseo.example.com/mcp",
+    }
     assert server_id == cfg.id
     stored = svc._load_oauth_data(cfg.id)
     assert stored["access_token"] == "acc_token"
@@ -934,3 +944,38 @@ async def test_discovery_does_not_guess_endpoints_when_blocked(tmp_path):
     with _patch_http(_Blocked()):
         with pytest.raises(ValueError, match="Could not discover OAuth metadata"):
             await svc._discover_oauth_metadata("https://mcp.example.com/mcp")
+
+
+@pytest.mark.asyncio
+async def test_discovery_errors_when_metadata_delegates_no_authorization_server(tmp_path):
+    """Published metadata with an empty authorization_servers is an error, not a guess."""
+    svc = _make_service(tmp_path)
+    fake = _FakeHttp(
+        routes={
+            "https://mcp.example.com/.well-known/oauth-protected-resource/mcp": {
+                "resource": "https://mcp.example.com/mcp",
+                "authorization_servers": [],
+            }
+        }
+    )
+    with _patch_http(fake):
+        with pytest.raises(ValueError, match="no authorization_servers"):
+            await svc._discover_oauth_metadata("https://mcp.example.com/mcp")
+
+
+@pytest.mark.asyncio
+async def test_non_bearer_token_type_is_logged(tmp_path):
+    svc = _make_service(tmp_path)
+    cfg = _oauth_config()
+    svc._configs[cfg.id] = cfg
+    svc._save_oauth_data(cfg.id, {"client_id": "c"})
+    svc._oauth_states["st"] = {
+        "server_id": cfg.id,
+        "code_verifier": "v",
+        "redirect_uri": "https://app.example.com/cb",
+        "client_id": "c",
+    }
+    fake = _FakeHttp(post_response=_token_response(access_token="t", token_type="mac"))
+    with _patch_http(fake), patch("src.services.mcp_service.logger") as log:
+        await svc.oauth_callback("code", "st")
+    assert any("'mac' token" in str(c.args[0]) for c in log.warning.call_args_list)

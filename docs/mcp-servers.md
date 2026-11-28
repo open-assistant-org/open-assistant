@@ -66,6 +66,10 @@ their own origin. Requests carry the RFC 8707 `resource` parameter.
   encrypted and never returned by the API. Changing the client clears stored
   tokens; connect again afterwards.
 
+The in-progress authorization state is kept in memory, so restarting the app between
+clicking **Connect via OAuth** and finishing sign-in shows "Unknown or expired OAuth
+state"; just connect again.
+
 ## API
 
 | Method & path | Purpose |

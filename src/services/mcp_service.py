@@ -355,6 +355,9 @@ class McpService(BaseService):
                     continue
                 auth_servers = pr_data.get("authorization_servers") or []
                 if not auth_servers:
+                    # Published but delegates nothing: a misconfiguration to report,
+                    # not "no metadata" (which would justify the legacy guess).
+                    failures.append(f"{candidate}: no authorization_servers")
                     continue
                 as_url = str(auth_servers[0]).rstrip("/")
                 resource = str(pr_data.get("resource") or resource)
@@ -387,10 +390,14 @@ class McpService(BaseService):
             # Only assume the legacy endpoints when metadata is genuinely absent
             # (404/405/410); a 403, 5xx or network error means something is wrong
             # and guessing endpoints would just hide it.
-            absent = all(f.endswith(("HTTP 404", "HTTP 405", "HTTP 410")) for f in failures)
+            missing = ("HTTP 404", "HTTP 405", "HTTP 410")
+            unusual = [f for f in failures if not f.endswith(missing)]
+            absent = bool(failures) and not unusual
             if found_resource_metadata or not absent:
+                # Lead with anything other than a plain "not found".
+                detail = unusual or failures
                 raise ValueError(
-                    f"Could not discover OAuth metadata for {url}: " + "; ".join(failures[-3:])
+                    f"Could not discover OAuth metadata for {url}: " + "; ".join(detail[-3:])
                 )
             # Legacy fallback (MCP 2025-03-26): fixed endpoints on the MCP origin.
             return McpOAuthMetadata(
@@ -410,6 +417,16 @@ class McpService(BaseService):
             ),
             resource=resource,
         )
+
+    @staticmethod
+    def _warn_if_not_bearer(server_id: str, token_data: Dict[str, Any]) -> None:
+        """Tokens are always sent as ``Authorization: Bearer``; flag anything else."""
+        token_type = token_data.get("token_type")
+        if token_type and str(token_type).lower() != "bearer":
+            logger.warning(
+                f"MCP server '{server_id}' issued a '{token_type}' token; "
+                "it will still be sent as a Bearer token, which the server may reject"
+            )
 
     @staticmethod
     def _oauth_resource(cfg: McpServerConfig) -> str:
@@ -576,6 +593,7 @@ class McpService(BaseService):
         access_token = token_data.get("access_token")
         if not access_token:
             raise ValueError("Token exchange did not return an access_token")
+        self._warn_if_not_bearer(server_id, token_data)
 
         expires_in = token_data.get("expires_in")
         expires_at = (time.time() + expires_in) if expires_in else None
@@ -630,6 +648,7 @@ class McpService(BaseService):
         new_access = token_data.get("access_token")
         if not new_access:
             raise RuntimeError(f"Token refresh for '{cfg.id}' did not return an access_token")
+        self._warn_if_not_bearer(cfg.id, token_data)
 
         expires_in = token_data.get("expires_in")
         oauth_data.update(
