@@ -458,6 +458,38 @@ class ConversationService:
 
         return None
 
+    def set_initial_title(self, conversation_id: str, first_message: str) -> Optional[str]:
+        """Generate a 3-6 word title from the first message and store it.
+
+        Uses the worker model. Does nothing if the conversation already has a
+        title; leaves the title unset if generation fails.
+        """
+        conversation = self.conversation_repo.get_by_id(conversation_id)
+        if not conversation:
+            return None
+        metadata = conversation.get("metadata") or {}
+        if isinstance(metadata, str):
+            try:
+                metadata = json.loads(metadata)
+            except json.JSONDecodeError:
+                metadata = {}
+        if metadata.get("title"):
+            return metadata["title"]
+
+        title = self.memory_service.generate_title(first_message)
+        if not title:
+            return None
+
+        # Re-read so a concurrent metadata change (e.g. pinning) isn't overwritten
+        latest = self.conversation_repo.get_by_id(conversation_id) or {}
+        latest_meta = latest.get("metadata") or {}
+        if not isinstance(latest_meta, dict):
+            latest_meta = {}
+        latest_meta["title"] = title
+        self.conversation_repo.update_metadata(conversation_id, latest_meta)
+        logger.info(f"Set title for conversation {conversation_id}: {title}")
+        return title
+
     def generate_conversation_title(self, conversation_id: str, llm_client=None) -> Optional[str]:
         """
         Generate a concise title for a conversation using LLM.

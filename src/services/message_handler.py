@@ -418,6 +418,9 @@ class MessageHandler:
 
             # Step 2: Store user message
             logger.debug("Step 2: Storing user message...")
+            is_first_message = (
+                channel != "subtask" and self.conversation_service.message_repo.count_messages(conv_id) == 0
+            )
             user_msg = self.conversation_service.add_message(
                 conversation_id=conv_id,
                 role="user",
@@ -427,6 +430,10 @@ class MessageHandler:
             # Sub-tasks keep the turn they were started from
             if channel != "subtask" and user_msg.get("message_id"):
                 bind_turn(conv_id, user_msg["message_id"])
+
+            # Step 2b: Generate a short title in the background (worker model)
+            if is_first_message:
+                asyncio.create_task(self._generate_title(conv_id, message))
 
             # Step 3: Load context (memory, soul, recent messages)
             logger.debug("Step 3: Loading context...")
@@ -2633,6 +2640,15 @@ class MessageHandler:
                 break
 
         return result
+
+    async def _generate_title(self, conversation_id: str, first_message: str) -> None:
+        """Fire-and-forget: title a new conversation. Failures are swallowed."""
+        try:
+            await asyncio.to_thread(
+                self.conversation_service.set_initial_title, conversation_id, first_message
+            )
+        except Exception as e:
+            logger.warning(f"Title generation failed for {conversation_id}: {e}")
 
     async def _run_auto_compaction(self, conversation_id: str, model: str) -> None:
         """Fire-and-forget background task that compresses conversation history.

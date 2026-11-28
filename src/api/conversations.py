@@ -157,6 +157,14 @@ async def get_conversation(
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
+    metadata = conversation.get("metadata")
+    if isinstance(metadata, dict):
+        conversation = {
+            **conversation,
+            "title": metadata.get("title"),
+            "pinned": metadata.get("pinned", False),
+        }
+
     return ConversationResponse(**conversation)
 
 

@@ -529,6 +529,33 @@ Write an updated coherent summary in 2-4 paragraphs that merges the prior contex
             logger.error(f"Failed to summarize messages: {e}")
             return None
 
+    def generate_title(self, first_message: str) -> Optional[str]:
+        """Generate a short (3-6 word) conversation title with the worker model.
+
+        Returns None on any failure so callers can leave the title unset.
+        """
+        text = (first_message or "").strip()
+        if not text:
+            return None
+        try:
+            llm = self._get_worker_llm_client()
+            prompt = (
+                "Write a title of 3 to 6 words for a conversation that starts with the "
+                "message below. Reply with the title only: no quotes, no trailing "
+                "punctuation.\n\n"
+                f"Message:\n{text[:1000]}"
+            )
+            raw = llm.complete_text(prompt)
+        except Exception as e:
+            logger.warning(f"Title generation failed: {e}")
+            return None
+
+        lines = (raw or "").strip().splitlines()
+        title = lines[0].strip().strip("\"'`*#").strip().rstrip(".!?:") if lines else ""
+        # Cap at 6 words in case the model ignores the instruction
+        title = " ".join(title.split()[:6])
+        return title or None
+
     def extract_facts(self, conversation_id: str, recent_message_count: int = 20) -> List[str]:
         """
         Extract key facts from recent conversation.
