@@ -248,7 +248,7 @@ class LLMClient:
                     raise
                 if kwargs.get("stream"):
                     return _recording_stream(response, model, messages)
-                _record(getattr(response, "usage", None), model)
+                _record(getattr(response, "usage", None), model, messages)
                 return response
 
             self._client.chat.completions.create = _recording_create

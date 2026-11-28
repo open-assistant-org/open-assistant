@@ -340,6 +340,25 @@ class TestFallbackEstimation:
         assert rows[0][2] > _ESTIMATE_FLOOR
         assert json.loads(rows[0][7])["estimated"] is True
 
+    def test_non_stream_response_without_usage_is_estimated(self, recorder_db):
+        """Symmetry: the non-streaming success path must also pass messages to
+        the recorder so a usage-less response (unusual provider) is estimated
+        rather than silently zero.
+        """
+
+        def usageless_create(**kw):
+            return types.SimpleNamespace(choices=[], usage=None)
+
+        client = _make_client(usageless_create)
+        client._client.chat.completions.create(model="claude", messages=_MESSAGES)
+        rows = [r for r in _ledger_rows(recorder_db) if r[1] == "claude"]
+        assert len(rows) == 1
+        assert rows[0][2] > _ESTIMATE_FLOOR
+        assert rows[0][3] == 0
+        meta = json.loads(rows[0][7])
+        assert meta["missing_usage"] is True
+        assert meta["estimated"] is True
+
     def test_recording_never_breaks_on_garbage_messages(self, recorder_db):
         usage_recorder.record(
             None, provider="x", model="y", messages=[{"content": None}, "garbage", 42, None]
