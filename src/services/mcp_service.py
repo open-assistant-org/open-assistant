@@ -960,7 +960,6 @@ class McpService(BaseService):
         if new_secret and not new_id:
             raise ValueError("An OAuth client secret requires a client ID")
 
-        old_oauth = self._load_oauth_data(cfg.id)
         id_changed = new_id != cfg.oauth_client_id
         if not id_changed and not new_secret:
             return
@@ -968,9 +967,8 @@ class McpService(BaseService):
         oauth: Dict[str, Any] = {}
         if new_id:
             oauth["client_id"] = new_id
-            secret = new_secret or (None if id_changed else old_oauth.get("client_secret"))
-            if secret:
-                oauth["client_secret"] = secret
+            if new_secret:
+                oauth["client_secret"] = new_secret
         self._save_oauth_data(cfg.id, oauth)
 
         if id_changed:
