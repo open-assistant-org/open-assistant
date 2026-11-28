@@ -113,3 +113,19 @@ def test_client_id_is_kept_with_the_message():
         "source": "chat_api_stream",
         "client_id": "abc-123",
     }
+
+
+def test_author_is_kept_in_history_metadata():
+    request = ChatRequest(message="Alice: hi", author={"id": "7", "name": "Alice Martin"})
+    assert request.history_metadata("chat_api")["author"] == {"id": "7", "name": "Alice Martin"}
+
+
+def test_no_author_means_no_author_metadata():
+    assert "author" not in ChatRequest(message="hi").history_metadata("chat_api")
+
+
+def test_author_name_is_required_and_bounded():
+    with pytest.raises(ValueError):
+        ChatRequest(message="hi", author={"name": ""})
+    with pytest.raises(ValueError):
+        ChatRequest(message="hi", author={"name": "x" * 121})

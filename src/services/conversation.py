@@ -27,6 +27,16 @@ def parse_conversation_metadata(value: Any) -> Dict[str, Any]:
     return {}
 
 
+def typed_text(message: Dict[str, Any]) -> str:
+    """What the person typed in a stored message.
+
+    UIs that add context to ``content`` (file context, "Alice: " for a shared assistant) keep the
+    typed text as ``display_text`` in the metadata; titles and previews should show that.
+    """
+    shown = parse_conversation_metadata(message.get("metadata")).get("display_text")
+    return shown if isinstance(shown, str) and shown else message["content"]
+
+
 def with_title_and_pinned(conv: Dict[str, Any]) -> Dict[str, Any]:
     """Return a copy of ``conv`` with top-level ``title`` and ``pinned`` from its metadata."""
     metadata = parse_conversation_metadata(conv.get("metadata"))
@@ -44,7 +54,7 @@ def _add_title_and_pinned(conv: Dict[str, Any], recent: List[Dict[str, Any]]) ->
         # Fallback to first user message
         for msg in recent:
             if msg["role"] == "user":
-                conv["title"] = msg["content"][:50]
+                conv["title"] = typed_text(msg)[:50]
                 break
 
 
@@ -239,7 +249,7 @@ class ConversationService:
             # Get last message preview
             recent = self.message_repo.get_recent_messages(conv_id, count=5)
             if recent:
-                conv["last_message_preview"] = recent[-1]["content"][:100]
+                conv["last_message_preview"] = typed_text(recent[-1])[:100]
             else:
                 conv["last_message_preview"] = None
 
@@ -493,7 +503,7 @@ class ConversationService:
             The stored title, or None if there is no user message or generation failed
         """
         messages = self.message_repo.get_by_conversation(conversation_id, limit=5, offset=0)
-        first_user = next((m["content"] for m in messages if m["role"] == "user"), None)
+        first_user = next((typed_text(m) for m in messages if m["role"] == "user"), None)
         if not first_user:
             return None
 

@@ -32,6 +32,13 @@ class ChatAttachment(BaseModel):
     content_type: Optional[str] = Field(None, max_length=255, description="MIME type")
 
 
+class ChatAuthor(BaseModel):
+    """Who typed a message. Display only: for UIs where several people share one assistant."""
+
+    id: Optional[str] = Field(None, max_length=64, description="The client's id for the person")
+    name: str = Field(..., min_length=1, max_length=120, description="Name to show")
+
+
 class ChatRequest(BaseModel):
     """Chat request model."""
 
@@ -79,6 +86,11 @@ class ChatRequest(BaseModel):
         ),
     )
 
+    author: Optional[ChatAuthor] = Field(
+        None,
+        description="Who sent the message, stored for display in the conversation history",
+    )
+
     def history_metadata(self, source: str) -> Dict[str, Any]:
         """Metadata for the stored user message: its source plus any display fields."""
         metadata: Dict[str, Any] = {"source": source}
@@ -88,6 +100,8 @@ class ChatRequest(BaseModel):
             metadata["display_text"] = self.display_text
         if self.client_id:
             metadata["client_id"] = self.client_id
+        if self.author:
+            metadata["author"] = self.author.model_dump(exclude_none=True)
         return metadata
 
 

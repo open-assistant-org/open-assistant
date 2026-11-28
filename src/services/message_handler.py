@@ -437,7 +437,13 @@ class MessageHandler:
 
             # Step 2b: Generate a short title in the background (worker model)
             if is_first_message:
-                asyncio.create_task(self._generate_title(conv_id, message))
+                # Title what the person typed, not the file context or speaker prefix added to it
+                typed = (metadata or {}).get("display_text")
+                asyncio.create_task(
+                    self._generate_title(
+                        conv_id, typed if isinstance(typed, str) and typed else message
+                    )
+                )
 
             # Step 3: Load context (memory, soul, recent messages)
             logger.debug("Step 3: Loading context...")

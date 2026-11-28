@@ -73,3 +73,29 @@ def test_generate_conversation_title_uses_worker_and_never_stores_truncated_text
     memory.generate_title.return_value = None
     assert svc.generate_conversation_title("c1") is None
     repo.update_metadata.assert_not_called()
+
+
+def test_typed_text_prefers_what_the_person_typed():
+    from src.services.conversation import typed_text
+
+    shared = {"content": "Ada: Plan a trip", "metadata": {"display_text": "Plan a trip"}}
+    assert typed_text(shared) == "Plan a trip"
+    # Stored as JSON, as some rows are
+    assert typed_text({"content": "x", "metadata": '{"display_text": "y"}'}) == "y"
+    # Nothing typed (files only) or older messages: the content as stored
+    assert typed_text({"content": "file ctx", "metadata": {"display_text": ""}}) == "file ctx"
+    assert typed_text({"content": "plain", "metadata": None}) == "plain"
+    assert typed_text({"content": "plain"}) == "plain"
+
+
+def test_generate_conversation_title_uses_typed_text_not_the_speaker_prefix():
+    repo = MagicMock()
+    repo.get_by_id.return_value = {"metadata": {}}
+    messages = MagicMock()
+    messages.get_by_conversation.return_value = [
+        {"role": "user", "content": "Ada: Plan a trip", "metadata": {"display_text": "Plan a trip"}}
+    ]
+    memory = MagicMock()
+    memory.generate_title.return_value = "Trip planning"
+    ConversationService(repo, messages, memory).generate_conversation_title("c1")
+    memory.generate_title.assert_called_once_with("Plan a trip")
