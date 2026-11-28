@@ -211,13 +211,19 @@ class LLMClient:
             provider = self.config.provider
             default_model = self.config.model
 
-            def _record(usage, model):
+            def _record(usage, model, messages=None):
                 try:
-                    usage_recorder.record(usage, provider=provider, model=model)
+                    usage_recorder.record(usage, provider=provider, model=model, messages=messages)
                 except Exception as e:  # noqa: BLE001 - never break the call
                     logger.error(f"usage recording failed (non-fatal): {e}")
 
-            def _recording_stream(stream, model):
+            def _record_failure(model, messages=None):
+                try:
+                    usage_recorder.record_failure(provider=provider, model=model, messages=messages)
+                except Exception as e:  # noqa: BLE001 - never break the call
+                    logger.error(f"usage recording failed (non-fatal): {e}")
+
+            def _recording_stream(stream, model, messages=None):
                 usage = None
                 try:
                     for chunk in stream:
@@ -229,13 +235,19 @@ class LLMClient:
                             usage = chunk_usage
                         yield chunk
                 finally:
-                    _record(usage, model)
+                    _record(usage, model, messages)
 
             def _recording_create(*args, **kwargs):
-                response = original_create(*args, **kwargs)
                 model = kwargs.get("model") or default_model
+                messages = kwargs.get("messages")
+                try:
+                    response = original_create(*args, **kwargs)
+                except Exception:
+                    # Billing marker only — the error itself propagates unchanged.
+                    _record_failure(model, messages)
+                    raise
                 if kwargs.get("stream"):
-                    return _recording_stream(response, model)
+                    return _recording_stream(response, model, messages)
                 _record(getattr(response, "usage", None), model)
                 return response
 

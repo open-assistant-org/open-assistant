@@ -192,6 +192,162 @@ class TestBoundaryWrap:
         assert len(rows) == 1
 
 
+# ── Failure markers + fallback estimation ───────────────────────────────────
+
+
+_MESSAGES = [
+    {"role": "system", "content": "You are a helpful assistant."},
+    {"role": "user", "content": "hello " * 200},
+]
+
+# "hello " * 200 ≈ 200 tokens under cl100k; anything > 100 proves real counting
+_ESTIMATE_FLOOR = 100
+
+
+def _make_client(create):
+    from src.core.llm_client import LLMClient, LLMConfig
+
+    config = LLMConfig(
+        provider="openrouter",
+        model="claude",
+        api_key="k",
+        base_url="https://openrouter.ai/api/v1",
+    )
+    with patch("src.core.llm_client.OpenAI") as mock_openai:
+        mock_openai.return_value.chat.completions.create = create
+        client = LLMClient(config)
+    return client
+
+
+class TestFailureMarkers:
+    def test_failed_create_writes_marker_row_and_reraises(self, recorder_db):
+        """create() raising (timeout / 4xx / reset) must leave a failed marker
+        row AND still propagate the error unchanged — billing never breaks chat.
+        """
+
+        def failing_create(**kw):
+            raise RuntimeError("connection reset")
+
+        client = _make_client(failing_create)
+
+        with pytest.raises(RuntimeError, match="connection reset"):
+            client._client.chat.completions.create(model="claude", messages=_MESSAGES)
+
+        rows = [r for r in _ledger_rows(recorder_db) if r[0] == "openrouter"]
+        assert len(rows) == 1
+        provider, model, prompt, completion, total, cached, reasoning, meta_raw = rows[0]
+        assert (model, prompt, completion, total) == ("claude", 0, 0, 0)
+        meta = json.loads(meta_raw)
+        assert meta["failed"] is True
+        # prompt size estimated locally from the messages payload
+        assert meta["estimated_prompt_tokens"] > _ESTIMATE_FLOOR
+
+    def test_failed_stream_create_also_marked(self, recorder_db):
+        def failing_create(**kw):
+            raise TimeoutError("stream handshake timed out")
+
+        client = _make_client(failing_create)
+        with pytest.raises(TimeoutError):
+            client._client.chat.completions.create(model="claude", messages=_MESSAGES, stream=True)
+        failed = [r for r in _ledger_rows(recorder_db) if r[7] and json.loads(r[7]).get("failed")]
+        assert len(failed) == 1
+
+    def test_marker_row_excluded_from_monthly_totals(self, recorder_db):
+        """Failed rows are reconciliation markers, not billed usage — the
+        /managed/usage totals must not count them.
+        """
+        repo = LlmConsumptionRepository(recorder_db)
+        usage_recorder.record(
+            _fake_usage(prompt=100, completion=40, total=140), provider="openrouter", model="claude"
+        )
+        usage_recorder.record_failure(provider="openrouter", model="claude", messages=_MESSAGES)
+        # get_monthly_totals runs from a repository bound to the same db
+        totals = repo.get_monthly_totals(months=12)
+        now = datetime.utcnow()
+        current = next(
+            (m for m in totals if m["year"] == now.year and m["month"] == now.month),
+            None,
+        )
+        assert current is not None
+        # baseline(0) + real call(140); the failure marker adds nothing
+        assert current["tokens_total"] == current["tokens_input"] + current["tokens_output"]
+        # find the real row's contribution: everything non-baseline
+        conn = recorder_db.get_connection()
+        try:
+            real = conn.execute(
+                "SELECT COALESCE(SUM(total_tokens), 0) FROM llm_consumption "
+                "WHERE NOT COALESCE(json_extract(metadata, '$.failed'), 0) "
+                "AND model != 'baseline'"
+            ).fetchone()[0]
+            assert current["tokens_total"] == real
+        finally:
+            conn.close()
+
+
+class TestFallbackEstimation:
+    def test_stream_without_usage_estimates_prompt_tokens(self, recorder_db):
+        """stream_options-rejected fallback: no usage chunks arrive, so the
+        recorder estimates the input locally instead of recording 0/0.
+        """
+
+        def streaming_create(**kw):
+            def gen():
+                yield types.SimpleNamespace(
+                    choices=[
+                        types.SimpleNamespace(
+                            delta=types.SimpleNamespace(content="hi"), finish_reason="stop"
+                        )
+                    ],
+                    usage=None,
+                )
+
+            return gen()
+
+        client = _make_client(streaming_create)
+        stream = client._client.chat.completions.create(
+            model="claude", messages=_MESSAGES, stream=True
+        )
+        consumed = list(stream)
+        assert consumed  # stream still usable
+
+        rows = [r for r in _ledger_rows(recorder_db) if r[1] == "claude"]
+        assert len(rows) == 1
+        prompt, completion, total = rows[0][2], rows[0][3], rows[0][4]
+        assert prompt > _ESTIMATE_FLOOR  # estimated, not zero
+        assert completion == 0
+        assert total == prompt
+        meta = json.loads(rows[0][7])
+        assert meta["missing_usage"] is True
+        assert meta["estimated"] is True
+
+    def test_missing_usage_without_messages_still_zero_flagged(self, recorder_db):
+        """record(None) with no messages keeps the old behaviour: flagged 0/0."""
+        usage_recorder.record(None, provider="ollama", model="llama3")
+        rows = [r for r in _ledger_rows(recorder_db) if r[0] == "ollama"]
+        assert len(rows) == 1
+        assert rows[0][2:5] == (0, 0, 0)
+        meta = json.loads(rows[0][7])
+        assert meta["missing_usage"] is True
+        assert "estimated" not in meta
+
+    def test_non_stream_missing_usage_not_estimated(self, recorder_db):
+        """Non-streaming responses carry usage; when absent (and messages were
+        passed), estimation applies the same way — but plain record() without
+        messages stays at flagged zeros.
+        """
+        usage_recorder.record(None, provider="x", model="y", messages=_MESSAGES)
+        rows = [r for r in _ledger_rows(recorder_db) if r[1] == "y"]
+        assert rows[0][2] > _ESTIMATE_FLOOR
+        assert json.loads(rows[0][7])["estimated"] is True
+
+    def test_recording_never_breaks_on_garbage_messages(self, recorder_db):
+        usage_recorder.record(
+            None, provider="x", model="y", messages=[{"content": None}, "garbage", 42, None]
+        )
+        rows = [r for r in _ledger_rows(recorder_db) if r[1] == "y"]
+        assert rows[0][2] >= 0  # tolerant, no raise
+
+
 # ── Migrations ─────────────────────────────────────────────────────────────
 
 
