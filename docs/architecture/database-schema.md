@@ -271,7 +271,10 @@ Individual messages within conversations.
   `{"compacted": true, ...}`). User messages sent from a chat UI with files
   carry `attachments` (`[{filename, size, content_type}]`) and `display_text`
   (what the user typed): `content` also holds the file context the LLM was
-  given, so the UI shows these instead when it reloads the history.
+  given, so the UI shows these instead when it reloads the history. A chat UI
+  shared by several people also sends `author` (`{id, name}`, display only),
+  and prefixes `content` with the speaker's first name; titles and previews use
+  `display_text` when it is set.
 
 **Relationships**:
 - Many-to-one with `conversations`
