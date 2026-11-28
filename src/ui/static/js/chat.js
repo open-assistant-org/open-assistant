@@ -1048,14 +1048,51 @@ function startNewConversation() {
 }
 
 // Update conversation display
-function updateConversationDisplay() {
-    if (conversationIdDisplay) {
-        if (conversationId) {
-            conversationIdDisplay.textContent = `ID: ${conversationId.substring(0, 8)}...`;
-        } else {
-            conversationIdDisplay.textContent = 'New conversation';
+// Title of the current conversation (set by the worker model after the first
+// message); empty until it exists.
+let conversationTitle = '';
+
+function renderConversationDisplay() {
+    if (!conversationIdDisplay) return;
+    if (conversationId) {
+        const shortId = `ID: ${conversationId.substring(0, 8)}...`;
+        conversationIdDisplay.textContent = conversationTitle || shortId;
+        conversationIdDisplay.title = conversationTitle ? `${conversationTitle} (${shortId})` : '';
+    } else {
+        conversationIdDisplay.textContent = 'New conversation';
+        conversationIdDisplay.title = '';
+    }
+}
+
+async function refreshConversationTitle() {
+    const requestedId = conversationId;
+    // Already have this conversation's title: titles don't change once set
+    if (requestedId && conversationTitleFor === requestedId && conversationTitle) return;
+    let title = '';
+    if (requestedId) {
+        try {
+            const conv = await api.get(`/api/conversations/${requestedId}`);
+            title = (conv && conv.title) || '';
+        } catch (error) {
+            // New conversations aren't stored until the first message; no title yet
         }
     }
+    if (requestedId === conversationId) {
+        conversationTitle = title;
+        renderConversationDisplay();
+    }
+}
+
+let conversationTitleFor = null;
+
+function updateConversationDisplay() {
+    // Drop the title of a different conversation right away, then fetch the current one
+    if (conversationTitleFor !== conversationId) {
+        conversationTitle = '';
+        conversationTitleFor = conversationId;
+    }
+    renderConversationDisplay();
+    refreshConversationTitle();
 }
 
 // Conversation History Manager

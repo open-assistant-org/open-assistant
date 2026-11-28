@@ -14,26 +14,38 @@ from src.utils.token_counter import count_tokens
 logger = get_logger(__name__)
 
 
+def parse_conversation_metadata(value: Any) -> Dict[str, Any]:
+    """Return conversation metadata as a dict (it may be None, a JSON string or a dict)."""
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str) and value:
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+    return {}
+
+
+def with_title_and_pinned(conv: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a copy of ``conv`` with top-level ``title`` and ``pinned`` from its metadata."""
+    metadata = parse_conversation_metadata(conv.get("metadata"))
+    return {
+        **conv,
+        "title": metadata.get("title"),
+        "pinned": bool(metadata.get("pinned", False)),
+    }
+
+
 def _add_title_and_pinned(conv: Dict[str, Any], recent: List[Dict[str, Any]]) -> None:
     """Set the title (from metadata, else the first user message) and pinned status."""
-    metadata = conv.get("metadata", {})
-    if metadata is None:
-        metadata = {}
-    elif isinstance(metadata, str):
-        try:
-            metadata = json.loads(metadata)
-        except json.JSONDecodeError:
-            metadata = {}
-
-    conv["title"] = metadata.get("title")
+    conv.update(with_title_and_pinned(conv))
     if not conv["title"] and recent:
         # Fallback to first user message
         for msg in recent:
             if msg["role"] == "user":
                 conv["title"] = msg["content"][:50]
                 break
-
-    conv["pinned"] = metadata.get("pinned", False)
 
 
 class ConversationService:
@@ -374,15 +386,7 @@ class ConversationService:
 
         # Sort: pinned first, then by updated_at DESC
         def sort_key(conv):
-            metadata = conv.get("metadata", {})
-            if metadata is None:
-                metadata = {}
-            elif isinstance(metadata, str):
-                try:
-                    metadata = json.loads(metadata)
-                except:
-                    metadata = {}
-            is_pinned = metadata.get("pinned", False)
+            is_pinned = parse_conversation_metadata(conv.get("metadata")).get("pinned", False)
             return (not is_pinned, conv["updated_at"])
 
         all_conversations.sort(key=sort_key, reverse=True)
@@ -436,14 +440,7 @@ class ConversationService:
             return None
 
         # Get current metadata
-        metadata = conversation.get("metadata", {})
-        if metadata is None:
-            metadata = {}
-        elif isinstance(metadata, str):
-            try:
-                metadata = json.loads(metadata) if metadata else {}
-            except:
-                metadata = {}
+        metadata = dict(parse_conversation_metadata(conversation.get("metadata")))
 
         # Toggle pinned status
         current_pinned = metadata.get("pinned", False)
@@ -458,72 +455,56 @@ class ConversationService:
 
         return None
 
+    def set_initial_title(self, conversation_id: str, first_message: str) -> Optional[str]:
+        """Generate a 3-6 word title from the first message and store it.
+
+        Uses the worker model. Does nothing if the conversation already has a
+        title; leaves the title unset if generation fails.
+        """
+        conversation = self.conversation_repo.get_by_id(conversation_id)
+        if not conversation:
+            return None
+        metadata = parse_conversation_metadata(conversation.get("metadata"))
+        if metadata.get("title"):
+            return metadata["title"]
+
+        title = self.memory_service.generate_title(first_message)
+        if not title:
+            return None
+
+        # Re-read so a concurrent metadata change (e.g. pinning) isn't overwritten
+        latest = self.conversation_repo.get_by_id(conversation_id) or {}
+        latest_meta = dict(parse_conversation_metadata(latest.get("metadata")))
+        latest_meta["title"] = title
+        self.conversation_repo.update_metadata(conversation_id, latest_meta)
+        logger.info(f"Set title for conversation {conversation_id}: {title}")
+        return title
+
     def generate_conversation_title(self, conversation_id: str, llm_client=None) -> Optional[str]:
         """
-        Generate a concise title for a conversation using LLM.
+        (Re)generate a 3-6 word title from the first user message with the worker
+        model and store it, replacing any existing title.
 
         Args:
             conversation_id: Conversation ID
-            llm_client: LLM client for title generation (optional)
+            llm_client: Unused; kept for backwards compatibility
 
         Returns:
-            Generated title string or None if failed
+            The stored title, or None if there is no user message or generation failed
         """
-        # Get first few messages
         messages = self.message_repo.get_by_conversation(conversation_id, limit=5, offset=0)
-
-        if not messages:
+        first_user = next((m["content"] for m in messages if m["role"] == "user"), None)
+        if not first_user:
             return None
 
-        # Build context from first messages
-        context_parts = []
-        for msg in messages[:5]:
-            role = msg["role"]
-            content = msg["content"][:200]  # Limit length
-            context_parts.append(f"{role}: {content}")
-
-        context = "\n".join(context_parts)
-
-        # Generate title using LLM (if client provided)
-        if llm_client:
-            try:
-                prompt = f"""Generate a concise, descriptive title (5-10 words) for this conversation:
-
-{context}
-
-Title:"""
-                # Note: This would need actual LLM integration
-                # For now, return a fallback
-                title = None
-            except Exception as e:
-                logger.error(f"Failed to generate title: {e}")
-                title = None
-        else:
-            title = None
-
-        # Fallback: Use first user message
+        title = self.memory_service.generate_title(first_user)
         if not title:
-            for msg in messages:
-                if msg["role"] == "user":
-                    title = msg["content"][:50]
-                    if len(msg["content"]) > 50:
-                        title += "..."
-                    break
+            return None
 
-        # Store title in metadata
-        if title:
-            conversation = self.conversation_repo.get_by_id(conversation_id)
-            if conversation:
-                metadata = conversation.get("metadata", {})
-                if metadata is None:
-                    metadata = {}
-                elif isinstance(metadata, str):
-                    try:
-                        metadata = json.loads(metadata) if metadata else {}
-                    except:
-                        metadata = {}
-
-                metadata["title"] = title
-                self.conversation_repo.update_metadata(conversation_id, metadata)
+        conversation = self.conversation_repo.get_by_id(conversation_id)
+        if conversation:
+            metadata = dict(parse_conversation_metadata(conversation.get("metadata")))
+            metadata["title"] = title
+            self.conversation_repo.update_metadata(conversation_id, metadata)
 
         return title

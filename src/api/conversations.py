@@ -27,7 +27,7 @@ from src.models.conversation import (
     SummarizeRequest,
     SummarizeResponse,
 )
-from src.services.conversation import ConversationService
+from src.services.conversation import ConversationService, with_title_and_pinned
 from src.services.memory import MemoryService
 from src.utils.logger import get_logger
 
@@ -157,7 +157,7 @@ async def get_conversation(
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    return ConversationResponse(**conversation)
+    return ConversationResponse(**with_title_and_pinned(conversation))
 
 
 @router.get("/{conversation_id}/messages", response_model=MessageListResponse)
@@ -369,7 +369,7 @@ async def toggle_pin_conversation(
     if not updated:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    return ConversationResponse(**updated)
+    return ConversationResponse(**with_title_and_pinned(updated))
 
 
 @router.post("/{conversation_id}/generate-title")
@@ -410,6 +410,9 @@ async def generate_conversation_title(
     title = conversation_service.generate_conversation_title(conversation_id)
 
     if not title:
-        raise HTTPException(status_code=400, detail="Could not generate title (no messages found)")
+        raise HTTPException(
+            status_code=400,
+            detail="Could not generate title (no user message found or generation failed)",
+        )
 
     return {"title": title}
