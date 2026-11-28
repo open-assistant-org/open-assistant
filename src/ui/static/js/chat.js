@@ -1066,6 +1066,8 @@ function renderConversationDisplay() {
 
 async function refreshConversationTitle() {
     const requestedId = conversationId;
+    // Already have this conversation's title: titles don't change once set
+    if (requestedId && conversationTitleFor === requestedId && conversationTitle) return;
     let title = '';
     if (requestedId) {
         try {

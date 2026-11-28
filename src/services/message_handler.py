@@ -418,9 +418,12 @@ class MessageHandler:
 
             # Step 2: Store user message
             logger.debug("Step 2: Storing user message...")
+            # Count only user messages: system/transparency rows can be stored earlier.
+            # Two simultaneous first messages may both pass this check; that only
+            # starts a second title task, which won't overwrite an existing title.
             is_first_message = (
                 channel != "subtask"
-                and self.conversation_service.message_repo.count_messages(conv_id) == 0
+                and self.conversation_service.message_repo.count_messages(conv_id, role="user") == 0
             )
             user_msg = self.conversation_service.add_message(
                 conversation_id=conv_id,
