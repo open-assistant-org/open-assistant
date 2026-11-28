@@ -2655,6 +2655,8 @@ function showAddMcpModal() {
     document.getElementById('new-mcp-url').value = '';
     document.getElementById('new-mcp-keywords').value = '';
     document.getElementById('new-mcp-scopes').value = '';
+    document.getElementById('new-mcp-client-id').value = '';
+    document.getElementById('new-mcp-client-secret').value = '';
     document.getElementById('mcp-headers-list').innerHTML = '';
     // Default to static-header auth.
     document.querySelector('input[name="mcp-auth-type"][value="header"]').checked = true;
@@ -2670,6 +2672,8 @@ function closeAddMcpModal() {
 function onMcpAuthTypeChange(authType) {
     document.getElementById('mcp-header-fields').hidden = authType !== 'header';
     document.getElementById('mcp-oauth-fields').hidden = authType !== 'oauth2';
+    document.getElementById('mcp-oauth-redirect-uri').textContent =
+        `${window.location.origin}${window.INSTANCE_BASE_PATH || ''}/api/mcp/oauth/callback`;
 }
 
 function addMcpHeaderRow(name = '', value = '') {
@@ -2727,6 +2731,10 @@ async function createMcpServer() {
     } else if (authType === 'oauth2') {
         const scopesRaw = document.getElementById('new-mcp-scopes').value.trim();
         body.oauth_scopes = scopesRaw ? scopesRaw.split(/\s+/).filter(Boolean) : [];
+        const clientId = document.getElementById('new-mcp-client-id').value.trim();
+        const clientSecret = document.getElementById('new-mcp-client-secret').value;
+        if (clientId) body.oauth_client_id = clientId;
+        if (clientId && clientSecret) body.oauth_client_secret = clientSecret;
     }
 
     const btn = document.getElementById('mcp-create-btn');

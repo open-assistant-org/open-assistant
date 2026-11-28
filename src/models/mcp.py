@@ -3,8 +3,9 @@
 HTTP-only transport with three auth modes:
 - ``none``: no authentication headers added
 - ``header``: one or more static auth headers (values stored encrypted)
-- ``oauth2``: OAuth 2.1 PKCE authorization-code flow with dynamic client
-  registration (RFC 7591). Access/refresh tokens stored encrypted.
+- ``oauth2``: OAuth 2.1 PKCE authorization-code flow, with either dynamic
+  client registration (RFC 7591) or a pre-registered client ID (and optional
+  secret). Access/refresh tokens and the client secret are stored encrypted.
 """
 
 import re
@@ -47,6 +48,11 @@ class McpOAuthMetadata(BaseModel):
     token_endpoint: str
     registration_endpoint: Optional[str] = None
     scopes_supported: List[str] = Field(default_factory=list)
+    # Methods the token endpoint accepts for client authentication
+    # (e.g. "client_secret_basic", "client_secret_post", "none").
+    token_endpoint_auth_methods_supported: List[str] = Field(default_factory=list)
+    # Canonical resource URI of the MCP server (RFC 8707 ``resource`` parameter).
+    resource: Optional[str] = None
 
 
 class McpDiscoveredTool(BaseModel):
@@ -78,6 +84,10 @@ class McpServerConfig(BaseModel):
     auth_headers: List[McpAuthHeader] = Field(default_factory=list)
     # Requested OAuth scopes. Only used when auth_type == "oauth2".
     oauth_scopes: List[str] = Field(default_factory=list)
+    # Pre-registered OAuth client ID (public, not a secret). When set, dynamic
+    # client registration is skipped. The matching client secret, if any, is
+    # stored encrypted in ``service_credentials``.
+    oauth_client_id: Optional[str] = None
     # Cached OAuth server metadata (discovered at add time, refreshed on demand).
     oauth_metadata: Optional[McpOAuthMetadata] = None
 
@@ -134,8 +144,11 @@ class McpServerCreateRequest(BaseModel):
     For ``auth_type="header"``: connects using the supplied headers, discovers
     tools, persists config/credentials, and creates a matching agent/skill row.
 
-    For ``auth_type="oauth2"``: discovers OAuth metadata, registers a dynamic
-    client, persists config, and creates an agent row with empty tools. The user
+    For ``auth_type="oauth2"``: discovers OAuth metadata, persists config, and
+    creates an agent row with empty tools. Supply ``oauth_client_id`` (and
+    ``oauth_client_secret`` for confidential clients) when the provider does
+    not support dynamic client registration; otherwise a client is registered
+    dynamically when the flow starts. The user
     must then authorise via ``/api/mcp/{id}/oauth/start`` before tools can be
     discovered and used.
 
@@ -151,18 +164,28 @@ class McpServerCreateRequest(BaseModel):
     auth_type: Literal["none", "header", "oauth2"] = "header"
     auth_headers: List[McpAuthHeaderInput] = Field(default_factory=list)
     oauth_scopes: List[str] = Field(default_factory=list)
+    oauth_client_id: Optional[str] = Field(default=None, max_length=500)
+    oauth_client_secret: Optional[str] = Field(default=None, max_length=2000)
     intent_keywords: List[str] = Field(default_factory=list)
     backstory: Optional[str] = Field(default=None, max_length=2000)
 
 
 class McpCredentialsRequest(BaseModel):
-    """Update the stored static auth header values for a server.
+    """Update the stored credentials for a server.
 
     For ``header`` auth: supply ``headers`` (name → value). Blank values
     preserve the existing secret.
+
+    For ``oauth2`` auth: supply ``oauth_client_id`` to switch to (or change) a
+    pre-registered client — an empty string goes back to dynamic registration —
+    and ``oauth_client_secret`` to set its secret (a blank value keeps the
+    existing one). Changing the client clears stored tokens, so the server must
+    be re-authorized.
     """
 
     headers: List[McpAuthHeaderInput] = Field(default_factory=list)
+    oauth_client_id: Optional[str] = Field(default=None, max_length=500)
+    oauth_client_secret: Optional[str] = Field(default=None, max_length=2000)
 
 
 class McpEnableRequest(BaseModel):
@@ -195,6 +218,10 @@ class McpServerListItem(BaseModel):
     header_names: List[str] = Field(default_factory=list)
     oauth_scopes: List[str] = Field(default_factory=list)
     oauth_authorized: bool = False
+    # Pre-registered client ID, or None when a client is registered dynamically.
+    oauth_client_id: Optional[str] = None
+    # True when a client secret is stored (the secret itself is never returned).
+    oauth_has_client_secret: bool = False
     enabled: bool
     has_credentials: bool
     intent_keywords: List[str] = Field(default_factory=list)
